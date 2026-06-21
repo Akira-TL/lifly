@@ -11,6 +11,8 @@ from app.db.models import Base
 from app.modules.memos.router import router as memo_router
 from app.modules.ledger.router import router as ledger_router
 from app.modules.tasks.router import router as task_router
+from app.modules.auth.router import router as auth_router
+from app.modules.trash import router as trash_router
 
 
 @asynccontextmanager
@@ -29,7 +31,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Lifily API",
-    version="0.1.0",
+    version="0.2.0",
     docs_url="/docs",
     lifespan=lifespan,
 )
@@ -42,11 +44,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(memo_router, prefix="/api/v1/memos", tags=["memos"])
 app.include_router(ledger_router, prefix="/api/v1/ledger", tags=["ledger"])
 app.include_router(task_router, prefix="/api/v1/tasks", tags=["tasks"])
+app.include_router(trash_router, prefix="/api/v1", tags=["audit", "trash"])
 
 
 @app.get("/api/v1/health")
 async def health():
-    return {"status": "ok", "version": "0.1.0", "port": settings.api_port}
+    return {"status": "ok", "version": "0.2.0", "port": settings.api_port}

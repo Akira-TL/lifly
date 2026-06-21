@@ -13,6 +13,9 @@ dependencies:
   dio: ^5.7.0
   provider: ^6.1.2
   intl: ^0.20.1
+  powersync: ^1.12.4
+  sqlite3_flutter_libs: ^0.5.27
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:
