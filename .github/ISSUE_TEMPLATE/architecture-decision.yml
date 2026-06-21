@@ -1,0 +1,35 @@
+name: Architecture Decision
+description: 架构变更/冻结项变更请求
+title: "[ADR] "
+labels: ["needs-architecture-decision", "agent:architect"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+    validations:
+      required: true
+  - type: textarea
+    id: current_constraints
+    attributes:
+      label: Current Constraints
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options
+    validations:
+      required: true
+  - type: textarea
+    id: proposed_decision
+    attributes:
+      label: Proposed Decision
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+    validations:
+      required: true

@@ -1,0 +1,61 @@
+name: AI Task
+description: 给 AI agent 执行的标准任务
+title: "[LC-XXXX] "
+labels: ["status:ready"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: 这个任务要完成什么
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: AI agent 必须知道的背景
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: 本 Issue 允许做什么
+    validations:
+      required: true
+  - type: textarea
+    id: allowed_files
+    attributes:
+      label: Allowed Files / Directories
+      description: 允许修改的文件或目录
+    validations:
+      required: true
+  - type: textarea
+    id: forbidden
+    attributes:
+      label: Forbidden Changes
+      description: 明确不允许做什么
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: 验收标准
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation
+      description: 如何验证
+    validations:
+      required: true
+  - type: textarea
+    id: related_docs
+    attributes:
+      label: Related Docs
+      description: 相关文档
+    validations:
+      required: true

@@ -1,0 +1,87 @@
+- name: type:spike
+  color: C5DEF5
+  description: 技术验证
+- name: type:feature
+  color: 0E8A16
+  description: 功能
+- name: type:bug
+  color: D73A4A
+  description: 缺陷
+- name: type:docs
+  color: 0075CA
+  description: 文档
+- name: type:infra
+  color: 5319E7
+  description: 基础设施
+- name: area:repo
+  color: BFDADC
+  description: 仓库结构
+- name: area:client
+  color: BFDADC
+  description: Flutter 客户端
+- name: area:backend
+  color: BFDADC
+  description: 后端
+- name: area:mcp
+  color: BFDADC
+  description: MCP
+- name: area:sync
+  color: BFDADC
+  description: 同步
+- name: area:asset
+  color: BFDADC
+  description: 附件
+- name: area:ledger
+  color: BFDADC
+  description: 记账
+- name: area:memo
+  color: BFDADC
+  description: 备忘录
+- name: area:task
+  color: BFDADC
+  description: 任务提醒
+- name: area:import
+  color: BFDADC
+  description: 导入导出
+- name: area:security
+  color: BFDADC
+  description: 安全
+- name: agent:architect
+  color: F9D0C4
+  description: 架构 Agent
+- name: agent:client
+  color: F9D0C4
+  description: 客户端 Agent
+- name: agent:backend
+  color: F9D0C4
+  description: 后端 Agent
+- name: agent:mcp
+  color: F9D0C4
+  description: MCP Agent
+- name: agent:qa
+  color: F9D0C4
+  description: QA Agent
+- name: agent:devops
+  color: F9D0C4
+  description: DevOps Agent
+- name: agent:docs
+  color: F9D0C4
+  description: Docs Agent
+- name: priority:p0
+  color: B60205
+  description: 最高优先级
+- name: priority:p1
+  color: D93F0B
+  description: 高优先级
+- name: priority:p2
+  color: FBCA04
+  description: 普通优先级
+- name: status:ready
+  color: 0E8A16
+  description: 可执行
+- name: status:blocked
+  color: D73A4A
+  description: 被阻塞
+- name: needs-architecture-decision
+  color: '000000'
+  description: 需要架构决策

@@ -1,0 +1,19 @@
+{
+  "name": "lifecore",
+  "private": true,
+  "packageManager": "pnpm@latest",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "typecheck": "turbo typecheck",
+    "dev:api": "cd services/api && uv run fastapi dev app/main.py",
+    "dev:flutter:windows": "cd apps/client_flutter && flutter run -d windows",
+    "analyze:flutter": "cd apps/client_flutter && flutter analyze"
+  },
+  "devDependencies": {
+    "turbo": "latest",
+    "typescript": "latest"
+  }
+}
