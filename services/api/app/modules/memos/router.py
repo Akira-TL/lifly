@@ -92,7 +92,9 @@ async def list_memos(
     if type:
         query = query.where(Memo.type == type)
     if q:
-        query = query.where(Memo.content_markdown.ilike(f"%{q}%"))
+        query = query.where(
+            Memo.title.ilike(f"%{q}%") | Memo.content_markdown.ilike(f"%{q}%")
+        )
 
     count_query = select(func.count()).select_from(query.subquery())
     total = await db.scalar(count_query)

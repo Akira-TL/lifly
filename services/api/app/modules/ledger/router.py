@@ -209,9 +209,9 @@ async def get_summary(
     count = len(txs)
 
     return ApiResponse(data={
-        "total_expense": round(total_expense, 2),
-        "total_income": round(total_income, 2),
-        "total_transactions": count,
+        "expense_total": round(total_expense, 2),
+        "income_total": round(total_income, 2),
+        "transaction_count": count,
     })
 
 

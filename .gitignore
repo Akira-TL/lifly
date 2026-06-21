@@ -1,19 +1,72 @@
+# ─── Node.js / pnpm ──────────────────────────────────────────────────────────
 node_modules/
 dist/
 .turbo/
+*.tsbuildinfo
+
+# ─── Python / uv ─────────────────────────────────────────────────────────────
 .venv/
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
 .ruff_cache/
+uv.lock
+
+# ─── Flutter / Dart ──────────────────────────────────────────────────────────
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
 build/
+.dart-define/
+*.iml
+*.ipr
+*.iws
+
+# ─── Android ─────────────────────────────────────────────────────────────────
+/apps/**/android/app/google-services.json
+/apps/**/android/key.properties
+/apps/**/android/*.jks
+/apps/**/android/*.keystore
+/apps/**/android/.gradle/
+/apps/**/android/captures/
+/apps/**/android/local.properties
+
+# ─── Windows ──────────────────────────────────────────────────────────────────
+/apps/**/windows/flutter/ephemeral/
+/apps/**/windows/flutter/generated_plugin_registrant.cc
+/apps/**/windows/flutter/generated_plugin_registrant.h
+/apps/**/windows/flutter/generated_plugins.cmake
+
+# ─── macOS ───────────────────────────────────────────────────────────────────
+/apps/**/macos/Flutter/ephemeral/
+/apps/**/macos/Pods/
+
+# ─── IDE / Editor ────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ─── OS ──────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─── Environment ─────────────────────────────────────────────────────────────
 .env
 .env.*
 !.env.example
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
+
+# ─── Logs ────────────────────────────────────────────────────────────────────
+logs/
 *.log
+
+# ─── Docker volumes ──────────────────────────────────────────────────────────
+infra/postgres/
+infra/minio/
+infra/redis/
+infra/powersync/
