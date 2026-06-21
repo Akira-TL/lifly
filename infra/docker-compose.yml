@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: lifecore
       POSTGRES_DB: lifecore
     ports:
-      - "5432:5432"
+      - "8332:5432"
     volumes:
       - lifecore_postgres:/var/lib/postgresql/data
 
@@ -15,18 +15,18 @@ services:
     image: redis:7
     container_name: lifecore-redis
     ports:
-      - "6379:6379"
+      - "8379:6379"
 
   minio:
     image: minio/minio:latest
     container_name: lifecore-minio
-    command: server /data --console-address ":9001"
+    command: server /data --console-address ":8301"
     environment:
       MINIO_ROOT_USER: lifecore
       MINIO_ROOT_PASSWORD: lifecore-secret
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "8300:9000"
+      - "8301:9001"
     volumes:
       - lifecore_minio:/data
 
@@ -35,7 +35,7 @@ services:
     container_name: lifecore-powersync
     profiles: ["powersync"]
     ports:
-      - "8080:8080"
+      - "8380:8080"
     environment:
       POWERSYNC_CONFIG_PATH: /config/powersync.yaml
     volumes:

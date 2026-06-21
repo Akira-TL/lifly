@@ -1,0 +1,52 @@
+from __future__ import annotations
+
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.core.database import engine
+from app.core.config import settings
+from app.db.models import Base
+from app.modules.memos.router import router as memo_router
+from app.modules.ledger.router import router as ledger_router
+from app.modules.tasks.router import router as task_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception:
+        print("WARN: Database unavailable, skipping table creation")
+    yield
+    try:
+        await engine.dispose()
+    except Exception:
+        pass
+
+
+app = FastAPI(
+    title="Lifily API",
+    version="0.1.0",
+    docs_url="/docs",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(memo_router, prefix="/api/v1/memos", tags=["memos"])
+app.include_router(ledger_router, prefix="/api/v1/ledger", tags=["ledger"])
+app.include_router(task_router, prefix="/api/v1/tasks", tags=["tasks"])
+
+
+@app.get("/api/v1/health")
+async def health():
+    return {"status": "ok", "version": "0.1.0", "port": settings.api_port}

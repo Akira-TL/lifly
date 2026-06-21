@@ -8,7 +8,7 @@
     "lint": "turbo lint",
     "test": "turbo test",
     "typecheck": "turbo typecheck",
-    "dev:api": "cd services/api && uv run fastapi dev app/main.py",
+    "dev:api": "cd services/api && uv run fastapi dev app/main.py --port 8310",
     "dev:flutter:windows": "cd apps/client_flutter && flutter run -d windows",
     "analyze:flutter": "cd apps/client_flutter && flutter analyze"
   },
