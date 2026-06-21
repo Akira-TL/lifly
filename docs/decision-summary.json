@@ -1,0 +1,28 @@
+{
+  "project": "Lifily",
+  "version": "v0.1-draft",
+  "date": "2026-06-21",
+  "decisions": {
+    "positioning": "personal-first, commercial-later",
+    "client": "Flutter",
+    "first_platforms": [
+      "Windows",
+      "Android"
+    ],
+    "sync": "PowerSync",
+    "backend": "FastAPI + PostgreSQL",
+    "mcp": {
+      "cloud": "TypeScript + Streamable HTTP",
+      "local": "TypeScript + stdio, Windows only"
+    },
+    "storage": "Object Storage for binary assets, database metadata only",
+    "mvp_modules": [
+      "Memo",
+      "Ledger",
+      "Task/Reminder"
+    ],
+    "no_android_notification_listener": true,
+    "multi_user": false,
+    "e2ee_in_mvp": false
+  }
+}
