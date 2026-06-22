@@ -145,3 +145,51 @@ class TaskResponse(BaseModel):
     completed_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+# ─── Asset ───────────────────────────────────────────────────────────────────
+
+class AssetCreateUploadUrl(BaseModel):
+    filename: str
+    mime_type: str | None = None
+    size_bytes: int | None = None
+    asset_type: str = Field(default="file", pattern=r"^(image|pdf|ppt|mindmap|file|audio|video)$")
+
+
+class AssetRegisterExternalUrl(BaseModel):
+    external_url: str
+    external_provider: str | None = None
+    asset_type: str = Field(default="link", pattern=r"^(image|pdf|ppt|mindmap|file|audio|video|link|embed)$")
+    title: str | None = None
+    preview_url: str | None = None
+
+
+class AssetUploadCompleteRequest(BaseModel):
+    sha256: str | None = None
+    size_bytes: int | None = None
+
+
+class AssetUpdate(BaseModel):
+    filename: str | None = None
+    visibility: str | None = Field(default=None, pattern=r"^(private|shared|public)$")
+    title: str | None = None
+
+
+class AssetResponse(BaseModel):
+    id: str
+    user_id: str
+    kind: str
+    asset_type: str
+    filename: str | None
+    mime_type: str | None
+    size_bytes: int | None
+    sha256: str | None
+    storage_provider: str | None
+    storage_key: str | None
+    external_url: str | None
+    external_provider: str | None
+    visibility: str
+    sync_status: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
