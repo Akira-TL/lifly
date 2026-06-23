@@ -1,5 +1,11 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Architecture Change
+  - name: Architecture Change / ADR
     url: ../issues/new?template=architecture-decision.yml
-    about: 架构冻结项变更必须走 ADR
+    about: 架构冻结项变更必须走 ADR，不要用普通 AI Task。
+  - name: AI Task Protocol
+    url: ../../blob/master/docs/31-agent-task-protocol.md
+    about: AI agent 执行任务前必须阅读任务协议。
+  - name: Architecture Freeze
+    url: ../../blob/master/docs/26-v0.1-architecture-freeze.md
+    about: 查看 Lifly v0.1 架构冻结边界。
