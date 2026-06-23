@@ -12,6 +12,10 @@ docs/26-v0.1-architecture-freeze.md
 docs/27-milestones.md
 docs/28-issues-backlog.md
 docs/30-monorepo-setup.md
+docs/31-agent-task-protocol.md
+docs/32-pr-review-protocol.md
+docs/33-github-gitlab-project-setup.md
+docs/34-architecture-decision-record-template.md
 ```
 
 ## Quick Start
@@ -36,3 +40,15 @@ packages/shared
 infra
 docs
 ```
+
+## AI Agent Rule
+
+Before editing code, every AI agent must read:
+
+```text
+docs/26-v0.1-architecture-freeze.md
+current GitHub Issue
+related module docs
+```
+
+The Issue is the task contract. Do not expand scope beyond the Issue.
