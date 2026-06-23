@@ -3,27 +3,90 @@ description: 缺陷报告
 title: "[BUG] "
 labels: ["type:bug"]
 body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: 问题发生在哪个模块
+      options:
+        - client
+        - backend
+        - mcp
+        - sync
+        - asset
+        - ledger
+        - memo
+        - task
+        - import
+        - security
+        - devops
+        - docs
+    validations:
+      required: true
+
   - type: textarea
     id: summary
     attributes:
       label: Summary
+      description: 问题摘要
     validations:
       required: true
+
   - type: textarea
     id: steps
     attributes:
       label: Reproduction Steps
+      description: 复现步骤
+      placeholder: |
+        1. 启动 ...
+        2. 执行 ...
+        3. 观察到 ...
     validations:
       required: true
+
   - type: textarea
     id: expected
     attributes:
       label: Expected
+      description: 期望行为
     validations:
       required: true
+
   - type: textarea
     id: actual
     attributes:
       label: Actual
+      description: 实际行为
     validations:
       required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: 运行环境
+      placeholder: |
+        OS:
+        Branch:
+        Commit:
+        Node:
+        pnpm:
+        Python/uv:
+        Flutter:
+        Docker:
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Screenshots
+      description: 日志或截图。不要粘贴 token、secret、用户隐私正文。
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: 影响范围与严重程度
+      placeholder: |
+        是否阻塞开发：
+        是否影响数据安全：
+        是否影响同步/删除/审计：
