@@ -167,22 +167,25 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
         payload = act.payload
 
         if act.type == "memo_create":
-            memo = Memo(
-                user_id="local-dev",
-                type=payload.get("type", "memo"),
-                title=payload.get("title"),
-                content_markdown=payload.get("content_markdown", ""),
-                tags=payload.get("tags"),
-                mood=payload.get("mood"),
-                source_capture_id=capture_id,
-                source="ai",
+            try:
+                data = MemoCreate.model_validate({
+                    **payload,
+                    "type": payload.get("type") or "memo",
+                    "source": payload.get("source") or "ai",
+                    "source_capture_id": capture_id,
+                })
+            except ValidationError as exc:
+                raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
+            memo = await create_memo_record(
+                db,
+                data,
+                user_id=DEFAULT_LOCAL_USER_ID,
+                actor_type="ai",
+                source_channel="mcp",
+                tool_name="capture_commit",
+                source_text=body.get("source_text") or act.raw_text,
             )
-            db.add(memo)
-            await db.flush()
-            await _write_audit(db, "local-dev", "create", "memo", memo.id,
-                               after=json_serialize(_memo_dict(memo)),
-                               tool_name="capture_commit",
-                               source_text=act.raw_text)
             created_entities.append({"type": "memo", "id": memo.id})
 
         elif act.type == "expense_create":
