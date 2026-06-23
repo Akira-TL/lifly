@@ -26,6 +26,7 @@ from app.modules.mcp.parse_engine import (
 )
 from app.modules.tasks.service import create_task_record, task_to_dict
 from app.schemas.common import (
+    CaptureUndoRequest,
     LedgerTransactionCreate,
     MemoCreate,
     TaskCreate,
@@ -223,16 +224,19 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
 @router.post("/capture/undo")
 async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
     body = await request.json()
-    undo_token = body.get("undo_token")
+    try:
+        data = CaptureUndoRequest.model_validate(body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
-    if not undo_token:
-        raise HTTPException(status_code=400, detail="undo_token is required")
-
+    undo_token = data.undo_token
     entries = get_undo_entries(undo_token)
     if not entries:
         raise HTTPException(status_code=404, detail="Undo token not found or expired")
 
-    undone = 0
+    undone_entities: list[dict] = []
+    failed_entities: list[dict] = []
+
     for entry in entries:
         model_class = {
             "memo": Memo,
@@ -241,6 +245,11 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
         }.get(entry.entity_type)
 
         if not model_class:
+            failed_entities.append({
+                "type": entry.entity_type,
+                "id": entry.entity_id,
+                "reason": "unsupported_entity_type",
+            })
             continue
 
         result = await db.execute(
@@ -251,6 +260,11 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
         )
         entity = result.scalar_one_or_none()
         if not entity:
+            failed_entities.append({
+                "type": entry.entity_type,
+                "id": entry.entity_id,
+                "reason": "not_found",
+            })
             continue
 
         before_snap = json_serialize(
@@ -266,14 +280,24 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
         if hasattr(entity, "revision"):
             entity.revision += 1
 
-        await _write_audit(db, DEFAULT_LOCAL_USER_ID, "undo_delete", entry.entity_type, entry.entity_id,
-                           before=before_snap,
-                           tool_name="capture_undo",
-                           source_text=f"undo_token={undo_token}")
-        undone += 1
+        await _write_audit(
+            db,
+            DEFAULT_LOCAL_USER_ID,
+            "undo_delete",
+            entry.entity_type,
+            entry.entity_id,
+            before=before_snap,
+            tool_name="capture_undo",
+            source_text=f"undo_token={undo_token}",
+        )
+        undone_entities.append({"type": entry.entity_type, "id": entry.entity_id})
 
     await db.commit()
-    return {"undone": undone, "entities": [{"type": e.entity_type, "id": e.entity_id} for e in entries]}
+    return {
+        "undone": len(undone_entities),
+        "entities": undone_entities,
+        "failed_entities": failed_entities,
+    }
 
 
 # ─── Direct CRUD Tools ────────────────────────────────────────────────────────

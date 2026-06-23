@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 
 
 # ─── Common ─────────────────────────────────────────────────────────────────
-
 def json_serialize(obj: dict | list) -> dict | list:
     """Convert datetimes to ISO strings for JSON serialization."""
     import json
@@ -30,6 +29,12 @@ class ApiResponse(BaseModel):
     success: bool = True
     data: dict | list | None = None
     error: str | None = None
+
+
+# ─── MCP ────────────────────────────────────────────────────────────────────
+
+class CaptureUndoRequest(BaseModel):
+    undo_token: str = Field(min_length=1)
 
 
 # ─── Memo ───────────────────────────────────────────────────────────────────
