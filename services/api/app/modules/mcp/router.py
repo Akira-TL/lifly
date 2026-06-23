@@ -5,32 +5,26 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import ValidationError
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.security import create_access_token
-from app.db.models import (
-    Memo,
-    LedgerTransaction,
-    Task,
-    Asset,
-    AuditLog,
-    MemoAssetRef,
+from app.db.models import AuditLog, LedgerTransaction, Memo, Task
+from app.modules.ledger.service import (
+    create_ledger_transaction_record,
+    ledger_transaction_to_dict,
 )
 from app.modules.memos.service import (
     DEFAULT_LOCAL_USER_ID,
     create_memo_record,
 )
-from app.schemas.common import MemoCreate, json_serialize
 from app.modules.mcp.parse_engine import (
-    parse_mixed_input,
     CAPTURE_STORE,
-    UNDO_STORE,
-    UndoEntry,
     add_undo_entry,
     get_undo_entries,
+    parse_mixed_input,
 )
+from app.schemas.common import LedgerTransactionCreate, MemoCreate, json_serialize
 
 router = APIRouter()
 
@@ -82,19 +76,7 @@ def _memo_dict(memo: Memo) -> dict:
 
 
 def _tx_dict(tx: LedgerTransaction) -> dict:
-    return {
-        "id": tx.id,
-        "user_id": tx.user_id,
-        "direction": tx.direction,
-        "amount": float(tx.amount),
-        "currency": tx.currency,
-        "merchant": tx.merchant,
-        "note": tx.note,
-        "occurred_at": tx.occurred_at.isoformat() if tx.occurred_at else None,
-        "status": tx.status,
-        "created_at": tx.created_at.isoformat() if tx.created_at else None,
-        "updated_at": tx.updated_at.isoformat() if tx.updated_at else None,
-    }
+    return ledger_transaction_to_dict(tx)
 
 
 def _task_dict(task: Task) -> dict:
@@ -189,29 +171,26 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
             created_entities.append({"type": "memo", "id": memo.id})
 
         elif act.type == "expense_create":
-            occurred_at = payload.get("occurred_at")
-            if occurred_at and isinstance(occurred_at, str):
-                occurred_at = datetime.fromisoformat(occurred_at)
+            try:
+                data = LedgerTransactionCreate.model_validate({
+                    **payload,
+                    "direction": payload.get("direction") or "expense",
+                    "source": payload.get("source") or "ai",
+                    "source_capture_id": capture_id,
+                    "confidence": payload.get("confidence") if payload.get("confidence") is not None else act.confidence,
+                })
+            except ValidationError as exc:
+                raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
-            tx = LedgerTransaction(
-                user_id="local-dev",
-                direction=payload.get("direction", "expense"),
-                amount=payload.get("amount", 0),
-                currency=payload.get("currency", "CNY"),
-                merchant=payload.get("merchant"),
-                category_id=payload.get("category_id"),
-                note=payload.get("note"),
-                occurred_at=occurred_at or datetime.now(timezone.utc),
-                source="ai",
-                source_capture_id=capture_id,
-                confidence=act.confidence,
+            tx = await create_ledger_transaction_record(
+                db,
+                data,
+                user_id=DEFAULT_LOCAL_USER_ID,
+                actor_type="ai",
+                source_channel="mcp",
+                tool_name="capture_commit",
+                source_text=body.get("source_text") or act.raw_text,
             )
-            db.add(tx)
-            await db.flush()
-            await _write_audit(db, "local-dev", "create", "ledger_transaction", tx.id,
-                               after=json_serialize(_tx_dict(tx)),
-                               tool_name="capture_commit",
-                               source_text=act.raw_text)
             created_entities.append({"type": "ledger_transaction", "id": tx.id})
 
         elif act.type == "task_create":
@@ -220,7 +199,7 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
                 remind_at = datetime.fromisoformat(remind_at)
 
             task = Task(
-                user_id="local-dev",
+                user_id=DEFAULT_LOCAL_USER_ID,
                 title=payload.get("title", ""),
                 description=payload.get("description"),
                 due_at=payload.get("due_at"),
@@ -231,7 +210,7 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
             )
             db.add(task)
             await db.flush()
-            await _write_audit(db, "local-dev", "create", "task", task.id,
+            await _write_audit(db, DEFAULT_LOCAL_USER_ID, "create", "task", task.id,
                                after=json_serialize(_task_dict(task)),
                                tool_name="capture_commit",
                                source_text=act.raw_text)
@@ -280,7 +259,7 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
         result = await db.execute(
             select(model_class).where(
                 getattr(model_class, "id") == entry.entity_id,
-                getattr(model_class, "user_id") == "local-dev",
+                getattr(model_class, "user_id") == DEFAULT_LOCAL_USER_ID,
             )
         )
         entity = result.scalar_one_or_none()
@@ -300,7 +279,7 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
         if hasattr(entity, "revision"):
             entity.revision += 1
 
-        await _write_audit(db, "local-dev", "undo_delete", entry.entity_type, entry.entity_id,
+        await _write_audit(db, DEFAULT_LOCAL_USER_ID, "undo_delete", entry.entity_type, entry.entity_id,
                            before=before_snap,
                            tool_name="capture_undo",
                            source_text=f"undo_token={undo_token}")
@@ -354,7 +333,7 @@ async def mcp_memo_search(request: Request, db: AsyncSession = Depends(get_db)):
     limit = body.get("limit", 20)
 
     query = select(Memo).where(
-        Memo.user_id == "local-dev",
+        Memo.user_id == DEFAULT_LOCAL_USER_ID,
         Memo.status == "active",
     )
     if q:
@@ -369,26 +348,24 @@ async def mcp_memo_search(request: Request, db: AsyncSession = Depends(get_db)):
 @router.post("/expense/create")
 async def mcp_expense_create(request: Request, db: AsyncSession = Depends(get_db)):
     body = await request.json()
-    occurred_at = body.get("occurred_at")
-    if occurred_at and isinstance(occurred_at, str):
-        occurred_at = datetime.fromisoformat(occurred_at)
+    try:
+        data = LedgerTransactionCreate.model_validate({
+            **body,
+            "direction": body.get("direction") or "expense",
+            "source": body.get("source") or "ai",
+        })
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
-    tx = LedgerTransaction(
-        user_id="local-dev",
-        direction=body.get("direction", "expense"),
-        amount=body.get("amount", 0),
-        currency=body.get("currency", "CNY"),
-        merchant=body.get("merchant"),
-        category_id=body.get("category_id"),
-        note=body.get("note"),
-        occurred_at=occurred_at or datetime.now(timezone.utc),
-        source="ai",
+    tx = await create_ledger_transaction_record(
+        db,
+        data,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        actor_type="ai",
+        source_channel="mcp",
+        tool_name="expense_create",
+        source_text=body.get("source_text") or body.get("note") or body.get("merchant"),
     )
-    db.add(tx)
-    await db.flush()
-    await _write_audit(db, "local-dev", "create", "ledger_transaction", tx.id,
-                       after=json_serialize(_tx_dict(tx)),
-                       tool_name="expense_create")
     await db.commit()
     await db.refresh(tx)
 
@@ -405,7 +382,7 @@ async def mcp_expense_search(request: Request, db: AsyncSession = Depends(get_db
     limit = body.get("limit", 20)
 
     query = select(LedgerTransaction).where(
-        LedgerTransaction.user_id == "local-dev",
+        LedgerTransaction.user_id == DEFAULT_LOCAL_USER_ID,
         LedgerTransaction.status == "active",
     )
     if q:
@@ -428,7 +405,7 @@ async def mcp_expense_summary(request: Request, db: AsyncSession = Depends(get_d
             func.sum(LedgerTransaction.amount).label("total_expense"),
             func.count().label("count"),
         ).where(
-            LedgerTransaction.user_id == "local-dev",
+            LedgerTransaction.user_id == DEFAULT_LOCAL_USER_ID,
             LedgerTransaction.direction == "expense",
             LedgerTransaction.status == "active",
             LedgerTransaction.occurred_at >= month_start,
@@ -449,7 +426,7 @@ async def mcp_task_create(request: Request, db: AsyncSession = Depends(get_db)):
         remind_at = datetime.fromisoformat(remind_at)
 
     task = Task(
-        user_id="local-dev",
+        user_id=DEFAULT_LOCAL_USER_ID,
         title=body.get("title", ""),
         description=body.get("description"),
         due_at=body.get("due_at"),
@@ -459,7 +436,7 @@ async def mcp_task_create(request: Request, db: AsyncSession = Depends(get_db)):
     )
     db.add(task)
     await db.flush()
-    await _write_audit(db, "local-dev", "create", "task", task.id,
+    await _write_audit(db, DEFAULT_LOCAL_USER_ID, "create", "task", task.id,
                        after=json_serialize(_task_dict(task)),
                        tool_name="task_create")
     await db.commit()
@@ -478,7 +455,7 @@ async def mcp_task_list(request: Request, db: AsyncSession = Depends(get_db)):
     limit = body.get("limit", 20)
 
     query = select(Task).where(
-        Task.user_id == "local-dev",
+        Task.user_id == DEFAULT_LOCAL_USER_ID,
         Task.status == "active",
     )
     if task_status:
@@ -497,7 +474,7 @@ async def mcp_task_complete(request: Request, db: AsyncSession = Depends(get_db)
         raise HTTPException(status_code=400, detail="task_id is required")
 
     result = await db.execute(
-        select(Task).where(Task.id == task_id, Task.user_id == "local-dev")
+        select(Task).where(Task.id == task_id, Task.user_id == DEFAULT_LOCAL_USER_ID)
     )
     task = result.scalar_one_or_none()
     if not task:
@@ -508,7 +485,7 @@ async def mcp_task_complete(request: Request, db: AsyncSession = Depends(get_db)
     task.completed_at = datetime.now(timezone.utc)
     task.revision += 1
 
-    await _write_audit(db, "local-dev", "complete", "task", task_id,
+    await _write_audit(db, DEFAULT_LOCAL_USER_ID, "complete", "task", task_id,
                        before=before, after=json_serialize(_task_dict(task)),
                        tool_name="task_complete")
     await db.commit()
