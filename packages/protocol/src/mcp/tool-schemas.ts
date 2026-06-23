@@ -97,28 +97,41 @@ export const TaskCompleteInputSchema = z.object({
   task_id: z.string().min(1),
 });
 
-export const AssetTypeSchema = z.enum([
+export const InternalAssetTypeSchema = z.enum([
   "image",
-  "file",
   "pdf",
-  "slide",
+  "ppt",
   "mindmap",
-  "link",
+  "file",
   "audio",
   "video",
 ]);
+
+export const ExternalAssetTypeSchema = z.enum([
+  "image",
+  "pdf",
+  "ppt",
+  "mindmap",
+  "file",
+  "audio",
+  "video",
+  "link",
+  "embed",
+]);
+
+export const AssetTypeSchema = z.union([InternalAssetTypeSchema, z.enum(["link", "embed"])]);
 
 export const AssetCreateUploadUrlInputSchema = z.object({
   filename: z.string().min(1),
   mime_type: z.string().min(1).optional().nullable(),
   size_bytes: z.number().int().nonnegative().optional().nullable(),
-  asset_type: AssetTypeSchema.default("file"),
+  asset_type: InternalAssetTypeSchema.default("file"),
 });
 
 export const AssetRegisterExternalUrlInputSchema = z.object({
   external_url: z.string().url(),
   title: z.string().min(1).optional().nullable(),
-  asset_type: AssetTypeSchema.default("link"),
+  asset_type: ExternalAssetTypeSchema.default("link"),
 });
 
 export const LiflyMcpToolInputSchemas = {
