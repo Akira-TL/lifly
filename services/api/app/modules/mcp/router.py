@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import ValidationError
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +18,11 @@ from app.db.models import (
     AuditLog,
     MemoAssetRef,
 )
-from app.schemas.common import json_serialize
+from app.modules.memos.service import (
+    DEFAULT_LOCAL_USER_ID,
+    create_memo_record,
+)
+from app.schemas.common import MemoCreate, json_serialize
 from app.modules.mcp.parse_engine import (
     parse_mixed_input,
     CAPTURE_STORE,
@@ -307,27 +312,36 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
 @router.post("/memo/create")
 async def mcp_memo_create(request: Request, db: AsyncSession = Depends(get_db)):
     body = await request.json()
-    memo = Memo(
-        user_id="local-dev",
-        type=body.get("type", "memo"),
-        title=body.get("title"),
-        content_markdown=body.get("content_markdown", ""),
-        tags=body.get("tags"),
-        mood=body.get("mood"),
-        source="ai",
+    try:
+        data = MemoCreate.model_validate({
+            **body,
+            "source": body.get("source") or "ai",
+        })
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
+    memo = await create_memo_record(
+        db,
+        data,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        actor_type="ai",
+        source_channel="mcp",
+        tool_name="memo_create",
+        source_text=body.get("source_text") or body.get("content_markdown"),
     )
-    db.add(memo)
-    await db.flush()
-    await _write_audit(db, "local-dev", "create", "memo", memo.id,
-                       after=json_serialize(_memo_dict(memo)),
-                       tool_name="memo_create")
     await db.commit()
     await db.refresh(memo)
 
     undo_token = str(uuid.uuid4())
     add_undo_entry(undo_token, "memo", memo.id, "create")
 
-    return {"memo": _memo_dict(memo), "undo_token": undo_token}
+    memo_data = _memo_dict(memo)
+    return {
+        "memo_id": memo.id,
+        "status": memo.status,
+        "memo": memo_data,
+        "undo_token": undo_token,
+    }
 
 
 @router.post("/memo/search")
