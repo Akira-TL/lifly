@@ -74,6 +74,43 @@ describe("Lifly MCP Tool Schema v0.1", () => {
     expect(parsed.currency).toBe("CNY");
   });
 
+  it("aligns internal upload asset types with the Python runtime", () => {
+    const parsed = parseLiflyMcpToolInput("asset_create_upload_url", {
+      filename: "deck.pptx",
+      asset_type: "ppt",
+    });
+
+    expect(parsed.asset_type).toBe("ppt");
+
+    expect(() =>
+      parseLiflyMcpToolInput("asset_create_upload_url", {
+        filename: "slide.pptx",
+        asset_type: "slide",
+      }),
+    ).toThrow();
+
+    expect(() =>
+      parseLiflyMcpToolInput("asset_create_upload_url", {
+        filename: "external-link.txt",
+        asset_type: "link",
+      }),
+    ).toThrow();
+  });
+
+  it("aligns external asset types with the Python runtime", () => {
+    const link = parseLiflyMcpToolInput("asset_register_external_url", {
+      external_url: "https://example.com/link",
+      asset_type: "link",
+    });
+    const embed = parseLiflyMcpToolInput("asset_register_external_url", {
+      external_url: "https://example.com/embed",
+      asset_type: "embed",
+    });
+
+    expect(link.asset_type).toBe("link");
+    expect(embed.asset_type).toBe("embed");
+  });
+
   it("rejects invalid external asset URL", () => {
     expect(() =>
       parseLiflyMcpToolInput("asset_register_external_url", {
