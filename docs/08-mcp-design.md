@@ -2,7 +2,11 @@
 
 ## 1. MCP 目标
 
-MCP 是 Lifily 的 AI 接入边界。所有 AI、机器人、Hermes、OpenClaw 等外部系统必须通过 MCP 工具访问 Lifily 能力。
+MCP 是 Lifly 的 AI 接入边界。所有 AI、机器人、Hermes、OpenClaw 等外部系统必须通过 MCP 工具访问 Lifly 能力。
+
+MCP 的核心职责不是“替代后端 API”，而是把自然语言和 AI 工具调用转成受控的结构化操作。
+
+---
 
 ## 2. MCP 形态
 
@@ -23,6 +27,8 @@ MCP 是 Lifily 的 AI 接入边界。所有 AI、机器人、Hermes、OpenClaw �
 - 认证：本机授权；
 - 写入：通过 Local Core Bridge 写入本地 SQLite。
 
+---
+
 ## 3. 设计原则
 
 1. Cloud MCP 和 Local MCP 共用 tool schema；
@@ -30,9 +36,32 @@ MCP 是 Lifily 的 AI 接入边界。所有 AI、机器人、Hermes、OpenClaw �
 3. 所有写操作必须写 audit log；
 4. 所有删除必须进入删除状态机；
 5. 工具数量必须控制，避免 Agent 乱调用；
-6. capture_parse 和 capture_commit 是 AI 混合输入的核心。
+6. `capture_parse` 和 `capture_commit` 是 AI 混合输入的核心；
+7. tool schema 必须先进入 `packages/protocol`，再被 Cloud MCP / Local MCP / 测试复用。
 
-## 4. 第一版工具清单
+---
+
+## 4. Schema Source of Truth
+
+Lifly MCP v0.1 的 schema source of truth 是：
+
+```text
+packages/protocol/src/mcp/tool-schemas.ts
+```
+
+这个包负责定义：
+
+- 第一版冻结工具名；
+- 每个工具的输入 schema；
+- 工具描述；
+- schema contract tests；
+- Cloud MCP 与 Local MCP 可复用的协议类型。
+
+当前后端中的 Python FastMCP 实现是 M0/M1 阶段的运行实现。后续是否迁移为独立 TypeScript Cloud MCP，需要通过 ADR 决定。
+
+---
+
+## 5. 第一版工具清单
 
 ```text
 capture_parse
@@ -54,7 +83,11 @@ asset_create_upload_url
 asset_register_external_url
 ```
 
-## 5. capture_parse
+禁止新增未经文档、schema、测试批准的 MCP tool。
+
+---
+
+## 6. capture_parse
 
 ### 作用
 
@@ -108,11 +141,13 @@ asset_register_external_url
 }
 ```
 
-## 6. capture_commit
+---
+
+## 7. capture_commit
 
 ### 作用
 
-确认执行 capture_parse 产生的动作。
+确认执行 `capture_parse` 产生的动作。
 
 ### 输入
 
@@ -137,9 +172,11 @@ asset_register_external_url
 }
 ```
 
-## 7. capture_undo
+---
 
-撤销最近一次 capture_commit。
+## 8. capture_undo
+
+撤销最近一次 `capture_commit`。
 
 ```json
 {
@@ -147,26 +184,37 @@ asset_register_external_url
 }
 ```
 
-## 8. memo_create
+---
+
+## 9. memo_create
 
 ```json
 {
   "type": "memo",
   "title": "标题",
   "content_markdown": "内容",
-  "tags": ["项目", "想法"],
-  "asset_ids": []
+  "tags": ["项目", "想法"]
 }
 ```
 
-## 9. expense_create
+`type` 允许值：
+
+```text
+memo
+journal
+clip
+doc
+```
+
+---
+
+## 10. expense_create
 
 ```json
 {
   "amount": 18,
   "currency": "CNY",
   "direction": "expense",
-  "category_id": "optional",
   "category_hint": "餐饮",
   "merchant": "食堂",
   "occurred_at": "2026-06-21T12:00:00+08:00",
@@ -174,7 +222,17 @@ asset_register_external_url
 }
 ```
 
-## 10. task_create
+`direction` 允许值：
+
+```text
+expense
+income
+transfer
+```
+
+---
+
+## 11. task_create
 
 ```json
 {
@@ -186,7 +244,18 @@ asset_register_external_url
 }
 ```
 
-## 11. asset_create_upload_url
+`priority` 允许值：
+
+```text
+low
+normal
+high
+urgent
+```
+
+---
+
+## 12. asset_create_upload_url
 
 用于内部附件上传。
 
@@ -194,7 +263,8 @@ asset_register_external_url
 {
   "filename": "image.png",
   "mime_type": "image/png",
-  "size_bytes": 123456
+  "size_bytes": 123456,
+  "asset_type": "image"
 }
 ```
 
@@ -208,7 +278,9 @@ asset_register_external_url
 }
 ```
 
-## 12. asset_register_external_url
+---
+
+## 13. asset_register_external_url
 
 用于外部链接/图床/第三方文档。
 
@@ -220,7 +292,9 @@ asset_register_external_url
 }
 ```
 
-## 13. 错误码
+---
+
+## 14. 错误码
 
 | 错误码 | 含义 |
 |---|---|
@@ -232,3 +306,14 @@ asset_register_external_url
 | ASSET_UPLOAD_FAILED | 附件上传失败 |
 | IMPORT_BATCH_INVALID | 导入批次无效 |
 | AI_PARSE_LOW_CONFIDENCE | 解析置信度过低 |
+
+---
+
+## 15. 当前实现说明
+
+截至 v0.1 M0 阶段：
+
+- Python FastMCP 已经提供 Cloud MCP 的运行实现；
+- `packages/protocol` 提供共享 schema 和 contract tests；
+- 后续 Cloud MCP / Local MCP 都必须对齐 `packages/protocol`；
+- 是否将 Cloud MCP 从 Python 内嵌实现迁移为独立 TypeScript 服务，需要单独 ADR。
