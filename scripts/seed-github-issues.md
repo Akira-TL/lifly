@@ -1,6 +1,14 @@
 # Seed GitHub Issues
 
-## Create Milestones
+本文档用于初始化 Lifly v0.1 的 GitHub Issues 和 Milestones。
+
+建议先运行：
+
+```bash
+./scripts/create-github-labels.sh Akira-TL/lifly
+```
+
+## 1. Create Milestones
 
 ```bash
 gh milestone create "M0 Repo Bootstrap & Technical Spikes"
@@ -11,18 +19,182 @@ gh milestone create "M4 Assets & Import MVP"
 gh milestone create "M5 Windows Local MCP"
 ```
 
-## Create M0 Issues
+## 2. Create M0 Issues
+
+### LC-0001 Repo bootstrap verification
 
 ```bash
-gh issue create --title "[LC-0001] Repo bootstrap" --label "type:infra,area:repo,agent:devops,priority:p0,status:ready" --milestone "M0 Repo Bootstrap & Technical Spikes" --body "创建 monorepo 基础结构，加入 docs、pnpm workspace、turbo、Flutter/FastAPI/MCP 服务目录。"
+gh issue create \
+  --title "[LC-0001] Verify M0 repo bootstrap and local dev startup" \
+  --label "type:spike,area:repo,area:devops,agent:devops,priority:p0,status:ready,needs-local-validation" \
+  --milestone "M0 Repo Bootstrap & Technical Spikes" \
+  --body "$(cat <<'EOF'
+Goal:
+Verify that the current Lifly monorepo can be installed and started locally.
 
-gh issue create --title "[LC-0002] Add docs v0.1 into repository" --label "type:docs,agent:docs,priority:p0,status:ready" --milestone "M0 Repo Bootstrap & Technical Spikes" --body "将开发文档包放入 docs/，并在 README 中链接关键文档。"
+Context:
+This is a local validation task. The GitHub connector cannot run pnpm/docker/uv/flutter commands.
 
-gh issue create --title "[LC-0003] FastAPI skeleton" --label "type:infra,area:backend,agent:backend,priority:p0,status:ready" --milestone "M0 Repo Bootstrap & Technical Spikes" --body "初始化 services/api，提供 health check。"
+Scope:
+- Validate package manager setup
+- Validate docker compose config
+- Validate API startup
+- Validate current docs and repo structure
 
-gh issue create --title "[LC-0004] Cloud MCP skeleton" --label "type:infra,area:mcp,agent:mcp,priority:p0,status:ready" --milestone "M0 Repo Bootstrap & Technical Spikes" --body "初始化 services/cloud-mcp，提供基础 MCP server 和 tool list。"
+Allowed Files / Directories:
+- No code changes unless a failure is found
+- If fixes are required, create a separate branch and PR
 
-gh issue create --title "[LC-0005] Flutter client skeleton" --label "type:infra,area:client,agent:client,priority:p0,status:ready" --milestone "M0 Repo Bootstrap & Technical Spikes" --body "初始化 apps/client_flutter，支持 Windows 和 Android 构建。"
+Forbidden Changes:
+- Do not add new product features
+- Do not change architecture freeze items
+- Do not change database schema unless required to fix startup
 
-gh issue create --title "[LC-0006] Docker Compose local infra" --label "type:infra,area:devops,agent:devops,priority:p0,status:ready" --milestone "M0 Repo Bootstrap & Technical Spikes" --body "提供 PostgreSQL、Redis、MinIO、PowerSync 的本地开发配置。"
+Acceptance Criteria:
+- pnpm install succeeds
+- docker compose -f infra/docker-compose.yml config succeeds
+- API health endpoint works locally
+- Any failure is documented as follow-up issue
+
+Validation:
+- pnpm install
+- docker compose -f infra/docker-compose.yml config
+- docker compose -f infra/docker-compose.yml up -d
+- cd services/api && uv run uvicorn app.main:app --reload --port 8310
+- curl http://localhost:8310/api/v1/health
+
+Related Docs:
+- docs/26-v0.1-architecture-freeze.md
+- docs/30-monorepo-setup.md
+- docs/31-agent-task-protocol.md
+EOF
+)"
+```
+
+### LC-0002 Architecture audit
+
+```bash
+gh issue create \
+  --title "[LC-0002] Audit current code against Lifly v0.1 architecture freeze" \
+  --label "type:docs,area:repo,agent:architect,priority:p0,status:ready" \
+  --milestone "M0 Repo Bootstrap & Technical Spikes" \
+  --body "$(cat <<'EOF'
+Goal:
+Compare current code with Lifly v0.1 architecture freeze and document gaps.
+
+Context:
+The repository already has FastAPI modules, SQLAlchemy models, MCP routing, docker compose, and workspace files. We need a code-vs-doc audit before adding more features.
+
+Scope:
+- Inspect services/api/app/main.py
+- Inspect services/api/app/db/models.py
+- Inspect services/api/app/modules/**
+- Inspect infra/docker-compose.yml
+- Inspect package.json and pnpm-workspace.yaml
+- Write docs/35-current-architecture-audit.md
+
+Allowed Files / Directories:
+- docs/35-current-architecture-audit.md
+- README.md only if docs index needs update
+
+Forbidden Changes:
+- Do not change runtime code in this audit issue
+- Do not add new product features
+- Do not change architecture freeze
+
+Acceptance Criteria:
+- Audit document lists aligned items
+- Audit document lists gaps
+- Audit document lists recommended next issues
+- No runtime code changes
+
+Validation:
+- Documentation review
+
+Related Docs:
+- docs/26-v0.1-architecture-freeze.md
+- docs/06-data-model.md
+- docs/08-mcp-design.md
+- docs/31-agent-task-protocol.md
+EOF
+)"
+```
+
+### LC-0003 MCP tool schema v0.1
+
+```bash
+gh issue create \
+  --title "[LC-0003] Define Lifly MCP tool schema v0.1" \
+  --label "type:feature,area:mcp,area:protocol,agent:mcp,priority:p0,status:ready" \
+  --milestone "M0 Repo Bootstrap & Technical Spikes" \
+  --body "$(cat <<'EOF'
+Goal:
+Define the first stable MCP tool schema package for Lifly.
+
+Context:
+MCP is the AI boundary. Tool schemas must be stable before implementing individual tool handlers.
+
+Scope:
+- Define schemas for capture_parse, capture_commit, capture_undo
+- Define schemas for memo_create, memo_search
+- Define schemas for expense_create, expense_search, expense_summary
+- Define schemas for task_create, task_list, task_complete
+- Define schemas for asset_create_upload_url, asset_register_external_url
+
+Allowed Files / Directories:
+- packages/protocol/**
+- services/cloud-mcp/** only if needed for imports
+- docs/08-mcp-design.md only if schema details need alignment
+
+Forbidden Changes:
+- Do not implement business persistence in this issue
+- Do not add tools outside architecture freeze
+- Do not call database directly from MCP
+
+Acceptance Criteria:
+- Schema package exports all v0.1 tool schemas
+- Schema tests exist
+- Tool names match docs/26-v0.1-architecture-freeze.md
+
+Validation:
+- pnpm --filter @lifly/protocol test
+- pnpm typecheck
+
+Related Docs:
+- docs/08-mcp-design.md
+- docs/26-v0.1-architecture-freeze.md
+EOF
+)"
+```
+
+## 3. Create M1 Issues after M0 is green
+
+Only create M1 issues after LC-0001 and LC-0002 are complete.
+
+Suggested next issues:
+
+```text
+[LC-0101] Define initial database migration alignment
+[LC-0102] Implement memo local CRUD validation path
+[LC-0103] Implement ledger transaction CRUD validation path
+[LC-0104] Implement task CRUD validation path
+```
+
+## 4. AI Agent Prompt Template
+
+Use this when assigning an issue to an AI agent:
+
+```text
+You are the Lifly <ROLE> Agent.
+Read first:
+- docs/26-v0.1-architecture-freeze.md
+- docs/31-agent-task-protocol.md
+- current Issue
+- related docs listed in the Issue
+
+Execute only this Issue.
+Do not expand scope.
+Do not change architecture freeze items.
+Return output as:
+Summary / Changed Files / Validation / Risks / Follow-ups.
 ```
