@@ -1,24 +1,25 @@
 from __future__ import annotations
 
-import uuid
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.storage import (
-    generate_upload_url,
     generate_download_url,
     check_object_exists,
 )
 from app.db.models import Asset, MemoAssetRef
+from app.modules.assets.service import (
+    asset_to_response,
+    create_internal_asset_upload_record,
+    register_external_asset_record,
+)
 from app.schemas.common import (
     AssetCreateUploadUrl,
     AssetRegisterExternalUrl,
     AssetUploadCompleteRequest,
     AssetUpdate,
-    AssetResponse,
     PaginatedResponse,
     ApiResponse,
 )
@@ -26,76 +27,37 @@ from app.schemas.common import (
 router = APIRouter()
 
 
-def _asset_to_response(asset: Asset) -> AssetResponse:
-    return AssetResponse(
-        id=asset.id,
-        user_id=asset.user_id,
-        kind=asset.kind,
-        asset_type=asset.asset_type,
-        filename=asset.filename,
-        mime_type=asset.mime_type,
-        size_bytes=asset.size_bytes,
-        sha256=asset.sha256,
-        storage_provider=asset.storage_provider,
-        storage_key=asset.storage_key,
-        external_url=asset.external_url,
-        external_provider=asset.external_provider,
-        visibility=asset.visibility,
-        sync_status=asset.sync_status,
-        status=asset.status,
-        created_at=asset.created_at,
-        updated_at=asset.updated_at,
-    )
-
-
 @router.post("/create-upload-url", response_model=ApiResponse)
 async def create_upload_url(data: AssetCreateUploadUrl, db: AsyncSession = Depends(get_db)):
-    asset_id = str(uuid.uuid4())
-    storage_key = f"attachments/local-dev/{asset_id}/{data.filename}"
-
-    asset = Asset(
-        id=asset_id,
+    asset, upload_url = await create_internal_asset_upload_record(
+        db,
+        data,
         user_id="local-dev",
-        kind="internal",
-        asset_type=data.asset_type,
-        filename=data.filename,
-        mime_type=data.mime_type,
-        size_bytes=data.size_bytes,
-        storage_provider="minio",
-        storage_key=storage_key,
-        sync_status="pending",
-        visibility="private",
+        actor_type="user",
+        source_channel="api",
     )
-    db.add(asset)
-    await db.flush()
-
-    upload_url = generate_upload_url(storage_key)
-
     await db.commit()
+    await db.refresh(asset)
     return ApiResponse(data={
-        "asset_id": asset_id,
-        "storage_key": storage_key,
+        "asset_id": asset.id,
+        "storage_key": asset.storage_key,
         "upload_url": upload_url,
-        "asset": _asset_to_response(asset).model_dump(),
+        "asset": asset_to_response(asset).model_dump(mode="json"),
     })
 
 
 @router.post("/register-external-url", response_model=ApiResponse)
 async def register_external_url(data: AssetRegisterExternalUrl, db: AsyncSession = Depends(get_db)):
-    asset = Asset(
+    asset = await register_external_asset_record(
+        db,
+        data,
         user_id="local-dev",
-        kind="external",
-        asset_type=data.asset_type,
-        external_url=data.external_url,
-        external_provider=data.external_provider,
-        filename=data.title,
-        sync_status="synced",
-        visibility="private",
+        actor_type="user",
+        source_channel="api",
     )
-    db.add(asset)
     await db.commit()
     await db.refresh(asset)
-    return ApiResponse(data=_asset_to_response(asset).model_dump())
+    return ApiResponse(data=asset_to_response(asset).model_dump(mode="json"))
 
 
 @router.post("/{asset_id}/upload-complete", response_model=ApiResponse)
@@ -124,7 +86,7 @@ async def upload_complete(
 
     await db.commit()
     await db.refresh(asset)
-    return ApiResponse(data=_asset_to_response(asset).model_dump())
+    return ApiResponse(data=asset_to_response(asset).model_dump(mode="json"))
 
 
 @router.get("/{asset_id}/download-url", response_model=ApiResponse)
@@ -167,7 +129,7 @@ async def list_assets(
             total=total or 0,
             limit=limit,
             offset=offset,
-            items=[_asset_to_response(a).model_dump() for a in assets],
+            items=[asset_to_response(a).model_dump(mode="json") for a in assets],
         ).model_dump()
     )
 
@@ -180,7 +142,7 @@ async def get_asset(asset_id: str, db: AsyncSession = Depends(get_db)):
     asset = result.scalar_one_or_none()
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
-    return ApiResponse(data=_asset_to_response(asset).model_dump())
+    return ApiResponse(data=asset_to_response(asset).model_dump(mode="json"))
 
 
 @router.put("/{asset_id}", response_model=ApiResponse)
@@ -198,7 +160,7 @@ async def update_asset(asset_id: str, data: AssetUpdate, db: AsyncSession = Depe
 
     await db.commit()
     await db.refresh(asset)
-    return ApiResponse(data=_asset_to_response(asset).model_dump())
+    return ApiResponse(data=asset_to_response(asset).model_dump(mode="json"))
 
 
 @router.delete("/{asset_id}", response_model=ApiResponse)

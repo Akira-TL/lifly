@@ -10,6 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.db.models import AuditLog, LedgerTransaction, Memo, Task
+from app.modules.assets.service import (
+    asset_to_dict,
+    create_internal_asset_upload_record,
+    register_external_asset_record,
+)
 from app.modules.ledger.service import (
     create_ledger_transaction_record,
     ledger_transaction_to_dict,
@@ -26,6 +31,8 @@ from app.modules.mcp.parse_engine import (
 )
 from app.modules.tasks.service import create_task_record, task_to_dict
 from app.schemas.common import (
+    AssetCreateUploadUrl,
+    AssetRegisterExternalUrl,
     CaptureUndoRequest,
     LedgerTransactionCreate,
     MemoCreate,
@@ -406,7 +413,6 @@ async def mcp_expense_search(request: Request, db: AsyncSession = Depends(get_db
 
 @router.post("/expense/summary")
 async def mcp_expense_summary(request: Request, db: AsyncSession = Depends(get_db)):
-    # 当月汇总
     now = datetime.now(timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
@@ -500,3 +506,54 @@ async def mcp_task_complete(request: Request, db: AsyncSession = Depends(get_db)
     await db.commit()
     await db.refresh(task)
     return {"task": _task_dict(task)}
+
+
+@router.post("/asset/create-upload-url")
+async def mcp_asset_create_upload_url(request: Request, db: AsyncSession = Depends(get_db)):
+    body = await request.json()
+    try:
+        data = AssetCreateUploadUrl.model_validate(body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
+    asset, upload_url = await create_internal_asset_upload_record(
+        db,
+        data,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        actor_type="ai",
+        source_channel="mcp",
+        tool_name="asset_create_upload_url",
+        source_text=body.get("source_text") or body.get("filename"),
+    )
+    await db.commit()
+    await db.refresh(asset)
+
+    return {
+        "asset_id": asset.id,
+        "storage_key": asset.storage_key,
+        "upload_url": upload_url,
+        "asset": asset_to_dict(asset),
+    }
+
+
+@router.post("/asset/register-external-url")
+async def mcp_asset_register_external_url(request: Request, db: AsyncSession = Depends(get_db)):
+    body = await request.json()
+    try:
+        data = AssetRegisterExternalUrl.model_validate(body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
+    asset = await register_external_asset_record(
+        db,
+        data,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        actor_type="ai",
+        source_channel="mcp",
+        tool_name="asset_register_external_url",
+        source_text=body.get("source_text") or body.get("external_url"),
+    )
+    await db.commit()
+    await db.refresh(asset)
+
+    return {"asset": asset_to_dict(asset)}
