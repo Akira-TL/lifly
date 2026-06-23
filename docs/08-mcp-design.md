@@ -147,7 +147,7 @@ asset_register_external_url
 
 ### 作用
 
-确认执行 `capture_parse` 产生的动作。
+确认执行 `capture_parse` 产生的动作。当前实现要求先调用 `capture_parse` 获取 `capture_id`，再调用 `capture_commit`。不要直接把任意 `actions` 数组传给 `capture_commit`。
 
 ### 输入
 
@@ -171,6 +171,56 @@ asset_register_external_url
   "undo_token": "token"
 }
 ```
+
+### 当前 memo_create action 运行路径
+
+当 `capture_commit` 执行 `memo_create` action 时，当前路径为：
+
+```text
+POST /api/v1/mcp/capture/commit
+    ↓
+读取 CAPTURE_STORE[capture_id]
+    ↓
+遍历 actions 中的 memo_create
+    ↓
+MemoCreate Pydantic validation
+    ↓
+app.modules.memos.service.create_memo_record
+    ↓
+memos 表写入
+    ↓
+audit_logs 写入，actor_type=ai，source_channel=mcp，tool_name=capture_commit
+    ↓
+created_entities 记录 {type: memo, id}
+```
+
+这保证了直接 `memo_create` tool 与混合输入 `capture_commit` 的 memo 写入路径复用同一个业务层，避免 MCP endpoint 内部直接构造 `Memo`。
+
+### 本地验证
+
+先调用 `capture_parse`：
+
+```bash
+CAPTURE_ID=$(curl -s -X POST http://localhost:8310/api/v1/mcp/capture/parse \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"记一下 capture_commit 测试","timezone":"Asia/Shanghai","locale":"zh-CN"}' \
+  | jq -r '.capture_id')
+```
+
+再提交：
+
+```bash
+curl -X POST http://localhost:8310/api/v1/mcp/capture/commit \
+  -H 'Content-Type: application/json' \
+  -d "{\"capture_id\":\"$CAPTURE_ID\"}"
+```
+
+预期：
+
+- 返回 `committed=true`；
+- `created_entities` 包含 memo；
+- `memos` 表新增记录；
+- `audit_logs` 写入 `tool_name=capture_commit`。
 
 ---
 
@@ -376,5 +426,6 @@ urgent
 - Python FastMCP 已经提供 Cloud MCP 的运行实现；
 - `packages/protocol` 提供共享 schema 和 contract tests；
 - `memo_create` 已完成第一条 MCP 写入 vertical slice；
+- `capture_commit` 的 memo_create action 已复用 memo service；
 - 后续 Cloud MCP / Local MCP 都必须对齐 `packages/protocol`；
 - 是否将 Cloud MCP 从 Python 内嵌实现迁移为独立 TypeScript 服务，需要单独 ADR。
