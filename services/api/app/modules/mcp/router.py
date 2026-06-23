@@ -24,7 +24,13 @@ from app.modules.mcp.parse_engine import (
     get_undo_entries,
     parse_mixed_input,
 )
-from app.schemas.common import LedgerTransactionCreate, MemoCreate, json_serialize
+from app.modules.tasks.service import create_task_record, task_to_dict
+from app.schemas.common import (
+    LedgerTransactionCreate,
+    MemoCreate,
+    TaskCreate,
+    json_serialize,
+)
 
 router = APIRouter()
 
@@ -32,7 +38,6 @@ UNDO_TOKENS: dict[str, str] = {}  # undo_token -> capture_id mapping
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
-
 async def _write_audit(
     db: AsyncSession,
     user_id: str,
@@ -80,24 +85,10 @@ def _tx_dict(tx: LedgerTransaction) -> dict:
 
 
 def _task_dict(task: Task) -> dict:
-    return {
-        "id": task.id,
-        "user_id": task.user_id,
-        "title": task.title,
-        "description": task.description,
-        "due_at": task.due_at.isoformat() if task.due_at else None,
-        "remind_at": task.remind_at.isoformat() if task.remind_at else None,
-        "priority": task.priority,
-        "task_status": task.task_status,
-        "status": task.status,
-        "completed_at": task.completed_at.isoformat() if task.completed_at else None,
-        "created_at": task.created_at.isoformat() if task.created_at else None,
-        "updated_at": task.updated_at.isoformat() if task.updated_at else None,
-    }
+    return task_to_dict(task)
 
 
 # ─── capture_parse ────────────────────────────────────────────────────────────
-
 @router.post("/capture/parse")
 async def capture_parse(request: Request, db: AsyncSession = Depends(get_db)):
     body = await request.json()
@@ -126,7 +117,6 @@ async def capture_parse(request: Request, db: AsyncSession = Depends(get_db)):
 
 
 # ─── capture_commit ───────────────────────────────────────────────────────────
-
 @router.post("/capture/commit")
 async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
     body = await request.json()
@@ -194,26 +184,24 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
             created_entities.append({"type": "ledger_transaction", "id": tx.id})
 
         elif act.type == "task_create":
-            remind_at = payload.get("remind_at")
-            if remind_at and isinstance(remind_at, str):
-                remind_at = datetime.fromisoformat(remind_at)
+            try:
+                data = TaskCreate.model_validate({
+                    **payload,
+                    "source": payload.get("source") or "ai",
+                    "source_capture_id": capture_id,
+                })
+            except ValidationError as exc:
+                raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
-            task = Task(
+            task = await create_task_record(
+                db,
+                data,
                 user_id=DEFAULT_LOCAL_USER_ID,
-                title=payload.get("title", ""),
-                description=payload.get("description"),
-                due_at=payload.get("due_at"),
-                remind_at=remind_at,
-                priority=payload.get("priority", "normal"),
-                source_capture_id=capture_id,
-                source="ai",
+                actor_type="ai",
+                source_channel="mcp",
+                tool_name="capture_commit",
+                source_text=body.get("source_text") or act.raw_text,
             )
-            db.add(task)
-            await db.flush()
-            await _write_audit(db, DEFAULT_LOCAL_USER_ID, "create", "task", task.id,
-                               after=json_serialize(_task_dict(task)),
-                               tool_name="capture_commit",
-                               source_text=act.raw_text)
             created_entities.append({"type": "task", "id": task.id})
 
     session.committed = True
@@ -232,7 +220,6 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
 
 
 # ─── capture_undo ────────────────────────────────────────────────────────────
-
 @router.post("/capture/undo")
 async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
     body = await request.json()
@@ -290,7 +277,6 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
 
 
 # ─── Direct CRUD Tools ────────────────────────────────────────────────────────
-
 @router.post("/memo/create")
 async def mcp_memo_create(request: Request, db: AsyncSession = Depends(get_db)):
     body = await request.json()
@@ -421,24 +407,23 @@ async def mcp_expense_summary(request: Request, db: AsyncSession = Depends(get_d
 @router.post("/task/create")
 async def mcp_task_create(request: Request, db: AsyncSession = Depends(get_db)):
     body = await request.json()
-    remind_at = body.get("remind_at")
-    if remind_at and isinstance(remind_at, str):
-        remind_at = datetime.fromisoformat(remind_at)
+    try:
+        data = TaskCreate.model_validate({
+            **body,
+            "source": body.get("source") or "ai",
+        })
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
-    task = Task(
+    task = await create_task_record(
+        db,
+        data,
         user_id=DEFAULT_LOCAL_USER_ID,
-        title=body.get("title", ""),
-        description=body.get("description"),
-        due_at=body.get("due_at"),
-        remind_at=remind_at,
-        priority=body.get("priority", "normal"),
-        source="ai",
+        actor_type="ai",
+        source_channel="mcp",
+        tool_name="task_create",
+        source_text=body.get("source_text") or body.get("title") or body.get("description"),
     )
-    db.add(task)
-    await db.flush()
-    await _write_audit(db, DEFAULT_LOCAL_USER_ID, "create", "task", task.id,
-                       after=json_serialize(_task_dict(task)),
-                       tool_name="task_create")
     await db.commit()
     await db.refresh(task)
 
