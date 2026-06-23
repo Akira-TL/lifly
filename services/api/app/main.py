@@ -40,7 +40,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Lifily API",
+    title="Lifly API",
     version="0.7.0",
     docs_url="/docs",
     lifespan=lifespan,
@@ -61,7 +61,9 @@ app.include_router(task_router, prefix="/api/v1/tasks", tags=["tasks"])
 app.include_router(assets_router, prefix="/api/v1/assets", tags=["assets"])
 app.include_router(mcp_router, prefix="/api/v1/mcp", tags=["mcp"])
 app.include_router(trash_router, prefix="/api/v1", tags=["audit", "trash"])
-app.include_router(imexport_router, prefix="/api/v1/imexport", tags=["import", "export"])
+app.include_router(
+    imexport_router, prefix="/api/v1/imexport", tags=["import", "export"]
+)
 app.include_router(search_router, prefix="/api/v1", tags=["search", "dashboard"])
 app.include_router(plugins_router, prefix="/api/v1", tags=["plugins", "robots"])
 

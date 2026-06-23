@@ -16,16 +16,16 @@ class Settings(BaseSettings):
     api_port: int = 8310
 
     # Database
-    database_url: str = "postgresql+asyncpg://lifecore:lifecore@localhost:8332/lifecore"
+    database_url: str = "postgresql+asyncpg://lifly:lifly@localhost:8332/lifly"
 
     # Redis
     redis_url: str = "redis://localhost:8379/0"
 
     # MinIO
     minio_endpoint: str = "http://localhost:8300"
-    minio_access_key: str = "lifecore"
-    minio_secret_key: str = "lifecore-secret"
-    minio_bucket: str = "lifecore-assets"
+    minio_access_key: str = "lifly"
+    minio_secret_key: str = "lifly-secret"
+    minio_bucket: str = "lifly-assets"
 
     # PowerSync
     powersync_url: str = "http://localhost:8380"
