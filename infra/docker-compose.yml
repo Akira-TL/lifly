@@ -1,38 +1,38 @@
 services:
   postgres:
     image: postgres:16
-    container_name: lifecore-postgres
+    container_name: lifly-postgres
     environment:
-      POSTGRES_USER: lifecore
-      POSTGRES_PASSWORD: lifecore
-      POSTGRES_DB: lifecore
+      POSTGRES_USER: lifly
+      POSTGRES_PASSWORD: lifly
+      POSTGRES_DB: lifly
     ports:
       - "8332:5432"
     volumes:
-      - lifecore_postgres:/var/lib/postgresql/data
+      - lifly_postgres:/var/lib/postgresql/data
 
   redis:
     image: redis:7
-    container_name: lifecore-redis
+    container_name: lifly-redis
     ports:
       - "8379:6379"
 
   minio:
     image: minio/minio:latest
-    container_name: lifecore-minio
+    container_name: lifly-minio
     command: server /data --console-address ":8301"
     environment:
-      MINIO_ROOT_USER: lifecore
-      MINIO_ROOT_PASSWORD: lifecore-secret
+      MINIO_ROOT_USER: lifly
+      MINIO_ROOT_PASSWORD: lifly-secret
     ports:
       - "8300:9000"
       - "8301:9001"
     volumes:
-      - lifecore_minio:/data
+      - lifly_minio:/data
 
   powersync:
     image: powersync/powersync-service:latest
-    container_name: lifecore-powersync
+    container_name: lifly-powersync
     profiles: ["powersync"]
     ports:
       - "8380:8080"
@@ -42,5 +42,5 @@ services:
       - ./powersync:/config
 
 volumes:
-  lifecore_postgres:
-  lifecore_minio:
+  lifly_postgres:
+  lifly_minio:
