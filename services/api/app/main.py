@@ -67,10 +67,11 @@ app.include_router(
 app.include_router(search_router, prefix="/api/v1", tags=["search", "dashboard"])
 app.include_router(plugins_router, prefix="/api/v1", tags=["plugins", "robots"])
 
-# MCP Streamable HTTP endpoint (Cloud MCP)
-app.mount("/", cloud_mcp.streamable_http_app())
-
 
 @app.get("/api/v1/health")
 async def health():
-    return {"status": "ok", "version": "0.5.0", "port": settings.api_port}
+    return {"status": "ok", "version": app.version, "port": settings.api_port}
+
+
+# MCP Streamable HTTP endpoint (Cloud MCP) is mounted last because "/" is a catch-all.
+app.mount("/", cloud_mcp.streamable_http_app())
