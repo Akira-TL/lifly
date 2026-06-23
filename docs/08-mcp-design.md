@@ -188,6 +188,8 @@ asset_register_external_url
 
 ## 9. memo_create
 
+### 输入
+
 ```json
 {
   "type": "memo",
@@ -204,6 +206,64 @@ memo
 journal
 clip
 doc
+```
+
+### 当前运行路径
+
+`memo_create` 的当前 M0/M3 最小运行切片为：
+
+```text
+Cloud MCP memo_create
+    ↓
+POST /api/v1/mcp/memo/create
+    ↓
+MemoCreate Pydantic validation
+    ↓
+app.modules.memos.service.create_memo_record
+    ↓
+memos 表写入
+    ↓
+audit_logs 写入，actor_type=ai，source_channel=mcp，tool_name=memo_create
+    ↓
+返回 memo_id/status/memo/undo_token
+```
+
+MCP router 不应绕过 `app.modules.memos.service` 直接构造 `Memo`。后续 memo API、Cloud MCP、Local MCP 都应逐步复用同一业务层。
+
+### 输出
+
+```json
+{
+  "memo_id": "uuid",
+  "status": "active",
+  "memo": {
+    "id": "uuid",
+    "type": "memo",
+    "title": "标题",
+    "content_markdown": "内容",
+    "tags": ["项目", "想法"],
+    "status": "active"
+  },
+  "undo_token": "uuid"
+}
+```
+
+### 本地验证
+
+```bash
+curl -X POST http://localhost:8310/api/v1/mcp/memo/create \
+  -H 'Content-Type: application/json' \
+  -d '{"type":"memo","title":"MCP memo smoke test","content_markdown":"hello from memo_create","tags":["mcp","smoke"]}'
+```
+
+预期：返回 `memo_id`、`status=active`、`memo` 和 `undo_token`。
+
+无效输入应返回 `422`，例如：
+
+```bash
+curl -X POST http://localhost:8310/api/v1/mcp/memo/create \
+  -H 'Content-Type: application/json' \
+  -d '{"type":"invalid","content_markdown":"bad"}'
 ```
 
 ---
@@ -311,9 +371,10 @@ urgent
 
 ## 15. 当前实现说明
 
-截至 v0.1 M0 阶段：
+截至 v0.1 M0/M3 阶段：
 
 - Python FastMCP 已经提供 Cloud MCP 的运行实现；
 - `packages/protocol` 提供共享 schema 和 contract tests；
+- `memo_create` 已完成第一条 MCP 写入 vertical slice；
 - 后续 Cloud MCP / Local MCP 都必须对齐 `packages/protocol`；
 - 是否将 Cloud MCP 从 Python 内嵌实现迁移为独立 TypeScript 服务，需要单独 ADR。
