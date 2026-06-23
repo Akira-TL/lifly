@@ -1,4 +1,4 @@
-# LifeCore
+# Lifly
 
 AI-first / Chat-first personal life data system.
 
