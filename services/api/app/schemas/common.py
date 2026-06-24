@@ -37,6 +37,24 @@ class CaptureUndoRequest(BaseModel):
     undo_token: str = Field(min_length=1)
 
 
+class McpSearchRequest(BaseModel):
+    q: str = ""
+    limit: int = Field(default=20, ge=1, le=100)
+
+
+class McpExpenseSummaryRequest(BaseModel):
+    period: str = Field(default="current_month", pattern=r"^(current_month)$")
+
+
+class McpTaskListRequest(BaseModel):
+    task_status: str | None = Field(default=None, pattern=r"^(todo|doing|done|cancelled)$")
+    limit: int = Field(default=20, ge=1, le=100)
+
+
+class McpTaskCompleteRequest(BaseModel):
+    task_id: str = Field(min_length=1)
+
+
 # ─── Memo ───────────────────────────────────────────────────────────────────
 
 class MemoCreate(BaseModel):

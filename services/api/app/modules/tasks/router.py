@@ -10,6 +10,7 @@ from app.core.database import get_db
 from app.db.models import Task
 from app.modules.tasks.service import (
     DEFAULT_LOCAL_USER_ID,
+    complete_task_record,
     create_task_record,
     task_to_response,
     write_task_audit,
@@ -131,26 +132,16 @@ async def update_task(task_id: str, data: TaskUpdate, db: AsyncSession = Depends
 
 @router.post("/{task_id}/complete", response_model=ApiResponse)
 async def complete_task(task_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(Task).where(Task.id == task_id, Task.user_id == DEFAULT_LOCAL_USER_ID)
+    task = await complete_task_record(
+        db,
+        task_id=task_id,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        actor_type="user",
+        source_channel="api",
     )
-    task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    before = task_to_response(task).model_dump()
-    task.task_status = "done"
-    task.completed_at = datetime.now(timezone.utc)
-    task.revision += 1
-
-    await write_task_audit(
-        db,
-        user_id=DEFAULT_LOCAL_USER_ID,
-        action="complete",
-        entity_id=task_id,
-        before=json_serialize(before),
-        after=json_serialize(task_to_response(task).model_dump()),
-    )
     await db.commit()
     await db.refresh(task)
     return ApiResponse(data=task_to_response(task).model_dump())
