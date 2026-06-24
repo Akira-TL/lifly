@@ -29,12 +29,16 @@ from app.modules.mcp.parse_engine import (
     get_undo_entries,
     parse_mixed_input,
 )
-from app.modules.tasks.service import create_task_record, task_to_dict
+from app.modules.tasks.service import complete_task_record, create_task_record, task_to_dict
 from app.schemas.common import (
     AssetCreateUploadUrl,
     AssetRegisterExternalUrl,
     CaptureUndoRequest,
     LedgerTransactionCreate,
+    McpExpenseSummaryRequest,
+    McpSearchRequest,
+    McpTaskCompleteRequest,
+    McpTaskListRequest,
     MemoCreate,
     TaskCreate,
     json_serialize,
@@ -46,6 +50,18 @@ UNDO_TOKENS: dict[str, str] = {}  # undo_token -> capture_id mapping
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+async def _read_json_body(request: Request) -> dict:
+    try:
+        body = await request.json()
+    except ValueError:
+        return {}
+    if body is None:
+        return {}
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=422, detail="request body must be a JSON object")
+    return body
+
+
 async def _write_audit(
     db: AsyncSession,
     user_id: str,
@@ -345,19 +361,21 @@ async def mcp_memo_create(request: Request, db: AsyncSession = Depends(get_db)):
 
 @router.post("/memo/search")
 async def mcp_memo_search(request: Request, db: AsyncSession = Depends(get_db)):
-    body = await request.json()
-    q = body.get("q", "")
-    limit = body.get("limit", 20)
+    body = await _read_json_body(request)
+    try:
+        data = McpSearchRequest.model_validate(body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
     query = select(Memo).where(
         Memo.user_id == DEFAULT_LOCAL_USER_ID,
         Memo.status == "active",
     )
-    if q:
+    if data.q:
         query = query.where(
-            Memo.title.ilike(f"%{q}%") | Memo.content_markdown.ilike(f"%{q}%")
+            Memo.title.ilike(f"%{data.q}%") | Memo.content_markdown.ilike(f"%{data.q}%")
         )
-    query = query.order_by(Memo.created_at.desc()).limit(limit)
+    query = query.order_by(Memo.created_at.desc()).limit(data.limit)
     result = await db.execute(query)
     return {"memos": [_memo_dict(m) for m in result.scalars().all()]}
 
@@ -394,25 +412,33 @@ async def mcp_expense_create(request: Request, db: AsyncSession = Depends(get_db
 
 @router.post("/expense/search")
 async def mcp_expense_search(request: Request, db: AsyncSession = Depends(get_db)):
-    body = await request.json()
-    q = body.get("q", "")
-    limit = body.get("limit", 20)
+    body = await _read_json_body(request)
+    try:
+        data = McpSearchRequest.model_validate(body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
     query = select(LedgerTransaction).where(
         LedgerTransaction.user_id == DEFAULT_LOCAL_USER_ID,
         LedgerTransaction.status == "active",
     )
-    if q:
+    if data.q:
         query = query.where(
-            LedgerTransaction.merchant.ilike(f"%{q}%") | LedgerTransaction.note.ilike(f"%{q}%")
+            LedgerTransaction.merchant.ilike(f"%{data.q}%") | LedgerTransaction.note.ilike(f"%{data.q}%")
         )
-    query = query.order_by(LedgerTransaction.occurred_at.desc()).limit(limit)
+    query = query.order_by(LedgerTransaction.occurred_at.desc()).limit(data.limit)
     result = await db.execute(query)
     return {"transactions": [_tx_dict(t) for t in result.scalars().all()]}
 
 
 @router.post("/expense/summary")
 async def mcp_expense_summary(request: Request, db: AsyncSession = Depends(get_db)):
+    body = await _read_json_body(request)
+    try:
+        data = McpExpenseSummaryRequest.model_validate(body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
     now = datetime.now(timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
@@ -431,7 +457,7 @@ async def mcp_expense_summary(request: Request, db: AsyncSession = Depends(get_d
     total = float(row.total_expense or 0) if row else 0
     count = row.count if row else 0
 
-    return {"period": "current_month", "total_expense": total, "count": count}
+    return {"period": data.period, "total_expense": total, "count": count}
 
 
 @router.post("/task/create")
@@ -465,44 +491,43 @@ async def mcp_task_create(request: Request, db: AsyncSession = Depends(get_db)):
 
 @router.post("/task/list")
 async def mcp_task_list(request: Request, db: AsyncSession = Depends(get_db)):
-    body = await request.json()
-    task_status = body.get("task_status", None)
-    limit = body.get("limit", 20)
+    body = await _read_json_body(request)
+    try:
+        data = McpTaskListRequest.model_validate(body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
     query = select(Task).where(
         Task.user_id == DEFAULT_LOCAL_USER_ID,
         Task.status == "active",
     )
-    if task_status:
-        query = query.where(Task.task_status == task_status)
-    query = query.order_by(Task.created_at.desc()).limit(limit)
+    if data.task_status:
+        query = query.where(Task.task_status == data.task_status)
+    query = query.order_by(Task.created_at.desc()).limit(data.limit)
     result = await db.execute(query)
     return {"tasks": [_task_dict(t) for t in result.scalars().all()]}
 
 
 @router.post("/task/complete")
 async def mcp_task_complete(request: Request, db: AsyncSession = Depends(get_db)):
-    body = await request.json()
-    task_id = body.get("task_id")
+    body = await _read_json_body(request)
+    try:
+        data = McpTaskCompleteRequest.model_validate(body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
-    if not task_id:
-        raise HTTPException(status_code=400, detail="task_id is required")
-
-    result = await db.execute(
-        select(Task).where(Task.id == task_id, Task.user_id == DEFAULT_LOCAL_USER_ID)
+    task = await complete_task_record(
+        db,
+        task_id=data.task_id,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        actor_type="ai",
+        source_channel="mcp",
+        tool_name="task_complete",
+        source_text=body.get("source_text") or data.task_id,
     )
-    task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    before = json_serialize(_task_dict(task))
-    task.task_status = "done"
-    task.completed_at = datetime.now(timezone.utc)
-    task.revision += 1
-
-    await _write_audit(db, DEFAULT_LOCAL_USER_ID, "complete", "task", task_id,
-                       before=before, after=json_serialize(_task_dict(task)),
-                       tool_name="task_complete")
     await db.commit()
     await db.refresh(task)
     return {"task": _task_dict(task)}
