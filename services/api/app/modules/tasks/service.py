@@ -116,10 +116,13 @@ async def complete_task_record(
         return None
 
     before = task_to_dict(task)
+    completed_at = datetime.now(timezone.utc)
     task.task_status = "done"
-    task.completed_at = datetime.now(timezone.utc)
+    task.completed_at = completed_at
+    task.updated_at = completed_at
     task.revision += 1
     await db.flush()
+    await db.refresh(task)
 
     await write_task_audit(
         db,
