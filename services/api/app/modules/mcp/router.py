@@ -23,12 +23,8 @@ from app.modules.memos.service import (
     DEFAULT_LOCAL_USER_ID,
     create_memo_record,
 )
-from app.modules.mcp.parse_engine import (
-    CAPTURE_STORE,
-    add_undo_entry,
-    get_undo_entries,
-    parse_mixed_input,
-)
+from app.modules.mcp.parse_engine import CAPTURE_STORE, parse_mixed_input
+from app.modules.mcp.undo_service import consume_undo_entries, persist_undo_entries
 from app.modules.tasks.service import complete_task_record, create_task_record, task_to_dict
 from app.schemas.common import (
     AssetCreateUploadUrl,
@@ -45,8 +41,6 @@ from app.schemas.common import (
 )
 
 router = APIRouter()
-
-UNDO_TOKENS: dict[str, str] = {}  # undo_token -> capture_id mapping
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -110,6 +104,20 @@ def _tx_dict(tx: LedgerTransaction) -> dict:
 
 def _task_dict(task: Task) -> dict:
     return task_to_dict(task)
+
+
+async def _persist_create_undo_entries(
+    db: AsyncSession,
+    *,
+    undo_token: str,
+    created_entities: list[dict],
+) -> None:
+    await persist_undo_entries(
+        db,
+        undo_token=undo_token,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        entries=[{**entity, "action": "create"} for entity in created_entities],
+    )
 
 
 # ─── capture_parse ────────────────────────────────────────────────────────────
@@ -228,13 +236,16 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
             )
             created_entities.append({"type": "task", "id": task.id})
 
+    undo_token = str(uuid.uuid4())
+    if created_entities:
+        await _persist_create_undo_entries(
+            db,
+            undo_token=undo_token,
+            created_entities=created_entities,
+        )
+
     session.committed = True
     await db.commit()
-
-    undo_token = str(uuid.uuid4())
-    for ent in created_entities:
-        add_undo_entry(undo_token, ent["type"], ent["id"], "create")
-    UNDO_TOKENS[undo_token] = capture_id
 
     return {
         "committed": True,
@@ -253,7 +264,11 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
     undo_token = data.undo_token
-    entries = get_undo_entries(undo_token)
+    entries = await consume_undo_entries(
+        db,
+        undo_token=undo_token,
+        user_id=DEFAULT_LOCAL_USER_ID,
+    )
     if not entries:
         raise HTTPException(status_code=404, detail="Undo token not found or expired")
 
@@ -344,11 +359,16 @@ async def mcp_memo_create(request: Request, db: AsyncSession = Depends(get_db)):
         tool_name="memo_create",
         source_text=body.get("source_text") or body.get("content_markdown"),
     )
-    await db.commit()
-    await db.refresh(memo)
 
     undo_token = str(uuid.uuid4())
-    add_undo_entry(undo_token, "memo", memo.id, "create")
+    await _persist_create_undo_entries(
+        db,
+        undo_token=undo_token,
+        created_entities=[{"type": "memo", "id": memo.id}],
+    )
+
+    await db.commit()
+    await db.refresh(memo)
 
     memo_data = _memo_dict(memo)
     return {
@@ -401,11 +421,16 @@ async def mcp_expense_create(request: Request, db: AsyncSession = Depends(get_db
         tool_name="expense_create",
         source_text=body.get("source_text") or body.get("note") or body.get("merchant"),
     )
-    await db.commit()
-    await db.refresh(tx)
 
     undo_token = str(uuid.uuid4())
-    add_undo_entry(undo_token, "ledger_transaction", tx.id, "create")
+    await _persist_create_undo_entries(
+        db,
+        undo_token=undo_token,
+        created_entities=[{"type": "ledger_transaction", "id": tx.id}],
+    )
+
+    await db.commit()
+    await db.refresh(tx)
 
     return {"transaction": _tx_dict(tx), "undo_token": undo_token}
 
@@ -480,11 +505,16 @@ async def mcp_task_create(request: Request, db: AsyncSession = Depends(get_db)):
         tool_name="task_create",
         source_text=body.get("source_text") or body.get("title") or body.get("description"),
     )
-    await db.commit()
-    await db.refresh(task)
 
     undo_token = str(uuid.uuid4())
-    add_undo_entry(undo_token, "task", task.id, "create")
+    await _persist_create_undo_entries(
+        db,
+        undo_token=undo_token,
+        created_entities=[{"type": "task", "id": task.id}],
+    )
+
+    await db.commit()
+    await db.refresh(task)
 
     return {"task": _task_dict(task), "undo_token": undo_token}
 

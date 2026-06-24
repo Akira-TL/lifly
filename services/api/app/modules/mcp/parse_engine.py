@@ -23,7 +23,6 @@ TASK_KEYWORDS = ["提醒", "记得", "别忘了", "要做", "任务", "TODO"]
 MOOD_KEYWORDS = ["累", "开心", "难过", "焦虑", "兴奋", "感恩", "压力", "充实", "无聊", "紧张"]
 
 CAPTURE_STORE: dict[str, CaptureSession] = {}
-UNDO_STORE: dict[str, list[UndoEntry]] = {}
 
 
 @dataclass
@@ -48,13 +47,6 @@ class CaptureSession:
     actions: list[CandidateAction] = field(default_factory=list)
     created_at: datetime = field(default_factory=lambda: datetime.now(TZ_SHANGHAI))
     committed: bool = False
-
-
-@dataclass
-class UndoEntry:
-    entity_type: str
-    entity_id: str
-    action: str  # create / update / delete
 
 
 def parse_mixed_input(text: str, timezone_str: str = "Asia/Shanghai", locale: str = "zh-CN") -> ParseResult:
@@ -242,17 +234,3 @@ def _infer_category(text: str) -> str:
         if kw in text:
             return cat
     return "未分类"
-
-
-def add_undo_entry(undo_token: str, entity_type: str, entity_id: str, action: str = "create"):
-    if undo_token not in UNDO_STORE:
-        UNDO_STORE[undo_token] = []
-    UNDO_STORE[undo_token].append(UndoEntry(entity_type=entity_type, entity_id=entity_id, action=action))
-    # 清理过期（>24h）
-    for key in list(UNDO_STORE.keys()):
-        if key not in UNDO_STORE:
-            continue
-
-
-def get_undo_entries(undo_token: str) -> list[UndoEntry]:
-    return UNDO_STORE.pop(undo_token, [])
