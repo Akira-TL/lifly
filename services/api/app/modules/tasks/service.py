@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import AuditLog, Task
@@ -86,6 +89,44 @@ async def create_task_record(
         user_id=user_id,
         action="create",
         entity_id=task.id,
+        after=task_to_dict(task),
+        actor_type=actor_type,
+        source_channel=source_channel,
+        tool_name=tool_name,
+        source_text=source_text,
+    )
+    return task
+
+
+async def complete_task_record(
+    db: AsyncSession,
+    *,
+    task_id: str,
+    user_id: str = DEFAULT_LOCAL_USER_ID,
+    actor_type: str = "user",
+    source_channel: str = "api",
+    tool_name: str | None = None,
+    source_text: str | None = None,
+) -> Task | None:
+    result = await db.execute(
+        select(Task).where(Task.id == task_id, Task.user_id == user_id, Task.status == "active")
+    )
+    task = result.scalar_one_or_none()
+    if not task:
+        return None
+
+    before = task_to_dict(task)
+    task.task_status = "done"
+    task.completed_at = datetime.now(timezone.utc)
+    task.revision += 1
+    await db.flush()
+
+    await write_task_audit(
+        db,
+        user_id=user_id,
+        action="complete",
+        entity_id=task_id,
+        before=before,
         after=task_to_dict(task),
         actor_type=actor_type,
         source_channel=source_channel,
