@@ -1,0 +1,99 @@
+name: Lifly CI
+
+on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lifly-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  protocol:
+    name: Protocol package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.0.0 --activate
+
+      - name: Install workspace dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Run protocol tests
+        run: pnpm --filter @lifly/protocol test
+
+      - name: Run protocol typecheck
+        run: pnpm --filter @lifly/protocol typecheck
+
+  api:
+    name: API integration tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Start local infrastructure
+        run: docker compose -f infra/docker-compose.yml up -d postgres redis minio
+
+      - name: Install API dependencies
+        working-directory: services/api
+        run: uv sync --group dev
+
+      - name: Start Lifly API
+        working-directory: services/api
+        run: |
+          uv run uvicorn app.main:app --host 127.0.0.1 --port 8310 > /tmp/lifly-api.log 2>&1 &
+          echo $! > /tmp/lifly-api.pid
+
+      - name: Wait for Lifly API
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:8310/api/v1/health; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Lifly API did not become healthy in time"
+          cat /tmp/lifly-api.log || true
+          exit 1
+
+      - name: Run MCP v0.1 API integration tests
+        working-directory: services/api
+        env:
+          LIFLY_API_BASE_URL: http://127.0.0.1:8310
+        run: uv run --group dev pytest tests/integration/test_mcp_v0_1_contract.py
+
+      - name: Print API logs on failure
+        if: failure()
+        run: cat /tmp/lifly-api.log || true
+
+      - name: Stop local infrastructure
+        if: always()
+        run: docker compose -f infra/docker-compose.yml down -v
