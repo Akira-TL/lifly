@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft validation guide for Issue #20 / PR branch `agent/asset-mcp-tools`.
+Validated implementation guide for Issue #20 / PR branch `agent/asset-mcp-tools`.
 
 This slice implements the frozen MCP asset tools:
 
@@ -44,6 +44,24 @@ audit_logs row, tool_name=asset_register_external_url
     ↓
 return asset
 ```
+
+## Asset Type Contract
+
+The TypeScript protocol package must stay aligned with Python runtime validation:
+
+```text
+asset_create_upload_url:
+  image | pdf | ppt | mindmap | file | audio | video
+
+asset_register_external_url:
+  image | pdf | ppt | mindmap | file | audio | video | link | embed
+```
+
+Important notes:
+
+- Use `ppt`, not `slide`, because the Python runtime currently validates `ppt`.
+- Do not allow `link` or `embed` for internal upload URLs.
+- Allow `link` and `embed` only for external URL asset registration.
 
 ## Local Validation
 
@@ -137,6 +155,10 @@ Expected:
 HTTP/1.1 422 Unprocessable Entity
 ```
 
-## Known Follow-up
+## Protocol Validation
 
-`packages/protocol` and Python schemas currently need a later enum-alignment pass for asset type naming around `ppt` vs `slide` and `embed`. This slice uses the current Python runtime schemas and avoids expanding the protocol enum in the same PR.
+Run protocol tests after enum changes:
+
+```bash
+pnpm --filter @lifly/protocol test
+```
