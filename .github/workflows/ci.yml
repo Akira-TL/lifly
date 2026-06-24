@@ -58,6 +58,8 @@ jobs:
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: 'false'
 
       - name: Start local infrastructure
         run: docker compose -f infra/docker-compose.yml up -d postgres redis minio
