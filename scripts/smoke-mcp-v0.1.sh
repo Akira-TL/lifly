@@ -56,6 +56,14 @@ assert_jq() {
   jq -e "$expr" "$LAST_BODY" >/dev/null || fail "$message"
 }
 
+assert_jq_arg() {
+  local arg_name="$1"
+  local arg_value="$2"
+  local expr="$3"
+  local message="$4"
+  jq -e --arg "$arg_name" "$arg_value" "$expr" "$LAST_BODY" >/dev/null || fail "$message"
+}
+
 require_cmd curl
 require_cmd jq
 
@@ -79,7 +87,7 @@ pass "memo_create"
 
 http_json "memo_search" POST "/api/v1/mcp/memo/search" 200 "{\"q\":\"MCP smoke memo $RUN_ID\",\"limit\":5}"
 assert_jq '.memos | type == "array"' "memo_search should return memos array"
-assert_jq --arg id "$MEMO_ID" '.memos | any(.id == $id)' "memo_search should find created memo"
+assert_jq_arg id "$MEMO_ID" '.memos | any(.id == $id)' "memo_search should find created memo"
 pass "memo_search"
 
 http_json "memo_create_invalid_type" POST "/api/v1/mcp/memo/create" 422 "{\"type\":\"invalid\",\"content_markdown\":\"bad\"}"
@@ -96,7 +104,7 @@ pass "expense_create amount=0 -> 422"
 
 http_json "expense_search" POST "/api/v1/mcp/expense/search" 200 "{\"q\":\"MCP Smoke Merchant $RUN_ID\",\"limit\":5}"
 assert_jq '.transactions | type == "array"' "expense_search should return transactions array"
-assert_jq --arg id "$TX_ID" '.transactions | any(.id == $id)' "expense_search should find created transaction"
+assert_jq_arg id "$TX_ID" '.transactions | any(.id == $id)' "expense_search should find created transaction"
 pass "expense_search"
 
 http_json "expense_summary" POST "/api/v1/mcp/expense/summary" 200 "{\"period\":\"current_month\"}"
@@ -113,7 +121,7 @@ pass "task_create"
 
 http_json "task_list" POST "/api/v1/mcp/task/list" 200 "{\"task_status\":\"todo\",\"limit\":20}"
 assert_jq '.tasks | type == "array"' "task_list should return tasks array"
-assert_jq --arg id "$TASK_ID" '.tasks | any(.id == $id)' "task_list should find created task"
+assert_jq_arg id "$TASK_ID" '.tasks | any(.id == $id)' "task_list should find created task"
 pass "task_list"
 
 http_json "task_complete" POST "/api/v1/mcp/task/complete" 200 "{\"task_id\":\"$TASK_ID\"}"
