@@ -29,7 +29,7 @@ class TaskRepository {
   }
 
   Future<Task> complete(String id) async {
-    final res = await api.post('/tasks/$id/complete');
+    final res = await api.post('/tasks/$id/complete', data: const {});
     return Task.fromJson(res['data'] as Map<String, dynamic>);
   }
 

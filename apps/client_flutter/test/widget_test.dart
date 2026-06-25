@@ -12,10 +12,89 @@ class FakeApiClient extends ApiClient {
       return {
         'success': true,
         'data': {
-          'monthly_income': 0,
-          'monthly_expense': 0,
-          'weekly_trend': [],
+          'memo_total': 1,
+          'task_todo': 1,
+          'task_total': 1,
+          'month_income': 0,
+          'month_expense': 12.3,
+          'daily_trend': [],
           'recent_transactions': [],
+        },
+      };
+    }
+    if (path == '/memos') {
+      return {
+        'success': true,
+        'data': {
+          'total': 1,
+          'limit': 50,
+          'offset': 0,
+          'items': [
+            {
+              'id': 'memo-test',
+              'type': 'memo',
+              'title': '测试备忘',
+              'content_markdown': '测试内容',
+              'tags': ['test'],
+              'mood': null,
+              'status': 'active',
+              'created_at': '2026-06-25T00:00:00Z',
+              'updated_at': '2026-06-25T00:00:00Z',
+            },
+          ],
+        },
+      };
+    }
+    if (path == '/ledger/transactions') {
+      return {
+        'success': true,
+        'data': {
+          'total': 1,
+          'limit': 50,
+          'offset': 0,
+          'items': [
+            {
+              'id': 'tx-test',
+              'direction': 'expense',
+              'amount': 12.3,
+              'currency': 'CNY',
+              'merchant': '测试商户',
+              'note': '测试账单',
+              'category_id': null,
+              'occurred_at': '2026-06-25T00:00:00Z',
+              'source': 'manual',
+              'created_at': '2026-06-25T00:00:00Z',
+            },
+          ],
+        },
+      };
+    }
+    if (path == '/ledger/summary') {
+      return {
+        'success': true,
+        'data': {'expense_total': 12.3, 'income_total': 0, 'transaction_count': 1},
+      };
+    }
+    if (path == '/tasks') {
+      return {
+        'success': true,
+        'data': {
+          'total': 1,
+          'limit': 50,
+          'offset': 0,
+          'items': [
+            {
+              'id': 'task-test',
+              'title': '测试任务',
+              'description': '测试描述',
+              'due_at': null,
+              'remind_at': null,
+              'priority': 'normal',
+              'task_status': 'todo',
+              'completed_at': null,
+              'created_at': '2026-06-25T00:00:00Z',
+            },
+          ],
         },
       };
     }
@@ -24,7 +103,7 @@ class FakeApiClient extends ApiClient {
 }
 
 void main() {
-  testWidgets('App displays shell', (WidgetTester tester) async {
+  testWidgets('App displays real API backed shell pages', (WidgetTester tester) async {
     await tester.pumpWidget(
       Provider<ApiClient>(
         create: (_) => FakeApiClient(),
@@ -34,7 +113,19 @@ void main() {
 
     await tester.pump();
 
-    expect(find.text('备忘'), findsOneWidget);
-    expect(find.text('Lifily'), findsNothing);
+    expect(find.text('备忘'), findsWidgets);
+    expect(find.text('测试备忘'), findsNothing);
+
+    await tester.tap(find.text('备忘').last);
+    await tester.pump();
+    expect(find.text('测试备忘'), findsOneWidget);
+
+    await tester.tap(find.text('记账'));
+    await tester.pump();
+    expect(find.text('测试商户'), findsOneWidget);
+
+    await tester.tap(find.text('任务'));
+    await tester.pump();
+    expect(find.text('测试任务'), findsOneWidget);
   });
 }
