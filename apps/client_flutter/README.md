@@ -1,17 +1,51 @@
-# client_flutter
+# Lifily Flutter Client
 
-A new Flutter project.
+Flutter 客户端当前处于真实 API 接入早期阶段。默认连接本机 Lifly API：
 
-## Getting Started
+```bash
+http://127.0.0.1:8310/api/v1
+```
 
-This project is a starting point for a Flutter application.
+可以通过 `--dart-define` 覆盖：
 
-A few resources to get you started if this is your first Flutter project:
+```bash
+flutter run \
+  --dart-define=LIFLY_API_BASE_URL=http://127.0.0.1:8310/api/v1
+```
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+Android 模拟器访问宿主机 API 时通常需要：
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+flutter run \
+  --dart-define=LIFLY_API_BASE_URL=http://10.0.2.2:8310/api/v1
+```
+
+## 后端连接诊断
+
+进入客户端「设置」页，可以手动执行：
+
+```text
+检查 Health
+运行 MCP Smoke
+```
+
+其中 MCP Smoke 会通过真实 API 调用一组最小主链路接口：
+
+```text
+GET  /health
+POST /mcp/memo/create
+POST /mcp/memo/search
+POST /mcp/expense/create
+POST /mcp/task/create
+POST /mcp/task/complete
+POST /mcp/asset/register-external-url
+```
+
+这不是完整端到端测试，只用于确认 Flutter 客户端能够访问 Lifly API，并且 MCP v0.1 基础接口可用。
+
+## 验证
+
+```bash
+flutter analyze
+flutter test
+```
