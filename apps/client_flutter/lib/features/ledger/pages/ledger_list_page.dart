@@ -3,6 +3,8 @@ import 'package:client_flutter/data/repositories/ledger_repository.dart';
 import 'package:client_flutter/domain/entities/ledger_transaction.dart';
 import 'package:client_flutter/features/ledger/pages/ledger_detail_page.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
+import 'package:client_flutter/shared/widgets/list_filter_bar.dart';
+import 'package:client_flutter/shared/widgets/pagination_footer.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -166,7 +168,7 @@ class _LedgerListPageState extends State<LedgerListPage> {
                           },
                         ),
                       )),
-                  _PaginationFooter(
+                  PaginationFooter(
                     total: _total,
                     current: _items.length,
                     hasMore: _hasMore,
@@ -199,60 +201,14 @@ class _LedgerFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).colorScheme.surface,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-        child: Row(
-          children: [
-            _FilterChipOption(label: '全部', selected: selectedDirection == null, onTap: () => onDirectionChanged(null)),
-            _FilterChipOption(label: '支出', selected: selectedDirection == 'expense', onTap: () => onDirectionChanged('expense')),
-            _FilterChipOption(label: '收入', selected: selectedDirection == 'income', onTap: () => onDirectionChanged('income')),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FilterChipOption extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _FilterChipOption({required this.label, required this.selected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(label: Text(label), selected: selected, onSelected: (_) => onTap()),
-    );
-  }
-}
-
-class _PaginationFooter extends StatelessWidget {
-  final int total;
-  final int current;
-  final bool hasMore;
-  final bool isLoadingMore;
-  final VoidCallback onLoadMore;
-
-  const _PaginationFooter({required this.total, required this.current, required this.hasMore, required this.isLoadingMore, required this.onLoadMore});
-
-  @override
-  Widget build(BuildContext context) {
-    if (isLoadingMore) {
-      return const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator()));
-    }
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Center(
-        child: hasMore
-            ? OutlinedButton(onPressed: onLoadMore, child: Text('加载更多（$current/$total）'))
-            : Text('已显示 $current/$total', style: Theme.of(context).textTheme.bodySmall),
-      ),
+    return ListFilterBar(
+      selectedValue: selectedDirection,
+      onChanged: onDirectionChanged,
+      options: const [
+        ListFilterOption(label: '全部', value: null),
+        ListFilterOption(label: '支出', value: 'expense'),
+        ListFilterOption(label: '收入', value: 'income'),
+      ],
     );
   }
 }

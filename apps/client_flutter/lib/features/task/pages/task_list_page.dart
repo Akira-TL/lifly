@@ -3,6 +3,8 @@ import 'package:client_flutter/data/repositories/task_repository.dart';
 import 'package:client_flutter/domain/entities/task.dart';
 import 'package:client_flutter/features/task/pages/task_detail_page.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
+import 'package:client_flutter/shared/widgets/list_filter_bar.dart';
+import 'package:client_flutter/shared/widgets/pagination_footer.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -157,7 +159,7 @@ class _TaskListPageState extends State<TaskListPage> {
                 separatorBuilder: (_, _) => const SizedBox(height: 8),
                 itemBuilder: (context, index) {
                   if (index == _items.length) {
-                    return _PaginationFooter(
+                    return PaginationFooter(
                       total: _total,
                       current: _items.length,
                       hasMore: _hasMore,
@@ -204,61 +206,15 @@ class _TaskFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).colorScheme.surface,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-        child: Row(
-          children: [
-            _FilterChipOption(label: '全部', selected: selectedTaskStatus == null, onTap: () => onTaskStatusChanged(null)),
-            _FilterChipOption(label: '待办', selected: selectedTaskStatus == 'todo', onTap: () => onTaskStatusChanged('todo')),
-            _FilterChipOption(label: '进行中', selected: selectedTaskStatus == 'doing', onTap: () => onTaskStatusChanged('doing')),
-            _FilterChipOption(label: '已完成', selected: selectedTaskStatus == 'done', onTap: () => onTaskStatusChanged('done')),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FilterChipOption extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _FilterChipOption({required this.label, required this.selected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(label: Text(label), selected: selected, onSelected: (_) => onTap()),
-    );
-  }
-}
-
-class _PaginationFooter extends StatelessWidget {
-  final int total;
-  final int current;
-  final bool hasMore;
-  final bool isLoadingMore;
-  final VoidCallback onLoadMore;
-
-  const _PaginationFooter({required this.total, required this.current, required this.hasMore, required this.isLoadingMore, required this.onLoadMore});
-
-  @override
-  Widget build(BuildContext context) {
-    if (isLoadingMore) {
-      return const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator()));
-    }
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Center(
-        child: hasMore
-            ? OutlinedButton(onPressed: onLoadMore, child: Text('加载更多（$current/$total）'))
-            : Text('已显示 $current/$total', style: Theme.of(context).textTheme.bodySmall),
-      ),
+    return ListFilterBar(
+      selectedValue: selectedTaskStatus,
+      onChanged: onTaskStatusChanged,
+      options: const [
+        ListFilterOption(label: '全部', value: null),
+        ListFilterOption(label: '待办', value: 'todo'),
+        ListFilterOption(label: '进行中', value: 'doing'),
+        ListFilterOption(label: '已完成', value: 'done'),
+      ],
     );
   }
 }

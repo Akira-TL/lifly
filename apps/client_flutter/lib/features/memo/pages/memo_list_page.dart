@@ -3,6 +3,8 @@ import 'package:client_flutter/data/repositories/memo_repository.dart';
 import 'package:client_flutter/domain/entities/memo.dart';
 import 'package:client_flutter/features/memo/pages/memo_detail_page.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
+import 'package:client_flutter/shared/widgets/list_filter_bar.dart';
+import 'package:client_flutter/shared/widgets/pagination_footer.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -169,7 +171,7 @@ class _MemoListPageState extends State<MemoListPage> {
                 separatorBuilder: (_, _) => const SizedBox(height: 8),
                 itemBuilder: (context, index) {
                   if (index == _items.length) {
-                    return _PaginationFooter(
+                    return PaginationFooter(
                       total: _total,
                       current: _items.length,
                       hasMore: _hasMore,
@@ -228,17 +230,17 @@ class _MemoFilterBar extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
         child: Column(
           children: [
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _FilterChipOption(label: '全部', selected: selectedType == null, onTap: () => onTypeChanged(null)),
-                  _FilterChipOption(label: '备忘', selected: selectedType == 'memo', onTap: () => onTypeChanged('memo')),
-                  _FilterChipOption(label: '日记', selected: selectedType == 'journal', onTap: () => onTypeChanged('journal')),
-                  _FilterChipOption(label: '剪藏', selected: selectedType == 'clip', onTap: () => onTypeChanged('clip')),
-                  _FilterChipOption(label: '文档', selected: selectedType == 'doc', onTap: () => onTypeChanged('doc')),
-                ],
-              ),
+            ListFilterBar(
+              selectedValue: selectedType,
+              padding: EdgeInsets.zero,
+              onChanged: onTypeChanged,
+              options: const [
+                ListFilterOption(label: '全部', value: null),
+                ListFilterOption(label: '备忘', value: 'memo'),
+                ListFilterOption(label: '日记', value: 'journal'),
+                ListFilterOption(label: '剪藏', value: 'clip'),
+                ListFilterOption(label: '文档', value: 'doc'),
+              ],
             ),
             const SizedBox(height: 8),
             TextField(
@@ -255,56 +257,6 @@ class _MemoFilterBar extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _FilterChipOption extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _FilterChipOption({required this.label, required this.selected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(label: Text(label), selected: selected, onSelected: (_) => onTap()),
-    );
-  }
-}
-
-class _PaginationFooter extends StatelessWidget {
-  final int total;
-  final int current;
-  final bool hasMore;
-  final bool isLoadingMore;
-  final VoidCallback onLoadMore;
-
-  const _PaginationFooter({
-    required this.total,
-    required this.current,
-    required this.hasMore,
-    required this.isLoadingMore,
-    required this.onLoadMore,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (isLoadingMore) {
-      return const Padding(
-        padding: EdgeInsets.all(16),
-        child: Center(child: CircularProgressIndicator()),
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Center(
-        child: hasMore
-            ? OutlinedButton(onPressed: onLoadMore, child: Text('加载更多（$current/$total）'))
-            : Text('已显示 $current/$total', style: Theme.of(context).textTheme.bodySmall),
       ),
     );
   }
