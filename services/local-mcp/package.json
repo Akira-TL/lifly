@@ -1,0 +1,25 @@
+{
+  "name": "@lifly/local-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/services/local-mcp/src/index.js",
+  "types": "dist/services/local-mcp/src/index.d.ts",
+  "bin": {
+    "lifly-local-mcp": "dist/services/local-mcp/src/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@lifly/local-core": "workspace:*",
+    "@lifly/protocol": "workspace:*",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "typescript": "latest",
+    "vitest": "latest"
+  }
+}
