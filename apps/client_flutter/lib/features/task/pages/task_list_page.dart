@@ -15,38 +15,83 @@ class TaskListPage extends StatefulWidget {
 }
 
 class _TaskListPageState extends State<TaskListPage> {
+  static const _pageSize = 20;
+
   late final TaskRepository _repo;
+  final _scrollController = ScrollController();
   final List<Task> _items = [];
+  String? _taskStatus;
+  int _total = 0;
   bool _isLoading = true;
+  bool _isLoadingMore = false;
   bool _isCreating = false;
   String? _error;
+
+  bool get _hasMore => _items.length < _total;
 
   @override
   void initState() {
     super.initState();
     _repo = TaskRepository(context.read<ApiClient>());
-    _load();
+    _scrollController.addListener(_handleScroll);
+    _loadFirstPage();
   }
 
-  Future<void> _load() async {
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_handleScroll)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients || !_hasMore || _isLoading || _isLoadingMore) return;
+    final threshold = _scrollController.position.maxScrollExtent - 240;
+    if (_scrollController.position.pixels >= threshold) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _loadFirstPage() async {
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
     try {
-      final items = await _repo.list(limit: 50);
+      final page = await _repo.listPage(limit: _pageSize, offset: 0, taskStatus: _taskStatus);
       if (!mounted) return;
       setState(() {
         _items
           ..clear()
-          ..addAll(items);
+          ..addAll(page.items);
+        _total = page.total;
       });
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = '任务加载失败：$error');
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (!_hasMore || _isLoadingMore) return;
+    setState(() => _isLoadingMore = true);
+
+    try {
+      final page = await _repo.listPage(limit: _pageSize, offset: _items.length, taskStatus: _taskStatus);
+      if (!mounted) return;
+      setState(() {
+        _items.addAll(page.items);
+        _total = page.total;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载更多任务失败：$error')));
+    } finally {
+      if (mounted) setState(() => _isLoadingMore = false);
     }
   }
 
@@ -62,7 +107,7 @@ class _TaskListPageState extends State<TaskListPage> {
         'priority': draft.priority,
         'source': 'flutter',
       });
-      await _load();
+      await _loadFirstPage();
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('创建任务失败：$error')));
@@ -75,44 +120,69 @@ class _TaskListPageState extends State<TaskListPage> {
     if (task.isDone) return;
     try {
       await _repo.complete(task.id);
-      await _load();
+      await _loadFirstPage();
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('完成任务失败：$error')));
     }
   }
 
+  void _setTaskStatus(String? taskStatus) {
+    if (_taskStatus == taskStatus) return;
+    setState(() => _taskStatus = taskStatus);
+    _loadFirstPage();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('任务')),
-      body: AsyncContentScaffold(
-        isLoading: _isLoading,
-        error: _error,
-        isEmpty: _items.isEmpty,
-        onRefresh: _load,
-        emptyIcon: Icons.check_circle_outline,
-        emptyTitle: '还没有任务',
-        emptySubtitle: '点击右下角新建任务，先打通真实 API 写入。',
-        child: ListView.separated(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-          itemCount: _items.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 8),
-          itemBuilder: (context, index) => _TaskTile(
-            task: _items[index],
-            onComplete: () => _completeTask(_items[index]),
-            onTap: () async {
-              await Navigator.push<bool>(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => TaskDetailPage(taskId: _items[index].id, initialTask: _items[index]),
-                ),
-              );
-              if (context.mounted) await _load();
-            },
+      body: Column(
+        children: [
+          _TaskFilterBar(selectedTaskStatus: _taskStatus, onTaskStatusChanged: _setTaskStatus),
+          Expanded(
+            child: AsyncContentScaffold(
+              isLoading: _isLoading,
+              error: _error,
+              isEmpty: _items.isEmpty,
+              onRefresh: _loadFirstPage,
+              emptyIcon: Icons.check_circle_outline,
+              emptyTitle: '还没有任务',
+              emptySubtitle: '点击右下角新建任务，先打通真实 API 写入。',
+              child: ListView.separated(
+                controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                itemCount: _items.length + 1,
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  if (index == _items.length) {
+                    return _PaginationFooter(
+                      total: _total,
+                      current: _items.length,
+                      hasMore: _hasMore,
+                      isLoadingMore: _isLoadingMore,
+                      onLoadMore: _loadMore,
+                    );
+                  }
+                  return _TaskTile(
+                    task: _items[index],
+                    onComplete: () => _completeTask(_items[index]),
+                    onTap: () async {
+                      await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => TaskDetailPage(taskId: _items[index].id, initialTask: _items[index]),
+                        ),
+                      );
+                      if (context.mounted) await _loadFirstPage();
+                    },
+                  );
+                },
+              ),
+            ),
           ),
-        ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'task-create-fab',
@@ -121,6 +191,73 @@ class _TaskListPageState extends State<TaskListPage> {
             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
             : const Icon(Icons.add),
         label: const Text('新建'),
+      ),
+    );
+  }
+}
+
+class _TaskFilterBar extends StatelessWidget {
+  final String? selectedTaskStatus;
+  final ValueChanged<String?> onTaskStatusChanged;
+
+  const _TaskFilterBar({required this.selectedTaskStatus, required this.onTaskStatusChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: Row(
+          children: [
+            _FilterChipOption(label: '全部', selected: selectedTaskStatus == null, onTap: () => onTaskStatusChanged(null)),
+            _FilterChipOption(label: '待办', selected: selectedTaskStatus == 'todo', onTap: () => onTaskStatusChanged('todo')),
+            _FilterChipOption(label: '进行中', selected: selectedTaskStatus == 'doing', onTap: () => onTaskStatusChanged('doing')),
+            _FilterChipOption(label: '已完成', selected: selectedTaskStatus == 'done', onTap: () => onTaskStatusChanged('done')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterChipOption extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _FilterChipOption({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(label: Text(label), selected: selected, onSelected: (_) => onTap()),
+    );
+  }
+}
+
+class _PaginationFooter extends StatelessWidget {
+  final int total;
+  final int current;
+  final bool hasMore;
+  final bool isLoadingMore;
+  final VoidCallback onLoadMore;
+
+  const _PaginationFooter({required this.total, required this.current, required this.hasMore, required this.isLoadingMore, required this.onLoadMore});
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoadingMore) {
+      return const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator()));
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Center(
+        child: hasMore
+            ? OutlinedButton(onPressed: onLoadMore, child: Text('加载更多（$current/$total）'))
+            : Text('已显示 $current/$total', style: Theme.of(context).textTheme.bodySmall),
       ),
     );
   }

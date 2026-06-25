@@ -1,10 +1,27 @@
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/repositories/paged_result.dart';
 import 'package:client_flutter/domain/entities/task.dart';
 
 class TaskRepository {
   final ApiClient api;
 
   TaskRepository(this.api);
+
+  Future<PagedResult<Task>> listPage({
+    int limit = 20,
+    int offset = 0,
+    String? taskStatus,
+    bool overdue = false,
+    bool today = false,
+  }) async {
+    final params = <String, dynamic>{'limit': limit, 'offset': offset};
+    if (taskStatus != null && taskStatus.isNotEmpty) params['task_status'] = taskStatus;
+    if (overdue) params['overdue'] = true;
+    if (today) params['today'] = true;
+
+    final res = await api.get('/tasks', params: params);
+    return PagedResult.fromData(res['data'] as Map<String, dynamic>, Task.fromJson);
+  }
 
   Future<List<Task>> list({
     int limit = 20,
@@ -13,14 +30,8 @@ class TaskRepository {
     bool overdue = false,
     bool today = false,
   }) async {
-    final params = <String, dynamic>{'limit': limit, 'offset': offset};
-    if (taskStatus != null) params['task_status'] = taskStatus;
-    if (overdue) params['overdue'] = true;
-    if (today) params['today'] = true;
-
-    final res = await api.get('/tasks', params: params);
-    final items = res['data']['items'] as List;
-    return items.map((e) => Task.fromJson(e as Map<String, dynamic>)).toList();
+    final page = await listPage(limit: limit, offset: offset, taskStatus: taskStatus, overdue: overdue, today: today);
+    return page.items;
   }
 
   Future<Task> get(String id) async {

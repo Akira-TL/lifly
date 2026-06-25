@@ -15,38 +15,95 @@ class MemoListPage extends StatefulWidget {
 }
 
 class _MemoListPageState extends State<MemoListPage> {
+  static const _pageSize = 20;
+
   late final MemoRepository _repo;
+  final _scrollController = ScrollController();
+  final _searchController = TextEditingController();
   final List<Memo> _items = [];
+  String? _selectedType;
+  int _total = 0;
   bool _isLoading = true;
+  bool _isLoadingMore = false;
   bool _isCreating = false;
   String? _error;
+
+  bool get _hasMore => _items.length < _total;
 
   @override
   void initState() {
     super.initState();
     _repo = MemoRepository(context.read<ApiClient>());
-    _load();
+    _scrollController.addListener(_handleScroll);
+    _loadFirstPage();
   }
 
-  Future<void> _load() async {
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_handleScroll)
+      ..dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients || !_hasMore || _isLoading || _isLoadingMore) return;
+    final threshold = _scrollController.position.maxScrollExtent - 240;
+    if (_scrollController.position.pixels >= threshold) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _loadFirstPage() async {
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
     try {
-      final items = await _repo.list(limit: 50);
+      final page = await _repo.listPage(
+        limit: _pageSize,
+        offset: 0,
+        type: _selectedType,
+        q: _searchController.text.trim(),
+      );
       if (!mounted) return;
       setState(() {
         _items
           ..clear()
-          ..addAll(items);
+          ..addAll(page.items);
+        _total = page.total;
       });
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = '备忘录加载失败：$error');
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (!_hasMore || _isLoadingMore) return;
+    setState(() => _isLoadingMore = true);
+
+    try {
+      final page = await _repo.listPage(
+        limit: _pageSize,
+        offset: _items.length,
+        type: _selectedType,
+        q: _searchController.text.trim(),
+      );
+      if (!mounted) return;
+      setState(() {
+        _items.addAll(page.items);
+        _total = page.total;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载更多备忘失败：$error')));
+    } finally {
+      if (mounted) setState(() => _isLoadingMore = false);
     }
   }
 
@@ -66,7 +123,7 @@ class _MemoListPageState extends State<MemoListPage> {
         'tags': result.tags,
         'source': 'flutter',
       });
-      await _load();
+      await _loadFirstPage();
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -77,36 +134,66 @@ class _MemoListPageState extends State<MemoListPage> {
     }
   }
 
+  void _setType(String? type) {
+    if (_selectedType == type) return;
+    setState(() => _selectedType = type);
+    _loadFirstPage();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('备忘录')),
-      body: AsyncContentScaffold(
-        isLoading: _isLoading,
-        error: _error,
-        isEmpty: _items.isEmpty,
-        onRefresh: _load,
-        emptyIcon: Icons.note_outlined,
-        emptyTitle: '还没有备忘录',
-        emptySubtitle: '点击右下角新建，把想法先记下来。',
-        child: ListView.separated(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-          itemCount: _items.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 8),
-          itemBuilder: (context, index) => _MemoTile(
-            memo: _items[index],
-            onTap: () async {
-              await Navigator.push<bool>(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => MemoDetailPage(memoId: _items[index].id, initialMemo: _items[index]),
-                ),
-              );
-              if (context.mounted) await _load();
-            },
+      body: Column(
+        children: [
+          _MemoFilterBar(
+            selectedType: _selectedType,
+            searchController: _searchController,
+            onTypeChanged: _setType,
+            onSearch: _loadFirstPage,
           ),
-        ),
+          Expanded(
+            child: AsyncContentScaffold(
+              isLoading: _isLoading,
+              error: _error,
+              isEmpty: _items.isEmpty,
+              onRefresh: _loadFirstPage,
+              emptyIcon: Icons.note_outlined,
+              emptyTitle: '还没有备忘录',
+              emptySubtitle: '点击右下角新建，把想法先记下来。',
+              child: ListView.separated(
+                controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                itemCount: _items.length + 1,
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  if (index == _items.length) {
+                    return _PaginationFooter(
+                      total: _total,
+                      current: _items.length,
+                      hasMore: _hasMore,
+                      isLoadingMore: _isLoadingMore,
+                      onLoadMore: _loadMore,
+                    );
+                  }
+                  return _MemoTile(
+                    memo: _items[index],
+                    onTap: () async {
+                      await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => MemoDetailPage(memoId: _items[index].id, initialMemo: _items[index]),
+                        ),
+                      );
+                      if (context.mounted) await _loadFirstPage();
+                    },
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'memo-create-fab',
@@ -115,6 +202,109 @@ class _MemoListPageState extends State<MemoListPage> {
             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
             : const Icon(Icons.add),
         label: const Text('新建'),
+      ),
+    );
+  }
+}
+
+class _MemoFilterBar extends StatelessWidget {
+  final String? selectedType;
+  final TextEditingController searchController;
+  final ValueChanged<String?> onTypeChanged;
+  final VoidCallback onSearch;
+
+  const _MemoFilterBar({
+    required this.selectedType,
+    required this.searchController,
+    required this.onTypeChanged,
+    required this.onSearch,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: Column(
+          children: [
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _FilterChipOption(label: '全部', selected: selectedType == null, onTap: () => onTypeChanged(null)),
+                  _FilterChipOption(label: '备忘', selected: selectedType == 'memo', onTap: () => onTypeChanged('memo')),
+                  _FilterChipOption(label: '日记', selected: selectedType == 'journal', onTap: () => onTypeChanged('journal')),
+                  _FilterChipOption(label: '剪藏', selected: selectedType == 'clip', onTap: () => onTypeChanged('clip')),
+                  _FilterChipOption(label: '文档', selected: selectedType == 'doc', onTap: () => onTypeChanged('doc')),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: searchController,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                isDense: true,
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: IconButton(onPressed: onSearch, icon: const Icon(Icons.arrow_forward)),
+                labelText: '搜索备忘',
+                border: const OutlineInputBorder(),
+              ),
+              onSubmitted: (_) => onSearch(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterChipOption extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _FilterChipOption({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(label: Text(label), selected: selected, onSelected: (_) => onTap()),
+    );
+  }
+}
+
+class _PaginationFooter extends StatelessWidget {
+  final int total;
+  final int current;
+  final bool hasMore;
+  final bool isLoadingMore;
+  final VoidCallback onLoadMore;
+
+  const _PaginationFooter({
+    required this.total,
+    required this.current,
+    required this.hasMore,
+    required this.isLoadingMore,
+    required this.onLoadMore,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoadingMore) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Center(
+        child: hasMore
+            ? OutlinedButton(onPressed: onLoadMore, child: Text('加载更多（$current/$total）'))
+            : Text('已显示 $current/$total', style: Theme.of(context).textTheme.bodySmall),
       ),
     );
   }

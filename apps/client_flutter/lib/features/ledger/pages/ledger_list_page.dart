@@ -15,43 +15,86 @@ class LedgerListPage extends StatefulWidget {
 }
 
 class _LedgerListPageState extends State<LedgerListPage> {
+  static const _pageSize = 20;
+
   late final LedgerRepository _repo;
+  final _scrollController = ScrollController();
   final List<LedgerTransaction> _items = [];
   Map<String, dynamic> _summary = const {};
+  String? _direction;
+  int _total = 0;
   bool _isLoading = true;
+  bool _isLoadingMore = false;
   bool _isCreating = false;
   String? _error;
+
+  bool get _hasMore => _items.length < _total;
 
   @override
   void initState() {
     super.initState();
     _repo = LedgerRepository(context.read<ApiClient>());
-    _load();
+    _scrollController.addListener(_handleScroll);
+    _loadFirstPage();
   }
 
-  Future<void> _load() async {
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_handleScroll)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients || !_hasMore || _isLoading || _isLoadingMore) return;
+    final threshold = _scrollController.position.maxScrollExtent - 240;
+    if (_scrollController.position.pixels >= threshold) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _loadFirstPage() async {
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
     try {
-      final results = await Future.wait([
-        _repo.list(limit: 50),
-        _repo.summary(),
-      ]);
+      final page = await _repo.listPage(limit: _pageSize, offset: 0, direction: _direction);
+      final summary = await _repo.summary();
       if (!mounted) return;
       setState(() {
         _items
           ..clear()
-          ..addAll(results[0] as List<LedgerTransaction>);
-        _summary = results[1] as Map<String, dynamic>;
+          ..addAll(page.items);
+        _total = page.total;
+        _summary = summary;
       });
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = '账单加载失败：$error');
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (!_hasMore || _isLoadingMore) return;
+    setState(() => _isLoadingMore = true);
+
+    try {
+      final page = await _repo.listPage(limit: _pageSize, offset: _items.length, direction: _direction);
+      if (!mounted) return;
+      setState(() {
+        _items.addAll(page.items);
+        _total = page.total;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载更多账单失败：$error')));
+    } finally {
+      if (mounted) setState(() => _isLoadingMore = false);
     }
   }
 
@@ -70,7 +113,7 @@ class _LedgerListPageState extends State<LedgerListPage> {
         'occurred_at': DateTime.now().toUtc().toIso8601String(),
         'source': 'flutter',
       });
-      await _load();
+      await _loadFirstPage();
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('创建账单失败：$error')));
@@ -79,41 +122,62 @@ class _LedgerListPageState extends State<LedgerListPage> {
     }
   }
 
+  void _setDirection(String? direction) {
+    if (_direction == direction) return;
+    setState(() => _direction = direction);
+    _loadFirstPage();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('记账')),
-      body: AsyncContentScaffold(
-        isLoading: _isLoading,
-        error: _error,
-        isEmpty: _items.isEmpty,
-        onRefresh: _load,
-        emptyIcon: Icons.account_balance_wallet_outlined,
-        emptyTitle: '还没有账单',
-        emptySubtitle: '点击右下角记一笔，先打通真实 API 写入。',
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-          children: [
-            _SummaryCard(summary: _summary),
-            const SizedBox(height: 12),
-            ..._items.map((tx) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _LedgerTile(
-                    transaction: tx,
-                    onTap: () async {
-                      await Navigator.push<bool>(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => LedgerDetailPage(transactionId: tx.id, initialTransaction: tx),
+      body: Column(
+        children: [
+          _LedgerFilterBar(selectedDirection: _direction, onDirectionChanged: _setDirection),
+          Expanded(
+            child: AsyncContentScaffold(
+              isLoading: _isLoading,
+              error: _error,
+              isEmpty: _items.isEmpty,
+              onRefresh: _loadFirstPage,
+              emptyIcon: Icons.account_balance_wallet_outlined,
+              emptyTitle: '还没有账单',
+              emptySubtitle: '点击右下角记一笔，先打通真实 API 写入。',
+              child: ListView(
+                controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                children: [
+                  _SummaryCard(summary: _summary),
+                  const SizedBox(height: 12),
+                  ..._items.map((tx) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _LedgerTile(
+                          transaction: tx,
+                          onTap: () async {
+                            await Navigator.push<bool>(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => LedgerDetailPage(transactionId: tx.id, initialTransaction: tx),
+                              ),
+                            );
+                            if (context.mounted) await _loadFirstPage();
+                          },
                         ),
-                      );
-                      if (context.mounted) await _load();
-                    },
+                      )),
+                  _PaginationFooter(
+                    total: _total,
+                    current: _items.length,
+                    hasMore: _hasMore,
+                    isLoadingMore: _isLoadingMore,
+                    onLoadMore: _loadMore,
                   ),
-                )),
-          ],
-        ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'ledger-create-fab',
@@ -122,6 +186,72 @@ class _LedgerListPageState extends State<LedgerListPage> {
             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
             : const Icon(Icons.add),
         label: const Text('记一笔'),
+      ),
+    );
+  }
+}
+
+class _LedgerFilterBar extends StatelessWidget {
+  final String? selectedDirection;
+  final ValueChanged<String?> onDirectionChanged;
+
+  const _LedgerFilterBar({required this.selectedDirection, required this.onDirectionChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: Row(
+          children: [
+            _FilterChipOption(label: '全部', selected: selectedDirection == null, onTap: () => onDirectionChanged(null)),
+            _FilterChipOption(label: '支出', selected: selectedDirection == 'expense', onTap: () => onDirectionChanged('expense')),
+            _FilterChipOption(label: '收入', selected: selectedDirection == 'income', onTap: () => onDirectionChanged('income')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterChipOption extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _FilterChipOption({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(label: Text(label), selected: selected, onSelected: (_) => onTap()),
+    );
+  }
+}
+
+class _PaginationFooter extends StatelessWidget {
+  final int total;
+  final int current;
+  final bool hasMore;
+  final bool isLoadingMore;
+  final VoidCallback onLoadMore;
+
+  const _PaginationFooter({required this.total, required this.current, required this.hasMore, required this.isLoadingMore, required this.onLoadMore});
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoadingMore) {
+      return const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator()));
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Center(
+        child: hasMore
+            ? OutlinedButton(onPressed: onLoadMore, child: Text('加载更多（$current/$total）'))
+            : Text('已显示 $current/$total', style: Theme.of(context).textTheme.bodySmall),
       ),
     );
   }

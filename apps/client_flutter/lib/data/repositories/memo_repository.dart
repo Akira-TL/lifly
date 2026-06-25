@@ -1,4 +1,5 @@
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/repositories/paged_result.dart';
 import 'package:client_flutter/domain/entities/memo.dart';
 
 class MemoRepository {
@@ -6,14 +7,18 @@ class MemoRepository {
 
   MemoRepository(this.api);
 
-  Future<List<Memo>> list({int limit = 20, int offset = 0, String? type, String? q}) async {
+  Future<PagedResult<Memo>> listPage({int limit = 20, int offset = 0, String? type, String? q}) async {
     final params = <String, dynamic>{'limit': limit, 'offset': offset};
-    if (type != null) params['type'] = type;
-    if (q != null) params['q'] = q;
+    if (type != null && type.isNotEmpty) params['type'] = type;
+    if (q != null && q.isNotEmpty) params['q'] = q;
 
     final res = await api.get('/memos', params: params);
-    final items = res['data']['items'] as List;
-    return items.map((e) => Memo.fromJson(e as Map<String, dynamic>)).toList();
+    return PagedResult.fromData(res['data'] as Map<String, dynamic>, Memo.fromJson);
+  }
+
+  Future<List<Memo>> list({int limit = 20, int offset = 0, String? type, String? q}) async {
+    final page = await listPage(limit: limit, offset: offset, type: type, q: q);
+    return page.items;
   }
 
   Future<Memo> get(String id) async {
