@@ -79,6 +79,8 @@ class _SettingsPageState extends State<SettingsPage> {
             onRunMcpSmoke: _runMcpSmoke,
           ),
           const SizedBox(height: 12),
+          const _LocalMcpStatusCard(),
+          const SizedBox(height: 12),
           const ListTile(
             leading: Icon(Icons.cloud_outlined),
             title: Text('同步状态'),
@@ -194,6 +196,46 @@ class _ApiDiagnosticsCard extends StatelessWidget {
                   label: const Text('运行 MCP Smoke'),
                 ),
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LocalMcpStatusCard extends StatelessWidget {
+  const _LocalMcpStatusCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.developer_board_outlined, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  '本地能力 / Local MCP',
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const _StatusRow(label: '当前模式', value: 'Cloud API 直连'),
+            const _StatusRow(label: 'Local Core', value: '已规划，未接入 Flutter'),
+            const _StatusRow(label: 'Local MCP', value: 'stdio skeleton，未由客户端启动'),
+            const _StatusRow(label: 'PowerSync', value: '未启用'),
+            const _StatusRow(label: '离线写入', value: '未启用'),
+            const SizedBox(height: 8),
+            Text(
+              '当前客户端仍通过后端 API 读写数据。本地 MCP / 离线写入会在 Local Core Bridge 与 PowerSync 接入后启用。',
+              style: theme.textTheme.bodySmall,
             ),
           ],
         ),
