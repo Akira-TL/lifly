@@ -23,9 +23,23 @@ class LedgerRepository {
     return items.map((e) => LedgerTransaction.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  Future<LedgerTransaction> get(String id) async {
+    final res = await api.get('/ledger/transactions/$id');
+    return LedgerTransaction.fromJson(res['data'] as Map<String, dynamic>);
+  }
+
   Future<LedgerTransaction> create(Map<String, dynamic> data) async {
     final res = await api.post('/ledger/transactions', data: data);
     return LedgerTransaction.fromJson(res['data'] as Map<String, dynamic>);
+  }
+
+  Future<LedgerTransaction> update(String id, Map<String, dynamic> data) async {
+    final res = await api.put('/ledger/transactions/$id', data: data);
+    return LedgerTransaction.fromJson(res['data'] as Map<String, dynamic>);
+  }
+
+  Future<void> delete(String id) async {
+    await api.delete('/ledger/transactions/$id');
   }
 
   Future<Map<String, dynamic>> summary({String? startDate, String? endDate}) async {

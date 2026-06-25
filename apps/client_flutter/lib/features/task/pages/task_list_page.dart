@@ -1,6 +1,7 @@
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/repositories/task_repository.dart';
 import 'package:client_flutter/domain/entities/task.dart';
+import 'package:client_flutter/features/task/pages/task_detail_page.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -101,10 +102,20 @@ class _TaskListPageState extends State<TaskListPage> {
           itemBuilder: (context, index) => _TaskTile(
             task: _items[index],
             onComplete: () => _completeTask(_items[index]),
+            onTap: () async {
+              await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => TaskDetailPage(taskId: _items[index].id, initialTask: _items[index]),
+                ),
+              );
+              if (context.mounted) await _load();
+            },
           ),
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'task-create-fab',
         onPressed: _isCreating ? null : _createTask,
         icon: _isCreating
             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
@@ -118,8 +129,9 @@ class _TaskListPageState extends State<TaskListPage> {
 class _TaskTile extends StatelessWidget {
   final Task task;
   final VoidCallback onComplete;
+  final VoidCallback onTap;
 
-  const _TaskTile({required this.task, required this.onComplete});
+  const _TaskTile({required this.task, required this.onComplete, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -133,10 +145,9 @@ class _TaskTile extends StatelessWidget {
             : theme.colorScheme.primary;
 
     return Card(
-      child: CheckboxListTile(
-        value: task.isDone,
-        onChanged: task.isDone ? null : (_) => onComplete(),
-        secondary: CircleAvatar(
+      child: ListTile(
+        onTap: onTap,
+        leading: CircleAvatar(
           backgroundColor: statusColor.withAlpha(24),
           child: Icon(task.isDone ? Icons.done : Icons.check_circle_outline, color: statusColor),
         ),
@@ -155,7 +166,10 @@ class _TaskTile extends StatelessWidget {
             Text([statusLabel, task.priority, ?dueLabel].join(' · '), style: theme.textTheme.bodySmall),
           ],
         ),
-        controlAffinity: ListTileControlAffinity.trailing,
+        trailing: Checkbox(
+          value: task.isDone,
+          onChanged: task.isDone ? null : (_) => onComplete(),
+        ),
       ),
     );
   }

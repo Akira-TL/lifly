@@ -23,8 +23,18 @@ class TaskRepository {
     return items.map((e) => Task.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  Future<Task> get(String id) async {
+    final res = await api.get('/tasks/$id');
+    return Task.fromJson(res['data'] as Map<String, dynamic>);
+  }
+
   Future<Task> create(Map<String, dynamic> data) async {
     final res = await api.post('/tasks', data: data);
+    return Task.fromJson(res['data'] as Map<String, dynamic>);
+  }
+
+  Future<Task> update(String id, Map<String, dynamic> data) async {
+    final res = await api.put('/tasks/$id', data: data);
     return Task.fromJson(res['data'] as Map<String, dynamic>);
   }
 

@@ -1,6 +1,7 @@
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/repositories/ledger_repository.dart';
 import 'package:client_flutter/domain/entities/ledger_transaction.dart';
+import 'package:client_flutter/features/ledger/pages/ledger_detail_page.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -98,12 +99,24 @@ class _LedgerListPageState extends State<LedgerListPage> {
             const SizedBox(height: 12),
             ..._items.map((tx) => Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: _LedgerTile(transaction: tx),
+                  child: _LedgerTile(
+                    transaction: tx,
+                    onTap: () async {
+                      await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => LedgerDetailPage(transactionId: tx.id, initialTransaction: tx),
+                        ),
+                      );
+                      if (context.mounted) await _load();
+                    },
+                  ),
                 )),
           ],
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'ledger-create-fab',
         onPressed: _isCreating ? null : _createTransaction,
         icon: _isCreating
             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
@@ -164,8 +177,9 @@ class _SummaryMetric extends StatelessWidget {
 
 class _LedgerTile extends StatelessWidget {
   final LedgerTransaction transaction;
+  final VoidCallback onTap;
 
-  const _LedgerTile({required this.transaction});
+  const _LedgerTile({required this.transaction, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -175,6 +189,7 @@ class _LedgerTile extends StatelessWidget {
 
     return Card(
       child: ListTile(
+        onTap: onTap,
         leading: CircleAvatar(
           backgroundColor: color.withAlpha(30),
           child: Icon(isExpense ? Icons.shopping_bag_outlined : Icons.attach_money, color: color),

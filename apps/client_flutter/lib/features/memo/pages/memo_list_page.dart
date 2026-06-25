@@ -1,6 +1,7 @@
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/repositories/memo_repository.dart';
 import 'package:client_flutter/domain/entities/memo.dart';
+import 'package:client_flutter/features/memo/pages/memo_detail_page.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -93,10 +94,22 @@ class _MemoListPageState extends State<MemoListPage> {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
           itemCount: _items.length,
           separatorBuilder: (_, _) => const SizedBox(height: 8),
-          itemBuilder: (context, index) => _MemoTile(memo: _items[index]),
+          itemBuilder: (context, index) => _MemoTile(
+            memo: _items[index],
+            onTap: () async {
+              await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => MemoDetailPage(memoId: _items[index].id, initialMemo: _items[index]),
+                ),
+              );
+              if (context.mounted) await _load();
+            },
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'memo-create-fab',
         onPressed: _isCreating ? null : _createMemo,
         icon: _isCreating
             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
@@ -109,8 +122,9 @@ class _MemoListPageState extends State<MemoListPage> {
 
 class _MemoTile extends StatelessWidget {
   final Memo memo;
+  final VoidCallback onTap;
 
-  const _MemoTile({required this.memo});
+  const _MemoTile({required this.memo, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -121,6 +135,7 @@ class _MemoTile extends StatelessWidget {
 
     return Card(
       child: ListTile(
+        onTap: onTap,
         leading: CircleAvatar(
           backgroundColor: theme.colorScheme.primary.withAlpha(24),
           child: Icon(Icons.note_outlined, color: theme.colorScheme.primary),
