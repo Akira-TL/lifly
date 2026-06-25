@@ -8,7 +8,7 @@ class SyncService {
 
   Future<void> initialize(String dbPath) async {
     db = PowerSyncDatabase(
-      schema: _lifilySchema,
+      schema: _liflySchema,
       path: dbPath,
     );
 
@@ -19,7 +19,7 @@ class SyncService {
   Future<void> connect(String powerSyncEndpoint, String token) async {
     if (!_initialized) return;
     await db.connect(
-      connector: _LifilyConnector(powerSyncEndpoint, token),
+      connector: _LiflyConnector(powerSyncEndpoint, token),
     );
   }
 
@@ -34,11 +34,11 @@ class SyncService {
   }
 }
 
-class _LifilyConnector extends PowerSyncBackendConnector {
+class _LiflyConnector extends PowerSyncBackendConnector {
   final String endpoint;
   final String token;
 
-  _LifilyConnector(this.endpoint, this.token);
+  _LiflyConnector(this.endpoint, this.token);
 
   @override
   Future<PowerSyncCredentials?> fetchCredentials() async {
@@ -53,17 +53,22 @@ class _LifilyConnector extends PowerSyncBackendConnector {
   }
 }
 
-const _lifilySchema = Schema([
+const _liflySchema = Schema([
   Table('memos', [
     Column.text('id'),
     Column.text('user_id'),
     Column.text('type'),
     Column.text('title'),
     Column.text('content_markdown'),
+    Column.text('tags'),
     Column.text('mood'),
+    Column.text('source_capture_id'),
+    Column.text('source'),
     Column.text('status'),
     Column.text('created_at'),
     Column.text('updated_at'),
+    Column.text('deleted_at'),
+    Column.integer('revision'),
   ]),
   Table('tasks', [
     Column.text('id'),
@@ -74,20 +79,119 @@ const _lifilySchema = Schema([
     Column.text('remind_at'),
     Column.text('priority'),
     Column.text('task_status'),
+    Column.text('source_capture_id'),
+    Column.text('source'),
     Column.text('status'),
     Column.text('created_at'),
     Column.text('updated_at'),
     Column.text('completed_at'),
+    Column.text('deleted_at'),
+    Column.integer('revision'),
   ]),
   Table('ledger_transactions', [
     Column.text('id'),
     Column.text('user_id'),
+    Column.text('account_id'),
+    Column.text('category_id'),
     Column.text('direction'),
     Column.real('amount'),
     Column.text('currency'),
     Column.text('merchant'),
     Column.text('note'),
     Column.text('occurred_at'),
+    Column.text('source'),
+    Column.text('source_capture_id'),
+    Column.text('import_batch_id'),
+    Column.real('confidence'),
+    Column.text('status'),
+    Column.text('created_at'),
+    Column.text('updated_at'),
+    Column.text('deleted_at'),
+    Column.integer('revision'),
+  ]),
+  Table('assets', [
+    Column.text('id'),
+    Column.text('user_id'),
+    Column.text('kind'),
+    Column.text('asset_type'),
+    Column.text('filename'),
+    Column.text('mime_type'),
+    Column.integer('size_bytes'),
+    Column.text('sha256'),
+    Column.text('storage_provider'),
+    Column.text('storage_key'),
+    Column.text('external_url'),
+    Column.text('external_provider'),
+    Column.text('visibility'),
+    Column.text('sync_status'),
+    Column.text('status'),
+    Column.text('created_at'),
+    Column.text('updated_at'),
+  ]),
+  Table('memo_asset_refs', [
+    Column.text('id'),
+    Column.text('memo_id'),
+    Column.text('asset_id'),
+    Column.text('ref_type'),
+    Column.text('position_hint'),
+    Column.text('created_at'),
+  ]),
+  Table('audit_logs', [
+    Column.text('id'),
+    Column.text('user_id'),
+    Column.text('actor_type'),
+    Column.text('actor_id'),
+    Column.text('action'),
+    Column.text('entity_type'),
+    Column.text('entity_id'),
+    Column.text('before_snapshot'),
+    Column.text('after_snapshot'),
+    Column.text('source_channel'),
+    Column.text('source_text'),
+    Column.text('tool_name'),
+    Column.text('request_id'),
+    Column.text('created_at'),
+  ]),
+  Table('mcp_undo_actions', [
+    Column.text('id'),
+    Column.text('user_id'),
+    Column.text('undo_token'),
+    Column.text('entity_type'),
+    Column.text('entity_id'),
+    Column.text('action'),
+    Column.text('status'),
+    Column.text('expires_at'),
+    Column.text('used_at'),
+    Column.text('created_at'),
+  ]),
+  Table('tombstones', [
+    Column.text('id'),
+    Column.text('user_id'),
+    Column.text('entity_type'),
+    Column.text('entity_id'),
+    Column.text('purged_at'),
+    Column.integer('last_revision'),
+  ]),
+  Table('ledger_accounts', [
+    Column.text('id'),
+    Column.text('user_id'),
+    Column.text('name'),
+    Column.text('type'),
+    Column.text('currency'),
+    Column.integer('is_default'),
+    Column.text('status'),
+    Column.text('created_at'),
+    Column.text('updated_at'),
+  ]),
+  Table('ledger_categories', [
+    Column.text('id'),
+    Column.text('user_id'),
+    Column.text('name'),
+    Column.text('parent_id'),
+    Column.text('type'),
+    Column.text('icon'),
+    Column.text('color'),
+    Column.integer('sort_order'),
     Column.text('status'),
     Column.text('created_at'),
     Column.text('updated_at'),
