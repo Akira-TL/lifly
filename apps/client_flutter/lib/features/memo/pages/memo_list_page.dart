@@ -1,6 +1,7 @@
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/repositories/memo_repository.dart';
 import 'package:client_flutter/domain/entities/memo.dart';
+import 'package:client_flutter/shared/widgets/async_content.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -79,7 +80,22 @@ class _MemoListPageState extends State<MemoListPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('备忘录')),
-      body: _buildBody(),
+      body: AsyncContentScaffold(
+        isLoading: _isLoading,
+        error: _error,
+        isEmpty: _items.isEmpty,
+        onRefresh: _load,
+        emptyIcon: Icons.note_outlined,
+        emptyTitle: '还没有备忘录',
+        emptySubtitle: '点击右下角新建，把想法先记下来。',
+        child: ListView.separated(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+          itemCount: _items.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
+          itemBuilder: (context, index) => _MemoTile(memo: _items[index]),
+        ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _isCreating ? null : _createMemo,
         icon: _isCreating
@@ -87,27 +103,6 @@ class _MemoListPageState extends State<MemoListPage> {
             : const Icon(Icons.add),
         label: const Text('新建'),
       ),
-    );
-  }
-
-  Widget _buildBody() {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _ListErrorState(message: _error!, onRetry: _load);
-
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: _items.isEmpty
-          ? const _EmptyListState(
-              icon: Icons.note_outlined,
-              title: '还没有备忘录',
-              subtitle: '点击右下角新建，把想法先记下来。',
-            )
-          : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-              itemCount: _items.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 8),
-              itemBuilder: (context, index) => _MemoTile(memo: _items[index]),
-            ),
     );
   }
 }
@@ -220,56 +215,6 @@ class _MemoEditorDialogState extends State<_MemoEditorDialog> {
           child: const Text('保存'),
         ),
       ],
-    );
-  }
-}
-
-class _EmptyListState extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  const _EmptyListState({required this.icon, required this.title, required this.subtitle});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      children: [
-        SizedBox(height: MediaQuery.of(context).size.height * 0.18),
-        Icon(icon, size: 64, color: theme.colorScheme.outline),
-        const SizedBox(height: 16),
-        Text(title, textAlign: TextAlign.center, style: theme.textTheme.titleMedium),
-        const SizedBox(height: 8),
-        Text(subtitle, textAlign: TextAlign.center, style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
-      ],
-    );
-  }
-}
-
-class _ListErrorState extends StatelessWidget {
-  final String message;
-  final Future<void> Function() onRetry;
-
-  const _ListErrorState({required this.message, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline, size: 48, color: Theme.of(context).colorScheme.error),
-            const SizedBox(height: 12),
-            Text(message, textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            const SizedBox(height: 16),
-            FilledButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('重试')),
-          ],
-        ),
-      ),
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/repositories/ledger_repository.dart';
 import 'package:client_flutter/domain/entities/ledger_transaction.dart';
+import 'package:client_flutter/shared/widgets/async_content.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -81,37 +82,33 @@ class _LedgerListPageState extends State<LedgerListPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('记账')),
-      body: _buildBody(),
+      body: AsyncContentScaffold(
+        isLoading: _isLoading,
+        error: _error,
+        isEmpty: _items.isEmpty,
+        onRefresh: _load,
+        emptyIcon: Icons.account_balance_wallet_outlined,
+        emptyTitle: '还没有账单',
+        emptySubtitle: '点击右下角记一笔，先打通真实 API 写入。',
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+          children: [
+            _SummaryCard(summary: _summary),
+            const SizedBox(height: 12),
+            ..._items.map((tx) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _LedgerTile(transaction: tx),
+                )),
+          ],
+        ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _isCreating ? null : _createTransaction,
         icon: _isCreating
             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
             : const Icon(Icons.add),
         label: const Text('记一笔'),
-      ),
-    );
-  }
-
-  Widget _buildBody() {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _LedgerErrorState(message: _error!, onRetry: _load);
-
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-        children: [
-          _SummaryCard(summary: _summary),
-          const SizedBox(height: 12),
-          if (_items.isEmpty)
-            const _LedgerEmptyState()
-          else
-            ..._items.map((tx) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _LedgerTile(transaction: tx),
-                )),
-        ],
       ),
     );
   }
@@ -272,53 +269,6 @@ class _LedgerEditorDialogState extends State<_LedgerEditorDialog> {
           child: const Text('保存'),
         ),
       ],
-    );
-  }
-}
-
-class _LedgerEmptyState extends StatelessWidget {
-  const _LedgerEmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(top: 96),
-      child: Column(
-        children: [
-          Icon(Icons.account_balance_wallet_outlined, size: 64, color: theme.colorScheme.outline),
-          const SizedBox(height: 16),
-          Text('还没有账单', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Text('点击右下角记一笔，先打通真实 API 写入。', style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
-        ],
-      ),
-    );
-  }
-}
-
-class _LedgerErrorState extends StatelessWidget {
-  final String message;
-  final Future<void> Function() onRetry;
-
-  const _LedgerErrorState({required this.message, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline, size: 48, color: Theme.of(context).colorScheme.error),
-            const SizedBox(height: 12),
-            Text(message, textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            const SizedBox(height: 16),
-            FilledButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('重试')),
-          ],
-        ),
-      ),
     );
   }
 }

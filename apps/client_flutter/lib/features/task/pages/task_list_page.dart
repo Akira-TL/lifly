@@ -1,6 +1,7 @@
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/repositories/task_repository.dart';
 import 'package:client_flutter/domain/entities/task.dart';
+import 'package:client_flutter/shared/widgets/async_content.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -84,7 +85,25 @@ class _TaskListPageState extends State<TaskListPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('任务')),
-      body: _buildBody(),
+      body: AsyncContentScaffold(
+        isLoading: _isLoading,
+        error: _error,
+        isEmpty: _items.isEmpty,
+        onRefresh: _load,
+        emptyIcon: Icons.check_circle_outline,
+        emptyTitle: '还没有任务',
+        emptySubtitle: '点击右下角新建任务，先打通真实 API 写入。',
+        child: ListView.separated(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+          itemCount: _items.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
+          itemBuilder: (context, index) => _TaskTile(
+            task: _items[index],
+            onComplete: () => _completeTask(_items[index]),
+          ),
+        ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _isCreating ? null : _createTask,
         icon: _isCreating
@@ -92,27 +111,6 @@ class _TaskListPageState extends State<TaskListPage> {
             : const Icon(Icons.add),
         label: const Text('新建'),
       ),
-    );
-  }
-
-  Widget _buildBody() {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _TaskErrorState(message: _error!, onRetry: _load);
-
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: _items.isEmpty
-          ? const _TaskEmptyState()
-          : ListView.separated(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-              itemCount: _items.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 8),
-              itemBuilder: (context, index) => _TaskTile(
-                task: _items[index],
-                onComplete: () => _completeTask(_items[index]),
-              ),
-            ),
     );
   }
 }
@@ -228,52 +226,6 @@ class _TaskEditorDialogState extends State<_TaskEditorDialog> {
           child: const Text('保存'),
         ),
       ],
-    );
-  }
-}
-
-class _TaskEmptyState extends StatelessWidget {
-  const _TaskEmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      children: [
-        SizedBox(height: MediaQuery.of(context).size.height * 0.18),
-        Icon(Icons.check_circle_outline, size: 64, color: theme.colorScheme.outline),
-        const SizedBox(height: 16),
-        Text('还没有任务', textAlign: TextAlign.center, style: theme.textTheme.titleMedium),
-        const SizedBox(height: 8),
-        Text('点击右下角新建任务，先打通真实 API 写入。', textAlign: TextAlign.center, style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
-      ],
-    );
-  }
-}
-
-class _TaskErrorState extends StatelessWidget {
-  final String message;
-  final Future<void> Function() onRetry;
-
-  const _TaskErrorState({required this.message, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline, size: 48, color: Theme.of(context).colorScheme.error),
-            const SizedBox(height: 12),
-            Text(message, textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            const SizedBox(height: 16),
-            FilledButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('重试')),
-          ],
-        ),
-      ),
     );
   }
 }
