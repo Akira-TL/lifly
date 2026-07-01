@@ -74,6 +74,22 @@ describe("Lifly MCP Tool Schema v0.1", () => {
     expect(parsed.currency).toBe("CNY");
   });
 
+  it("rejects zero or negative expense amounts", () => {
+    expect(() =>
+      parseLiflyMcpToolInput("expense_create", {
+        amount: 0,
+        merchant: "食堂",
+      }),
+    ).toThrow();
+
+    expect(() =>
+      parseLiflyMcpToolInput("expense_create", {
+        amount: -1,
+        merchant: "食堂",
+      }),
+    ).toThrow();
+  });
+
   it("aligns internal upload asset types with the Python runtime", () => {
     const parsed = parseLiflyMcpToolInput("asset_create_upload_url", {
       filename: "deck.pptx",

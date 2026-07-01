@@ -60,7 +60,7 @@ export const MemoSearchInputSchema = z.object({
 export const ExpenseDirectionSchema = z.enum(["expense", "income", "transfer"]);
 
 export const ExpenseCreateInputSchema = z.object({
-  amount: z.number().finite().nonnegative(),
+  amount: z.number().finite().positive(),
   merchant: z.string().min(1),
   direction: ExpenseDirectionSchema.default("expense"),
   currency: z.string().min(3).max(8).default("CNY"),
