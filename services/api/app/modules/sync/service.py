@@ -66,7 +66,8 @@ async def _apply_memo_change(
     memo.status = data.get("status") or "active"
     memo.source = data.get("source") or change.source
     memo.revision = change.revision
-    memo.created_at = change.created_at or change.updated_at
+    if memo.created_at is None:
+        memo.created_at = change.created_at or change.updated_at
     memo.updated_at = change.updated_at
     await db.flush()
     await _write_sync_audit(db, change, client_id, before=before, after=_memo_snapshot(memo))
@@ -111,7 +112,8 @@ async def _apply_task_change(
     task.status = data.get("status") or "active"
     task.source = data.get("source") or change.source
     task.revision = change.revision
-    task.created_at = change.created_at or change.updated_at
+    if task.created_at is None:
+        task.created_at = change.created_at or change.updated_at
     task.updated_at = change.updated_at
     await db.flush()
     await _write_sync_audit(db, change, client_id, before=before, after=task_to_dict(task))
@@ -163,7 +165,8 @@ async def _apply_expense_change(
     tx.confidence = data.get("confidence")
     tx.status = data.get("status") or "active"
     tx.revision = change.revision
-    tx.created_at = change.created_at or change.updated_at
+    if tx.created_at is None:
+        tx.created_at = change.created_at or change.updated_at
     tx.updated_at = change.updated_at
     await db.flush()
     await _write_sync_audit(db, change, client_id, before=before, after=ledger_transaction_to_dict(tx))
