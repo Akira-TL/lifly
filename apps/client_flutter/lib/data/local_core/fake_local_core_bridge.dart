@@ -186,6 +186,38 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
+  Future<LocalLedgerTransactionRecord> deleteExpense(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final transactionId =
+        input['transaction_id'] as String? ??
+        input['expense_id'] as String? ??
+        input['id'] as String?;
+    final index = _expenses.indexWhere(
+      (tx) => tx.id == transactionId && tx.status == 'active',
+    );
+    if (index < 0) throw StateError('Expense not found: $transactionId');
+
+    final old = _expenses[index];
+    final deleted = LocalLedgerTransactionRecord(
+      id: old.id,
+      direction: old.direction,
+      amount: old.amount,
+      currency: old.currency,
+      merchant: old.merchant,
+      note: old.note,
+      occurredAt: old.occurredAt,
+      status: input['status'] as String? ?? 'deleted',
+      revision: old.revision + 1,
+      createdAt: old.createdAt,
+      updatedAt: context.effectiveNow,
+    );
+    _expenses[index] = deleted;
+    return deleted;
+  }
+
+  @override
   Future<LocalTaskRecord> createTask(
     Map<String, Object?> input,
     LocalCoreContext context,

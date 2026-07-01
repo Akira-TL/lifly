@@ -103,6 +103,14 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
+  Future<LocalLedgerTransactionRecord> deleteExpense(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _unsupported('expense delete');
+  }
+
+  @override
   Future<LocalTaskRecord> createTask(
     Map<String, Object?> input,
     LocalCoreContext context,
