@@ -1,3 +1,4 @@
+import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/api/api_diagnostics.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
@@ -91,6 +92,7 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final api = context.watch<ApiClient>();
+    final dataMode = context.watch<LiflyDataMode>();
 
     return Scaffold(
       appBar: AppBar(title: const Text('设置')),
@@ -107,6 +109,8 @@ class _SettingsPageState extends State<SettingsPage> {
             onCheckHealth: _checkHealth,
             onRunMcpSmoke: _runMcpSmoke,
           ),
+          const SizedBox(height: 12),
+          _DataModeCard(dataMode: dataMode),
           const SizedBox(height: 12),
           _LocalMcpStatusCard(
             health: _localCoreHealth,
@@ -191,16 +195,11 @@ class _ApiDiagnosticsCard extends StatelessWidget {
             _StatusRow(label: 'MCP Smoke', value: smokeStatus),
             if (error != null) ...[
               const SizedBox(height: 8),
-              Text(
-                error!,
-                style: TextStyle(color: theme.colorScheme.error),
-              ),
+              Text(error!, style: TextStyle(color: theme.colorScheme.error)),
             ],
             if (smokeReport != null) ...[
               const SizedBox(height: 8),
-              ...smokeReport!.steps.map(
-                (step) => _SmokeStepTile(step: step),
-              ),
+              ...smokeReport!.steps.map((step) => _SmokeStepTile(step: step)),
             ],
             const SizedBox(height: 12),
             Wrap(
@@ -238,6 +237,43 @@ class _ApiDiagnosticsCard extends StatelessWidget {
   }
 }
 
+class _DataModeCard extends StatelessWidget {
+  final LiflyDataMode dataMode;
+
+  const _DataModeCard({required this.dataMode});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.sync_alt_outlined, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  '数据模式',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _StatusRow(label: '当前模式', value: dataMode.label),
+            const _StatusRow(label: '切换方式', value: 'LIFLY_DATA_MODE=api|local'),
+            const _StatusRow(label: '本地范围', value: 'memo / task / expense'),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _LocalMcpStatusCard extends StatelessWidget {
   final LocalCoreHealth? health;
   final String? error;
@@ -267,18 +303,26 @@ class _LocalMcpStatusCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.developer_board_outlined, color: theme.colorScheme.primary),
+                Icon(
+                  Icons.developer_board_outlined,
+                  color: theme.colorScheme.primary,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   '本地能力 / Local MCP',
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            const _StatusRow(label: '当前模式', value: 'Cloud API + Local Core health'),
+            _StatusRow(label: '当前模式', value: health?.mode ?? '未检查'),
             _StatusRow(label: 'Local Core', value: localCoreStatus),
-            const _StatusRow(label: 'Local MCP', value: 'stdio skeleton，未由客户端启动'),
+            const _StatusRow(
+              label: 'Local MCP',
+              value: 'stdio skeleton，未由客户端启动',
+            ),
             _StatusRow(label: 'PowerSync', value: health?.detail ?? '未初始化'),
             const _StatusRow(label: '离线写入', value: '0.2.2+ 启用'),
             if (checkedAt != null) _StatusRow(label: '检查时间', value: checkedAt),
@@ -288,7 +332,7 @@ class _LocalMcpStatusCard extends StatelessWidget {
             ],
             const SizedBox(height: 8),
             Text(
-              '当前版本先接入 PowerSync 本地数据库初始化和 health 诊断；真实 CRUD 将从 0.2.2 起逐步落到 Local Core。',
+              '0.2.6 已支持 memo、task、expense 在本地模式下走 Local Core。',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
@@ -327,9 +371,9 @@ class _StatusRow extends StatelessWidget {
             width: 96,
             child: Text(
               label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
           Expanded(child: Text(value)),
@@ -346,7 +390,9 @@ class _SmokeStepTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = step.passed ? Colors.green : Theme.of(context).colorScheme.error;
+    final color = step.passed
+        ? Colors.green
+        : Theme.of(context).colorScheme.error;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
