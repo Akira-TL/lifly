@@ -1,0 +1,242 @@
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.models import AuditLog, LedgerTransaction, Memo, Task
+from app.modules.ledger.service import ledger_transaction_to_dict
+from app.modules.memos.service import memo_to_response
+from app.modules.sync.schemas import SyncApplyResult, SyncChange, SyncPushRequest, SyncPushResponse
+from app.modules.tasks.service import task_to_dict
+from app.schemas.common import json_serialize
+
+
+async def apply_sync_push(db: AsyncSession, request: SyncPushRequest) -> SyncPushResponse:
+    results: list[SyncApplyResult] = []
+    for change in request.changes:
+        if change.entity_type == "memo":
+            result = await _apply_memo_change(db, change, request.client_id)
+        elif change.entity_type == "task":
+            result = await _apply_task_change(db, change, request.client_id)
+        else:
+            result = await _apply_expense_change(db, change, request.client_id)
+        results.append(result)
+
+    applied = sum(1 for item in results if item.status == "applied")
+    skipped = len(results) - applied
+    return SyncPushResponse(applied=applied, skipped=skipped, results=results)
+
+
+async def _apply_memo_change(
+    db: AsyncSession,
+    change: SyncChange,
+    client_id: str,
+) -> SyncApplyResult:
+    memo = await _find_entity(db, Memo, change)
+    if _is_stale(memo, change):
+        return _skipped(change, "stale_revision", memo.revision)
+
+    if change.operation == "delete":
+        if memo is None:
+            return _skipped(change, "missing_entity", None)
+        before = _memo_snapshot(memo)
+        memo.status = change.data.get("status") or "deleted"
+        memo.deleted_at = change.deleted_at
+        memo.updated_at = change.updated_at
+        memo.revision = change.revision
+        await db.flush()
+        await _write_sync_audit(db, change, client_id, before=before, after=_memo_snapshot(memo))
+        return _applied(change)
+
+    if memo is None:
+        memo = Memo(id=change.entity_id, user_id=change.user_id)
+        db.add(memo)
+
+    before = _memo_snapshot(memo) if memo.created_at is not None else None
+    data = change.data
+    memo.type = data.get("type") or memo.type or "memo"
+    memo.title = data.get("title")
+    memo.content_markdown = data.get("content_markdown") or ""
+    memo.tags = data.get("tags")
+    memo.mood = data.get("mood")
+    memo.source_capture_id = data.get("source_capture_id")
+    memo.status = data.get("status") or "active"
+    memo.source = data.get("source") or change.source
+    memo.revision = change.revision
+    memo.created_at = change.created_at or change.updated_at
+    memo.updated_at = change.updated_at
+    await db.flush()
+    await _write_sync_audit(db, change, client_id, before=before, after=_memo_snapshot(memo))
+    return _applied(change)
+
+
+async def _apply_task_change(
+    db: AsyncSession,
+    change: SyncChange,
+    client_id: str,
+) -> SyncApplyResult:
+    task = await _find_entity(db, Task, change)
+    if _is_stale(task, change):
+        return _skipped(change, "stale_revision", task.revision)
+
+    if change.operation == "delete":
+        if task is None:
+            return _skipped(change, "missing_entity", None)
+        before = task_to_dict(task)
+        task.status = change.data.get("status") or "deleted"
+        task.deleted_at = change.deleted_at
+        task.updated_at = change.updated_at
+        task.revision = change.revision
+        await db.flush()
+        await _write_sync_audit(db, change, client_id, before=before, after=task_to_dict(task))
+        return _applied(change)
+
+    if task is None:
+        task = Task(id=change.entity_id, user_id=change.user_id, title="")
+        db.add(task)
+
+    before = task_to_dict(task) if task.created_at is not None else None
+    data = change.data
+    task.title = data.get("title") or task.title
+    task.description = data.get("description")
+    task.due_at = _datetime_value(data.get("due_at"))
+    task.remind_at = _datetime_value(data.get("remind_at"))
+    task.priority = data.get("priority") or "normal"
+    task.task_status = data.get("task_status") or "todo"
+    task.completed_at = _datetime_value(data.get("completed_at"))
+    task.source_capture_id = data.get("source_capture_id")
+    task.status = data.get("status") or "active"
+    task.source = data.get("source") or change.source
+    task.revision = change.revision
+    task.created_at = change.created_at or change.updated_at
+    task.updated_at = change.updated_at
+    await db.flush()
+    await _write_sync_audit(db, change, client_id, before=before, after=task_to_dict(task))
+    return _applied(change)
+
+
+async def _apply_expense_change(
+    db: AsyncSession,
+    change: SyncChange,
+    client_id: str,
+) -> SyncApplyResult:
+    tx = await _find_entity(db, LedgerTransaction, change)
+    if _is_stale(tx, change):
+        return _skipped(change, "stale_revision", tx.revision)
+
+    if change.operation == "delete":
+        if tx is None:
+            return _skipped(change, "missing_entity", None)
+        before = ledger_transaction_to_dict(tx)
+        tx.status = change.data.get("status") or "deleted"
+        tx.deleted_at = change.deleted_at
+        tx.updated_at = change.updated_at
+        tx.revision = change.revision
+        await db.flush()
+        await _write_sync_audit(db, change, client_id, before=before, after=ledger_transaction_to_dict(tx))
+        return _applied(change)
+
+    if tx is None:
+        tx = LedgerTransaction(id=change.entity_id, user_id=change.user_id)
+        db.add(tx)
+
+    before = ledger_transaction_to_dict(tx) if tx.created_at is not None else None
+    data = change.data
+    amount = data.get("amount")
+    if amount is None or float(amount) <= 0:
+        return _skipped(change, "invalid_amount", tx.revision if tx.created_at is not None else None)
+
+    tx.direction = data.get("direction") or "expense"
+    tx.amount = float(amount)
+    tx.currency = data.get("currency") or "CNY"
+    tx.account_id = data.get("account_id")
+    tx.category_id = data.get("category_id")
+    tx.merchant = data.get("merchant")
+    tx.note = data.get("note")
+    tx.occurred_at = _datetime_value(data.get("occurred_at"), fallback=change.updated_at)
+    tx.source = data.get("source") or change.source
+    tx.source_capture_id = data.get("source_capture_id")
+    tx.import_batch_id = data.get("import_batch_id")
+    tx.confidence = data.get("confidence")
+    tx.status = data.get("status") or "active"
+    tx.revision = change.revision
+    tx.created_at = change.created_at or change.updated_at
+    tx.updated_at = change.updated_at
+    await db.flush()
+    await _write_sync_audit(db, change, client_id, before=before, after=ledger_transaction_to_dict(tx))
+    return _applied(change)
+
+
+async def _find_entity(db: AsyncSession, model: type[Any], change: SyncChange) -> Any | None:
+    result = await db.execute(
+        select(model).where(model.id == change.entity_id, model.user_id == change.user_id)
+    )
+    return result.scalar_one_or_none()
+
+
+def _is_stale(entity: Any | None, change: SyncChange) -> bool:
+    return entity is not None and entity.revision >= change.revision
+
+
+def _applied(change: SyncChange) -> SyncApplyResult:
+    return SyncApplyResult(
+        entity_type=change.entity_type,
+        entity_id=change.entity_id,
+        operation=change.operation,
+        status="applied",
+        revision=change.revision,
+    )
+
+
+def _skipped(change: SyncChange, reason: str, revision: int | None) -> SyncApplyResult:
+    return SyncApplyResult(
+        entity_type=change.entity_type,
+        entity_id=change.entity_id,
+        operation=change.operation,
+        status="skipped",
+        revision=revision,
+        reason=reason,
+    )
+
+
+def _memo_snapshot(memo: Memo) -> dict:
+    return json_serialize(memo_to_response(memo).model_dump())
+
+
+def _datetime_value(value: Any, *, fallback: datetime | None = None) -> datetime | None:
+    if value is None:
+        return fallback
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        normalized = value.replace("Z", "+00:00")
+        return datetime.fromisoformat(normalized)
+    return fallback
+
+
+async def _write_sync_audit(
+    db: AsyncSession,
+    change: SyncChange,
+    client_id: str,
+    *,
+    before: dict | None,
+    after: dict | None,
+) -> None:
+    db.add(
+        AuditLog(
+            user_id=change.user_id,
+            actor_type="system",
+            actor_id=client_id,
+            action=f"sync.{change.operation}",
+            entity_type=change.entity_type,
+            entity_id=change.entity_id,
+            before_snapshot=before,
+            after_snapshot=after,
+            source_channel="powersync",
+            tool_name="cloud-sync",
+            request_id=client_id,
+        )
+    )
