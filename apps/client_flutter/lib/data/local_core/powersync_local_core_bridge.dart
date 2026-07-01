@@ -71,7 +71,7 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   ) {
-    return _unsupported('memo delete');
+    return _memoStore.deleteMemo(input, context);
   }
 
   @override

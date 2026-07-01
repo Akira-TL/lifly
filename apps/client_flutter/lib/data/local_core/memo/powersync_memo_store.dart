@@ -123,6 +123,53 @@ class PowerSyncMemoStore {
     return updatedMemo;
   }
 
+  Future<LocalMemoRecord> deleteMemo(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final deleteInput = LocalMemoDeleteInput.fromMap(input);
+    late final LocalMemoRecord deletedMemo;
+
+    await LocalCoreWriteExecutor(syncService: syncService).run((handle) async {
+      final oldMemo = await _findActiveMemo(handle, deleteInput.memoId);
+      if (oldMemo == null) {
+        throw StateError('Memo not found: ${deleteInput.memoId}');
+      }
+
+      final metadata = policy.metadataForUpdate(
+        context,
+        currentRevision: oldMemo.revision,
+        createdAt: oldMemo.createdAt,
+      );
+      deletedMemo = LocalMemoRecord(
+        id: oldMemo.id,
+        type: oldMemo.type,
+        title: oldMemo.title,
+        contentMarkdown: oldMemo.contentMarkdown,
+        tags: oldMemo.tags,
+        status: deleteInput.status,
+        revision: metadata.revision,
+        createdAt: oldMemo.createdAt,
+        updatedAt: metadata.timestamps.updatedAt,
+      );
+
+      await _softDeleteMemo(handle, deletedMemo, metadata);
+      await auditLogWriter.write(
+        handle,
+        LocalCoreAuditLogInput(
+          context: context,
+          action: 'memo.delete',
+          entityType: 'memo',
+          entityId: deletedMemo.id,
+          beforeSnapshot: LocalMemoMapper.snapshot(oldMemo),
+          afterSnapshot: LocalMemoMapper.snapshot(deletedMemo),
+        ),
+      );
+    });
+
+    return deletedMemo;
+  }
+
   Future<List<Map<String, Object?>>> _searchRows({
     required String query,
     required int limit,
@@ -192,6 +239,25 @@ class PowerSyncMemoStore {
         memo.title,
         memo.contentMarkdown,
         LocalMemoMapper.encodeTags(memo.tags),
+        metadata.timestamps.updatedAtIso,
+        metadata.revision,
+        memo.id,
+        'active',
+      ],
+    );
+  }
+
+  Future<void> _softDeleteMemo(
+    LocalCoreWriteHandle handle,
+    LocalMemoRecord memo,
+    LocalCoreWriteMetadata metadata,
+  ) async {
+    await handle.execute(
+      'UPDATE memos SET status = ?, deleted_at = ?, updated_at = ?, revision = ? '
+      'WHERE id = ? AND status = ?',
+      [
+        memo.status,
+        metadata.timestamps.updatedAtIso,
         metadata.timestamps.updatedAtIso,
         metadata.revision,
         memo.id,
