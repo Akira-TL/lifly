@@ -47,3 +47,11 @@ class SyncPushResponse(BaseModel):
     applied: int
     skipped: int
     results: list[SyncApplyResult]
+
+
+class PowerSyncCredentialsResponse(BaseModel):
+    endpoint: str
+    token: str
+    user_id: str
+    expires_at: datetime
+    mode: Literal["development"] = "development"
