@@ -29,18 +29,18 @@ v1.0.0-personal-production.md
 
 ## 当前开发分支
 
-当前 v0.1 收口开发分支：
+当前 v0.2 本地数据开发分支：
 
 ```text
-fix/v0.1-release-gate
+feat/v0.2-local-data-mvp
 ```
 
-该分支的职责是完成 `v0.1.0 Foundation Baseline` release gate，不扩大到 v0.2 的真实本地持久化和跨端同步。
+该分支的职责是完成 `v0.2.x Local Data MVP`，让 memo / task / expense 形成本机离线写入和重启不丢的闭环；不扩大到 v0.3 的云同步、uploadData 和跨端同步。
 
 ## 当前计划文件
 
 ```text
-v0.1.0-foundation-baseline.md
+v0.2.0-local-data-mvp.md
 ```
 
 ## 维护规则

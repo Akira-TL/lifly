@@ -2,29 +2,35 @@
 
 ## 1. 当前版本判定
 
-当前 Lifly 统一定为：
+当前 Lifly 已完成第一个稳定工程基线：
 
 ```text
-v0.1.0-dev
+v0.1.0
+```
+
+当前开发进入 v0.2 版本族：
+
+```text
+v0.2.x Local Data MVP
 ```
 
 含义：
 
 ```text
-代码包版本：0.1.0
-Flutter 应用版本：0.1.0+1
-API health version：0.1.0
-发布状态：development，尚未切正式 release tag
+当前稳定 tag：v0.1.0
+当前开发分支：feat/v0.2-local-data-mvp
+当前开发版本族：v0.2.x
+版本号规则：从 v0.2 开始不再使用 dev 后缀，开发轮次使用 0.2.0、0.2.1、0.2.2 这类标准三段式修订号
 ```
 
-项目已经超过空仓库和纯文档阶段，进入 v0.1.0 的开发后半段；但还没有达到可正式标记 `v0.1.0` release 的状态。正式 `v0.1.0` 应在本地基础闭环、Cloud API/MCP smoke、Flutter 基础页面、CI 和命名一致性全部稳定后再打 tag。
+v0.2 的目标是完成本机离线数据闭环，让 memo / task / expense 可以离线写入，并在应用重启后不丢。Cloud Sync、uploadData 和跨端同步进入 v0.3 处理。
 
 ## 2. 版本号规则
 
 Lifly 使用 SemVer 风格版本号：
 
 ```text
-MAJOR.MINOR.PATCH[-PRERELEASE]
+MAJOR.MINOR.PATCH
 ```
 
 规则：
@@ -32,19 +38,20 @@ MAJOR.MINOR.PATCH[-PRERELEASE]
 ```text
 MAJOR：破坏性架构变化，或正式公开发布后的不兼容变更
 MINOR：新增一组完整产品能力，例如本地离线、云同步、Local MCP、导入导出
-PATCH：缺陷修复、文案调整、测试补强、小范围兼容改动
-PRERELEASE：alpha / beta / rc / dev，用于正式 release 前的阶段标记
+PATCH：同一能力版本族内的修订号，用于拆分可验证开发轮次、缺陷修复、测试补强和发布门禁
 ```
+
+从 v0.2 开始，开发过程也使用标准三段式版本号，不再写 `dev` 后缀。
 
 示例：
 
 ```text
-v0.1.0-dev
-v0.1.0-alpha.1
-v0.1.0-beta.1
-v0.1.0-rc.1
 v0.1.0
 v0.2.0
+v0.2.1
+v0.2.2
+v0.2.8
+v0.3.0
 v1.0.0
 ```
 
@@ -71,20 +78,21 @@ release/vX.Y.Z：发布候选分支，只做修复、不加新功能
 6. 进入下一个版本前，再新开下一个版本分支
 ```
 
-当前 v0.1.0 收口分支：
+当前 v0.2 开发分支：
 
 ```text
-fix/v0.1-release-gate
+feat/v0.2-local-data-mvp
 ```
 
 推荐 tag 规则：
 
 ```text
-v0.1.0-alpha.1
-v0.1.0-beta.1
-v0.1.0-rc.1
 v0.1.0
 v0.2.0
+v0.2.1
+v0.2.2
+v0.2.8
+v0.3.0
 ```
 
 每个 release tag 必须满足：
@@ -159,9 +167,15 @@ flutter test 通过
 打 tag：v0.1.0
 ```
 
-### v0.2.0：Local Data MVP
+### v0.2.x：Local Data MVP
 
 主题：本地优先的手动记录闭环。
+
+修订号计划见：
+
+```text
+docs/development-plans/v0.2.0-local-data-mvp.md
+```
 
 范围：
 
@@ -368,14 +382,16 @@ LC-07xx：v0.7 beta/release hardening
 测试命令
 ```
 
-## 7. 当前推荐下一批 Issue
+## 7. 当前推荐下一批修订号
 
 ```text
-LC-0101 Finish v0.1 baseline release checks
-LC-0102 Remove legacy Lifly naming residues and lock workspace dependencies
-LC-0201 Implement Dart PowerSyncLocalCoreBridge memo/task minimal write path
-LC-0202 Add local audit log writer for Dart Local Core
-LC-0203 Switch Flutter memo/task pages to Local Core in local mode
-LC-0301 Implement PowerSync uploadData to Cloud API
-LC-0401 Connect Local MCP transport to Dart Local Core Bridge
+0.2.0 版本规划与本地数据边界冻结
+0.2.1 PowerSync Local Core 基础底座
+0.2.2 audit_logs 与本地写入公共工具
+0.2.3 memo 本地 CRUD 闭环
+0.2.4 task 本地 CRUD / complete 闭环
+0.2.5 expense 本地 create/search/summary 闭环
+0.2.6 Flutter 页面切换到 Local Core 模式
+0.2.7 本地持久化回归与重启验证
+0.2.8 v0.2 release gate 与文档收口
 ```

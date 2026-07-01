@@ -2,16 +2,16 @@
 
 ## 1. 文档目的
 
-本文档用于规划 Lifly 从当前 `v0.1.0-dev` 到个人生产可用版本 `v1.0.0` 的大版本开发内容。
+本文档用于规划 Lifly 从已完成的 `v0.1.0` 工程基线到个人生产可用版本 `v1.0.0` 的大版本开发内容。
 
 `docs/59-version-control-plan.md` 更偏版本号、分支、tag、release gate 规则；本文档更偏每个大版本的产品目标、工程边界、验收标准和推荐 Issue 切片。
 
 当前判断：
 
 ```text
-当前版本：v0.1.0-dev
-当前阶段：Foundation Baseline 整理中
-近期重点：完成 v0.1.0 release gate，然后进入 v0.2.0 Local Data MVP
+当前稳定版本：v0.1.0
+当前开发分支：feat/v0.2-local-data-mvp
+近期重点：按 0.2.0、0.2.1、0.2.2 这类标准修订号推进 v0.2.x Local Data MVP
 ```
 
 ## 2. 总体路线
@@ -23,7 +23,7 @@ Lifly 的版本推进不按页面数量拆分，而按“数据闭环能力”�
 ```text
 v0.1.0 Foundation Baseline
   ↓
-v0.2.0 Local Data MVP
+v0.2.x Local Data MVP
   ↓
 v0.3.0 Cloud Sync MVP
   ↓
@@ -118,13 +118,13 @@ LC-0104 Update docs index and release checklist
 
 ---
 
-## 4. v0.2.0 Local Data MVP
+## 4. v0.2.x Local Data MVP
 
 ### 4.1 版本定位
 
-`v0.2.0` 的目标是让 Lifly 具备真正的本地优先记录能力。用户即使没有网络，也能在 Flutter 客户端创建、查看、编辑、删除 memo / expense / task，并且应用重启后数据不丢。
+`v0.2.x` 的目标是让 Lifly 具备真正的本地优先记录能力。用户即使没有网络，也能在 Flutter 客户端创建、查看、编辑、删除 memo / expense / task，并且应用重启后数据不丢。
 
-这是 Lifly 最关键的底座版本。没有 v0.2.0，就不应该继续扩大 AI 和云同步能力。
+这是 Lifly 最关键的底座版本。没有 v0.2.x，就不应该继续扩大 AI 和云同步能力。
 
 ### 4.2 核心目标
 
@@ -196,16 +196,26 @@ memo / task / expense 列表可从本地数据读取
 Flutter local core tests 覆盖主要路径
 ```
 
-### 4.6 推荐 Issue
+### 4.6 修订号规划
+
+详细计划见：
 
 ```text
-LC-0201 Implement Dart PowerSyncLocalCoreBridge health and shared utilities
-LC-0202 Implement local audit log writer
-LC-0203 Implement local memo create/search/update/delete
-LC-0204 Implement local task create/list/complete/update/delete
-LC-0205 Implement local expense create/search/summary
-LC-0206 Switch Flutter memo/task/ledger pages to Local Core mode
-LC-0207 Add local persistence regression tests
+docs/development-plans/v0.2.0-local-data-mvp.md
+```
+
+当前 v0.2.x 修订号拆分：
+
+```text
+0.2.0 版本规划与本地数据边界冻结
+0.2.1 PowerSync Local Core 基础底座
+0.2.2 audit_logs 与本地写入公共工具
+0.2.3 memo 本地 CRUD 闭环
+0.2.4 task 本地 CRUD / complete 闭环
+0.2.5 expense 本地 create/search/summary 闭环
+0.2.6 Flutter 页面切换到 Local Core 模式
+0.2.7 本地持久化回归与重启验证
+0.2.8 v0.2 release gate 与文档收口
 ```
 
 ---
@@ -683,21 +693,24 @@ docs/README.md
 
 ## 12. 当前最推荐的下一步
 
-当前已经完成 v0.1.0-dev 的一部分 baseline 整理。下一步建议直接围绕 `v0.2.0 Local Data MVP` 开发，不再扩展新产品功能。
+当前已经完成 `v0.1.0` Foundation Baseline。下一步直接围绕 `v0.2.x Local Data MVP` 开发，不再扩展新产品功能。
 
 优先顺序：
 
 ```text
-1. LC-0201 Implement Dart PowerSyncLocalCoreBridge health and shared utilities
-2. LC-0202 Implement local audit log writer
-3. LC-0203 Implement local memo create/search/update/delete
-4. LC-0204 Implement local task create/list/complete/update/delete
-5. LC-0205 Implement local expense create/search/summary
-6. LC-0206 Switch Flutter memo/task/ledger pages to Local Core mode
+1. 0.2.0 版本规划与本地数据边界冻结
+2. 0.2.1 PowerSync Local Core 基础底座
+3. 0.2.2 audit_logs 与本地写入公共工具
+4. 0.2.3 memo 本地 CRUD 闭环
+5. 0.2.4 task 本地 CRUD / complete 闭环
+6. 0.2.5 expense 本地 create/search/summary 闭环
+7. 0.2.6 Flutter 页面切换到 Local Core 模式
+8. 0.2.7 本地持久化回归与重启验证
+9. 0.2.8 v0.2 release gate 与文档收口
 ```
 
 判断标准：
 
 ```text
-只要 memo / task / expense 可以离线写入并重启不丢，v0.2.0 的核心就成立。
+只要 memo / task / expense 可以离线写入并重启不丢，v0.2.x 的核心就成立。
 ```
