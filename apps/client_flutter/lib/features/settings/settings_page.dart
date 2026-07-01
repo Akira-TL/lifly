@@ -3,6 +3,7 @@ import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/api/api_diagnostics.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_models.dart';
+import 'package:client_flutter/data/powersync/powersync_credentials_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -17,11 +18,14 @@ class _SettingsPageState extends State<SettingsPage> {
   ApiHealthStatus? _health;
   McpSmokeReport? _smokeReport;
   LocalCoreHealth? _localCoreHealth;
+  LiflyPowerSyncCredentials? _powerSyncCredentials;
   String? _diagnosticError;
   String? _localCoreError;
+  String? _powerSyncCredentialsError;
   bool _checkingHealth = false;
   bool _runningSmoke = false;
   bool _checkingLocalCore = false;
+  bool _checkingPowerSyncCredentials = false;
 
   Future<void> _checkHealth() async {
     setState(() {
@@ -89,6 +93,27 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _checkPowerSyncCredentials() async {
+    setState(() {
+      _checkingPowerSyncCredentials = true;
+      _powerSyncCredentialsError = null;
+    });
+
+    try {
+      final service = PowerSyncCredentialsService(context.read<ApiClient>());
+      final credentials = await service.fetchCredentials();
+      if (!mounted) return;
+      setState(() => _powerSyncCredentials = credentials);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _powerSyncCredentialsError = '同步凭据检查失败：$error');
+    } finally {
+      if (mounted) {
+        setState(() => _checkingPowerSyncCredentials = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final api = context.watch<ApiClient>();
@@ -119,11 +144,13 @@ class _SettingsPageState extends State<SettingsPage> {
             onCheck: _checkLocalCore,
           ),
           const SizedBox(height: 12),
-          const ListTile(
-            leading: Icon(Icons.cloud_outlined),
-            title: Text('同步状态'),
-            subtitle: Text('未连接'),
+          _PowerSyncCredentialsCard(
+            credentials: _powerSyncCredentials,
+            error: _powerSyncCredentialsError,
+            checking: _checkingPowerSyncCredentials,
+            onCheck: _checkPowerSyncCredentials,
           ),
+          const SizedBox(height: 12),
           const ListTile(
             leading: Icon(Icons.storage_outlined),
             title: Text('数据管理'),
@@ -267,6 +294,85 @@ class _DataModeCard extends StatelessWidget {
             _StatusRow(label: '当前模式', value: dataMode.label),
             const _StatusRow(label: '切换方式', value: 'LIFLY_DATA_MODE=api|local'),
             const _StatusRow(label: '本地范围', value: 'memo / task / expense'),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PowerSyncCredentialsCard extends StatelessWidget {
+  final LiflyPowerSyncCredentials? credentials;
+  final String? error;
+  final bool checking;
+  final VoidCallback onCheck;
+
+  const _PowerSyncCredentialsCard({
+    required this.credentials,
+    required this.error,
+    required this.checking,
+    required this.onCheck,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final expiresAt = credentials?.expiresAt.toLocal().toIso8601String();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.cloud_sync_outlined,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '同步凭据 / PowerSync',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _StatusRow(
+              label: 'Endpoint',
+              value: credentials?.endpoint ?? '未检查',
+            ),
+            _StatusRow(label: 'User', value: credentials?.userId ?? '未检查'),
+            _StatusRow(
+              label: 'Token',
+              value: credentials?.tokenStatus ?? '未获取',
+            ),
+            _StatusRow(label: 'Mode', value: credentials?.mode ?? '未检查'),
+            if (expiresAt != null) _StatusRow(label: '过期时间', value: expiresAt),
+            if (error != null) ...[
+              const SizedBox(height: 8),
+              Text(error!, style: TextStyle(color: theme.colorScheme.error)),
+            ],
+            const SizedBox(height: 8),
+            Text(
+              '0.3.2 使用开发期最小身份凭据；token 明文不会在页面展示。',
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: checking ? null : onCheck,
+              icon: checking
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.key_outlined),
+              label: const Text('检查同步凭据'),
+            ),
           ],
         ),
       ),
