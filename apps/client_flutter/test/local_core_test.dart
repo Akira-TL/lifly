@@ -56,30 +56,45 @@ void main() {
     },
   );
 
-  test('FakeLocalCoreBridge creates expenses and summarizes them', () async {
-    final core = FakeLocalCoreBridge();
-    final tx = await core.createExpense({
-      'direction': 'expense',
-      'amount': 12.5,
-      'currency': 'CNY',
-      'merchant': 'Local Merchant',
-      'note': 'local expense',
-    }, context);
+  test(
+    'FakeLocalCoreBridge creates, searches, summarizes, and deletes expenses',
+    () async {
+      final core = FakeLocalCoreBridge();
+      final tx = await core.createExpense({
+        'direction': 'expense',
+        'amount': 12.5,
+        'currency': 'CNY',
+        'merchant': 'Local Merchant',
+        'note': 'local expense',
+      }, context);
 
-    expect(tx.id, 'local_tx_0001');
+      expect(tx.id, 'local_tx_0001');
 
-    final results = await core.searchExpenses({
-      'q': 'merchant',
-      'limit': 20,
-    }, context);
-    expect(results, hasLength(1));
+      final results = await core.searchExpenses({
+        'q': 'merchant',
+        'limit': 20,
+      }, context);
+      expect(results, hasLength(1));
 
-    final summary = await core.summarizeExpenses({
-      'period': 'current_month',
-    }, context);
-    expect(summary.totalExpense, 12.5);
-    expect(summary.count, 1);
-  });
+      final summary = await core.summarizeExpenses({
+        'period': 'current_month',
+      }, context);
+      expect(summary.totalExpense, 12.5);
+      expect(summary.count, 1);
+
+      final deleted = await core.deleteExpense({
+        'transaction_id': tx.id,
+      }, context);
+      expect(deleted.status, 'deleted');
+      expect(deleted.revision, 2);
+
+      final afterDelete = await core.searchExpenses({
+        'q': 'merchant',
+        'limit': 20,
+      }, context);
+      expect(afterDelete, isEmpty);
+    },
+  );
 
   test(
     'FakeLocalCoreBridge creates, updates, completes, and deletes tasks',
