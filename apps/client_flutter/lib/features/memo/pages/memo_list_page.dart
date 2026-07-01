@@ -1,4 +1,6 @@
+import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/repositories/memo_repository.dart';
 import 'package:client_flutter/domain/entities/memo.dart';
 import 'package:client_flutter/features/memo/pages/memo_detail_page.dart';
@@ -35,7 +37,11 @@ class _MemoListPageState extends State<MemoListPage> {
   @override
   void initState() {
     super.initState();
-    _repo = MemoRepository(context.read<ApiClient>());
+    _repo = MemoRepository(
+      context.read<ApiClient>(),
+      localCore: context.read<LocalCoreBridge>(),
+      dataMode: context.read<LiflyDataMode>(),
+    );
     _scrollController.addListener(_handleScroll);
     _loadFirstPage();
   }
@@ -50,7 +56,12 @@ class _MemoListPageState extends State<MemoListPage> {
   }
 
   void _handleScroll() {
-    if (!_scrollController.hasClients || !_hasMore || _isLoading || _isLoadingMore) return;
+    if (!_scrollController.hasClients ||
+        !_hasMore ||
+        _isLoading ||
+        _isLoadingMore) {
+      return;
+    }
     final threshold = _scrollController.position.maxScrollExtent - 240;
     if (_scrollController.position.pixels >= threshold) {
       _loadMore();
@@ -103,7 +114,9 @@ class _MemoListPageState extends State<MemoListPage> {
       });
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载更多备忘失败：$error')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('加载更多备忘失败：$error')));
     } finally {
       if (mounted) setState(() => _isLoadingMore = false);
     }
@@ -128,9 +141,9 @@ class _MemoListPageState extends State<MemoListPage> {
       await _loadFirstPage();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('创建备忘失败：$error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('创建备忘失败：$error')));
     } finally {
       if (mounted) setState(() => _isCreating = false);
     }
@@ -185,7 +198,10 @@ class _MemoListPageState extends State<MemoListPage> {
                       await Navigator.push<bool>(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => MemoDetailPage(memoId: _items[index].id, initialMemo: _items[index]),
+                          builder: (_) => MemoDetailPage(
+                            memoId: _items[index].id,
+                            initialMemo: _items[index],
+                          ),
                         ),
                       );
                       if (context.mounted) await _loadFirstPage();
@@ -201,7 +217,11 @@ class _MemoListPageState extends State<MemoListPage> {
         heroTag: 'memo-create-fab',
         onPressed: _isCreating ? null : _createMemo,
         icon: _isCreating
-            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
             : const Icon(Icons.add),
         label: const Text('新建'),
       ),
@@ -249,7 +269,10 @@ class _MemoFilterBar extends StatelessWidget {
               decoration: InputDecoration(
                 isDense: true,
                 prefixIcon: const Icon(Icons.search),
-                suffixIcon: IconButton(onPressed: onSearch, icon: const Icon(Icons.arrow_forward)),
+                suffixIcon: IconButton(
+                  onPressed: onSearch,
+                  icon: const Icon(Icons.arrow_forward),
+                ),
                 labelText: '搜索备忘',
                 border: const OutlineInputBorder(),
               ),
@@ -271,8 +294,12 @@ class _MemoTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final createdAt = DateFormat('MM/dd HH:mm').format(memo.createdAt.toLocal());
-    final title = memo.displayTitle.trim().isEmpty ? '无标题' : memo.displayTitle.trim();
+    final createdAt = DateFormat(
+      'MM/dd HH:mm',
+    ).format(memo.createdAt.toLocal());
+    final title = memo.displayTitle.trim().isEmpty
+        ? '无标题'
+        : memo.displayTitle.trim();
     final content = memo.contentMarkdown.trim();
 
     return Card(
@@ -289,7 +316,11 @@ class _MemoTile extends StatelessWidget {
             if (content.isNotEmpty && content != title)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text(content, maxLines: 2, overflow: TextOverflow.ellipsis),
+                child: Text(
+                  content,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             const SizedBox(height: 4),
             Text(createdAt, style: theme.textTheme.bodySmall),
@@ -298,7 +329,10 @@ class _MemoTile extends StatelessWidget {
         trailing: memo.tags == null || memo.tags!.isEmpty
             ? null
             : Chip(
-                label: Text(memo.tags!.first, style: const TextStyle(fontSize: 12)),
+                label: Text(
+                  memo.tags!.first,
+                  style: const TextStyle(fontSize: 12),
+                ),
                 visualDensity: VisualDensity.compact,
               ),
       ),
@@ -311,7 +345,11 @@ class _MemoDraft {
   final String content;
   final List<String> tags;
 
-  const _MemoDraft({required this.title, required this.content, required this.tags});
+  const _MemoDraft({
+    required this.title,
+    required this.content,
+    required this.tags,
+  });
 }
 
 class _MemoEditorDialog extends StatefulWidget {
@@ -342,19 +380,28 @@ class _MemoEditorDialogState extends State<_MemoEditorDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: _titleController, decoration: const InputDecoration(labelText: '标题')),
+            TextField(
+              controller: _titleController,
+              decoration: const InputDecoration(labelText: '标题'),
+            ),
             TextField(
               controller: _contentController,
               minLines: 3,
               maxLines: 6,
               decoration: const InputDecoration(labelText: '内容'),
             ),
-            TextField(controller: _tagsController, decoration: const InputDecoration(labelText: '标签，逗号分隔')),
+            TextField(
+              controller: _tagsController,
+              decoration: const InputDecoration(labelText: '标签，逗号分隔'),
+            ),
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
         FilledButton(
           onPressed: () {
             final content = _contentController.text.trim();
@@ -366,7 +413,11 @@ class _MemoEditorDialogState extends State<_MemoEditorDialog> {
                 .toList();
             Navigator.pop(
               context,
-              _MemoDraft(title: _titleController.text.trim(), content: content, tags: tags),
+              _MemoDraft(
+                title: _titleController.text.trim(),
+                content: content,
+                tags: tags,
+              ),
             );
           },
           child: const Text('保存'),
