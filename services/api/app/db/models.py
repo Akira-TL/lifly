@@ -278,6 +278,25 @@ class AuditLog(Base):
     )
 
 
+# ─── MCP Undo ────────────────────────────────────────────────────────────────
+
+class McpUndoAction(Base):
+    __tablename__ = "mcp_undo_actions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    undo_token: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    entity_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    entity_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    action: Mapped[str] = mapped_column(String(32), nullable=False, default="create")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", index=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 # ─── Tombstone ──────────────────────────────────────────────────────────────
 
 class Tombstone(Base):

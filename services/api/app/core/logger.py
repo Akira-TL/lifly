@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 
-def setup_logger(name: str = "lifily") -> logging.Logger:
+def setup_logger(name: str = "lifly") -> logging.Logger:
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
     logger.handlers.clear()

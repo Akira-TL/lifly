@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -30,29 +30,17 @@ class _HomePageState extends State<HomePage> {
     try {
       final api = context.read<ApiClient>();
       final response = await api.get('/dashboard');
-
       if (!mounted) return;
-
       if (response['success'] == true) {
-        setState(() {
-          _data = response['data'] as Map<String, dynamic>?;
-        });
+        setState(() => _data = response['data'] as Map<String, dynamic>? ?? {});
       } else {
-        setState(() {
-          _error = response['message'] as String? ?? '加载失败';
-        });
+        setState(() => _error = response['error'] as String? ?? '加载失败');
       }
-    } catch (e) {
+    } catch (error) {
       if (!mounted) return;
-      setState(() {
-        _error = '加载出错: $e';
-      });
+      setState(() => _error = '加载出错：$error');
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -65,53 +53,44 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    if (_error != null) return _ErrorState(message: _error!, onRetry: _loadDashboard);
 
-    if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline,
-                size: 48, color: Theme.of(context).colorScheme.error),
-            const SizedBox(height: 12),
-            Text(_error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: _loadDashboard,
-              icon: const Icon(Icons.refresh),
-              label: const Text('重试'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final monthlyIncome =
-        (_data?['monthly_income'] as num?)?.toDouble() ?? 0;
-    final monthlyExpense =
-        (_data?['monthly_expense'] as num?)?.toDouble() ?? 0;
-    final weeklyTrend =
-        (_data?['weekly_trend'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    final recentTransactions =
-        (_data?['recent_transactions'] as List?)
-            ?.cast<Map<String, dynamic>>() ?? [];
+    final dashboard = _data ?? {};
+    final monthlyIncome = _numValue(dashboard, ['month_income', 'monthly_income']);
+    final monthlyExpense = _numValue(dashboard, ['month_expense', 'monthly_expense']);
+    final memoTotal = _intValue(dashboard, 'memo_total');
+    final taskTodo = _intValue(dashboard, 'task_todo');
+    final taskTotal = _intValue(dashboard, 'task_total');
+    final trend = _listOfMaps(dashboard['daily_trend'] ?? dashboard['weekly_trend']);
+    final recentTransactions = _listOfMaps(dashboard['recent_transactions']);
 
     return RefreshIndicator(
       onRefresh: _loadDashboard,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          _buildOverviewStats(memoTotal: memoTotal, taskTodo: taskTodo, taskTotal: taskTotal),
+          const SizedBox(height: 16),
           _buildMonthlyCard(monthlyIncome, monthlyExpense),
           const SizedBox(height: 20),
-          _buildWeeklyTrend(weeklyTrend),
+          _buildWeeklyTrend(trend),
           const SizedBox(height: 20),
           _buildRecentTransactions(recentTransactions),
         ],
       ),
+    );
+  }
+
+  Widget _buildOverviewStats({required int memoTotal, required int taskTodo, required int taskTotal}) {
+    return Row(
+      children: [
+        Expanded(child: _CountCard(label: '备忘', value: memoTotal, icon: Icons.note_outlined)),
+        const SizedBox(width: 12),
+        Expanded(child: _CountCard(label: '待办', value: taskTodo, icon: Icons.check_circle_outline)),
+        const SizedBox(width: 12),
+        Expanded(child: _CountCard(label: '任务总数', value: taskTotal, icon: Icons.list_alt_outlined)),
+      ],
     );
   }
 
@@ -125,9 +104,7 @@ class _HomePageState extends State<HomePage> {
           children: [
             Text(
               '${DateFormat('M月').format(DateTime.now())}收支汇总',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 20),
             Row(
@@ -159,29 +136,16 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildWeeklyTrend(List<Map<String, dynamic>> data) {
     final theme = Theme.of(context);
-
-    if (data.isEmpty) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Center(
-            child: Text('暂无本周趋势数据',
-                style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
-          ),
-        ),
-      );
-    }
+    if (data.isEmpty) return _EmptyCard(message: '暂无本周趋势数据');
 
     final maxAmount = data
-        .map((d) => (d['amount'] as num?)?.toDouble() ?? 0)
-        .reduce((a, b) => a > b ? a : b);
+        .map((item) => _numValue(item, ['amount', 'total']))
+        .fold<double>(0, (max, value) => value > max ? value : max);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('本周趋势',
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w600)),
+        Text('本周趋势', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         const SizedBox(height: 12),
         SizedBox(
           height: 160,
@@ -190,25 +154,17 @@ class _HomePageState extends State<HomePage> {
               padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
-                children: data.map((d) {
-                  final amount =
-                      (d['amount'] as num?)?.toDouble() ?? 0;
-                  final label = d['day'] as String? ??
-                      d['date'] as String? ??
-                      '';
-                  final fraction =
-                      maxAmount > 0 ? amount / maxAmount : 0.0;
-                  final barHeight = fraction * 100;
-
+                children: data.map((item) {
+                  final amount = _numValue(item, ['amount', 'total']);
+                  final label = item['day'] as String? ?? item['date'] as String? ?? '';
+                  final fraction = maxAmount > 0 ? amount / maxAmount : 0.0;
                   return Expanded(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         if (amount > 0)
                           Text(
-                            amount >= 10000
-                                ? '${(amount / 10000).toStringAsFixed(1)}w'
-                                : amount.toStringAsFixed(0),
+                            amount >= 10000 ? '${(amount / 10000).toStringAsFixed(1)}w' : amount.toStringAsFixed(0),
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: theme.colorScheme.primary,
                               fontSize: 10,
@@ -217,22 +173,14 @@ class _HomePageState extends State<HomePage> {
                         const SizedBox(height: 4),
                         Container(
                           width: 24,
-                          height: barHeight.clamp(0, 100),
+                          height: (fraction * 100).clamp(2, 100),
                           decoration: BoxDecoration(
-                            color: theme.colorScheme.primary
-                                .withAlpha(180),
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(4),
-                            ),
+                            color: theme.colorScheme.primary.withAlpha(180),
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
                           ),
                         ),
                         const SizedBox(height: 6),
-                        Text(
-                          _shortDayLabel(label),
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            fontSize: 11,
-                          ),
-                        ),
+                        Text(_shortDayLabel(label), style: theme.textTheme.labelSmall?.copyWith(fontSize: 11)),
                       ],
                     ),
                   );
@@ -245,73 +193,34 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  String _shortDayLabel(String raw) {
-    if (raw.length <= 3) return raw;
-    // Try to extract short day name from ISO date
-    try {
-      final dt = DateTime.parse(raw);
-      final weekDays = ['', '一', '二', '三', '四', '五', '六', '日'];
-      return '周${weekDays[dt.weekday]}';
-    } catch (_) {
-      return raw.substring(0, 3);
-    }
-  }
-
   Widget _buildRecentTransactions(List<Map<String, dynamic>> transactions) {
     final theme = Theme.of(context);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('最近交易',
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w600)),
+        Text('最近交易', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         if (transactions.isEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Center(
-                child: Text('暂无交易记录',
-                    style: TextStyle(
-                        color: theme.colorScheme.onSurfaceVariant)),
-              ),
-            ),
-          )
+          const _EmptyCard(message: '暂无交易记录')
         else
           Card(
             clipBehavior: Clip.antiAlias,
             child: Column(
               children: transactions.take(5).map((tx) {
-                final direction =
-                    tx['direction'] as String? ?? 'expense';
-                final amount =
-                    (tx['amount'] as num?)?.toDouble() ?? 0;
+                final direction = tx['direction'] as String? ?? 'expense';
+                final amount = _numValue(tx, ['amount']);
                 final merchant = tx['merchant'] as String?;
                 final note = tx['note'] as String?;
                 final occurredAt = tx['occurred_at'] as String?;
                 final isExpense = direction == 'expense';
-
-                String dateLabel = '';
-                if (occurredAt != null) {
-                  try {
-                    dateLabel = DateFormat('MM/dd')
-                        .format(DateTime.parse(occurredAt));
-                  } catch (_) {
-                    dateLabel = occurredAt;
-                  }
-                }
+                final dateLabel = _formatShortDate(occurredAt);
 
                 return ListTile(
                   dense: true,
                   leading: CircleAvatar(
-                    backgroundColor: isExpense
-                        ? Colors.red.withAlpha(30)
-                        : Colors.green.withAlpha(30),
+                    backgroundColor: isExpense ? Colors.red.withAlpha(30) : Colors.green.withAlpha(30),
                     child: Icon(
-                      isExpense
-                          ? Icons.shopping_bag_outlined
-                          : Icons.attach_money,
+                      isExpense ? Icons.shopping_bag_outlined : Icons.attach_money,
                       color: isExpense ? Colors.red : Colors.green,
                       size: 20,
                     ),
@@ -321,13 +230,7 @@ class _HomePageState extends State<HomePage> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  subtitle: note != null && note != merchant
-                      ? Text(note,
-                          maxLines: 1, overflow: TextOverflow.ellipsis)
-                      : (dateLabel.isNotEmpty
-                          ? Text(dateLabel,
-                              style: theme.textTheme.bodySmall)
-                          : null),
+                  subtitle: note != null && note != merchant ? Text(note, maxLines: 1, overflow: TextOverflow.ellipsis) : Text(dateLabel),
                   trailing: Text(
                     '${isExpense ? '-' : '+'}¥${amount.toStringAsFixed(2)}',
                     style: TextStyle(
@@ -342,6 +245,71 @@ class _HomePageState extends State<HomePage> {
       ],
     );
   }
+
+  String _shortDayLabel(String raw) {
+    if (raw.isEmpty) return '';
+    try {
+      final dt = DateTime.parse(raw);
+      const weekDays = ['', '一', '二', '三', '四', '五', '六', '日'];
+      return '周${weekDays[dt.weekday]}';
+    } catch (_) {
+      return raw.length <= 3 ? raw : raw.substring(0, 3);
+    }
+  }
+
+  String _formatShortDate(String? raw) {
+    if (raw == null || raw.isEmpty) return '';
+    try {
+      return DateFormat('MM/dd').format(DateTime.parse(raw));
+    } catch (_) {
+      return raw;
+    }
+  }
+
+  static double _numValue(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final value = data[key];
+      if (value is num) return value.toDouble();
+    }
+    return 0;
+  }
+
+  static int _intValue(Map<String, dynamic> data, String key) {
+    final value = data[key];
+    return value is num ? value.toInt() : 0;
+  }
+
+  static List<Map<String, dynamic>> _listOfMaps(Object? value) {
+    if (value is! List) return const [];
+    return value.whereType<Map>().map((item) => item.cast<String, dynamic>()).toList();
+  }
+}
+
+class _CountCard extends StatelessWidget {
+  final String label;
+  final int value;
+  final IconData icon;
+
+  const _CountCard({required this.label, required this.value, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: theme.colorScheme.primary),
+            const SizedBox(height: 8),
+            Text(value.toString(), style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+            Text(label, style: theme.textTheme.bodySmall),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _SummaryItem extends StatelessWidget {
@@ -350,12 +318,7 @@ class _SummaryItem extends StatelessWidget {
   final Color color;
   final IconData icon;
 
-  const _SummaryItem({
-    required this.label,
-    required this.amount,
-    required this.color,
-    required this.icon,
-  });
+  const _SummaryItem({required this.label, required this.amount, required this.color, required this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -373,20 +336,59 @@ class _SummaryItem extends StatelessWidget {
             children: [
               Icon(icon, size: 18, color: color),
               const SizedBox(width: 4),
-              Text(label,
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: color)),
+              Text(label, style: theme.textTheme.bodyMedium?.copyWith(color: color)),
             ],
           ),
           const SizedBox(height: 8),
           Text(
             '¥${amount.toStringAsFixed(2)}',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
+            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: color),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _EmptyCard extends StatelessWidget {
+  final String message;
+
+  const _EmptyCard({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Center(
+          child: Text(message, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _ErrorState({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 48, color: Theme.of(context).colorScheme.error),
+            const SizedBox(height: 12),
+            Text(message, textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            const SizedBox(height: 16),
+            FilledButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('重试')),
+          ],
+        ),
       ),
     );
   }

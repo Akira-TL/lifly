@@ -3,33 +3,82 @@ description: 架构变更/冻结项变更请求
 title: "[ADR] "
 labels: ["needs-architecture-decision", "agent:architect"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        任何会改变 v0.1 架构冻结项的请求，都必须先创建 ADR Issue。
+
+        不允许 AI agent 在普通功能 PR 中偷偷改变技术栈、同步策略、MCP 边界、删除规则或 MVP 范围。
+
   - type: textarea
     id: problem
     attributes:
       label: Problem
+      description: 需要做架构决策的问题
+      placeholder: "当前方案在什么场景下不够用？不决策会造成什么问题？"
     validations:
       required: true
+
   - type: textarea
     id: current_constraints
     attributes:
       label: Current Constraints
+      description: 当前冻结项或限制
+      placeholder: |
+        - Flutter Windows + Android first
+        - FastAPI + PostgreSQL + PowerSync
+        - Cloud MCP + Windows Local MCP
+        - 附件二进制不进数据库
     validations:
       required: true
+
   - type: textarea
     id: options
     attributes:
       label: Options
+      description: 候选方案，至少两个
+      placeholder: |
+        方案 A：...
+        优点：...
+        缺点：...
+
+        方案 B：...
+        优点：...
+        缺点：...
     validations:
       required: true
+
   - type: textarea
     id: proposed_decision
     attributes:
       label: Proposed Decision
+      description: 推荐方案与理由
     validations:
       required: true
+
   - type: textarea
     id: impact
     attributes:
       label: Impact
+      description: 影响范围
+      placeholder: |
+        影响模块：
+        影响文件：
+        影响测试：
+        是否需要迁移：
     validations:
       required: true
+
+  - type: textarea
+    id: rollback
+    attributes:
+      label: Rollback Plan
+      description: 如果决策失败，如何回滚
+    validations:
+      required: true
+
+  - type: textarea
+    id: followups
+    attributes:
+      label: Follow-up Issues
+      description: 接受 ADR 后需要创建哪些 Issue

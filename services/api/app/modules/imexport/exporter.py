@@ -68,7 +68,7 @@ async def _export_memos_md(db, user_id: str) -> bytes:
     )
     memos = result.scalars().all()
 
-    lines = ["# Lifily 备忘导出\n", f"导出时间: {datetime.now(timezone.utc).isoformat()}\n\n---\n"]
+    lines = ["# Lifly 备忘导出\n", f"导出时间: {datetime.now(timezone.utc).isoformat()}\n\n---\n"]
     for m in memos:
         lines.append(f"## {m.title or '无标题'}\n")
         lines.append(f"类型: {m.type} | 情绪: {m.mood or '无'} | 创建: {m.created_at.isoformat() if m.created_at else ''}\n\n")

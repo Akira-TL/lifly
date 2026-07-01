@@ -42,7 +42,7 @@ Labels: `type:infra, area:mcp, agent:mcp, priority:p0`
 
 目标：初始化 services/cloud-mcp，提供基础 MCP server 和 tool list。
 
-验收：pnpm --filter @lifecore/cloud-mcp dev 可启动；能列出 ping tool。
+验收：pnpm --filter @lifly/cloud-mcp dev 可启动；能列出 ping tool。
 
 ### LC-0005 Flutter client skeleton
 

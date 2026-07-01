@@ -66,41 +66,41 @@ def get_registry() -> PluginRegistry:
 # ─── Built-in Plugins ─────────────────────────────────────────────────────────
 
 _registry.register_manifest(PluginManifest(
-    id="lifily.core.import",
+    id="lifly.core.import",
     display_name="通用导入",
     version="1.0.0",
     description="CSV（通用/支付宝/微信）、飞书、Notion、Obsidian 导入",
-    author="Lifily Team",
+    author="Lifly Team",
     entry_point="imexport.csv_parser:parse_generic_csv",
     icon="file_present",
 ))
 
 _registry.register_manifest(PluginManifest(
-    id="lifily.core.export",
+    id="lifly.core.export",
     display_name="通用导出",
     version="1.0.0",
     description="CSV/JSON/Markdown 导出",
-    author="Lifily Team",
+    author="Lifly Team",
     entry_point="imexport.exporter:export_entities",
     icon="file_download",
 ))
 
 _registry.register_manifest(PluginManifest(
-    id="lifily.core.calendar",
+    id="lifly.core.calendar",
     display_name="ICS 日历",
     version="1.0.0",
     description="ICS（RFC 5545）日历导入/导出",
-    author="Lifily Team",
+    author="Lifly Team",
     entry_point="imexport.ics_handler:parse_ics",
     icon="calendar_month",
 ))
 
 _registry.register_manifest(PluginManifest(
-    id="lifily.core.capture",
+    id="lifly.core.capture",
     display_name="AI 混合输入",
     version="1.0.0",
     description="自然语言捕获（capture_parse/commit/undo）",
-    author="Lifily Team",
+    author="Lifly Team",
     entry_point="mcp.parse_engine:parse_mixed_input",
     icon="smart_toy",
 ))

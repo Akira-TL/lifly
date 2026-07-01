@@ -4,7 +4,7 @@ class ApiClient {
   late final Dio _dio;
   final String baseUrl;
 
-  ApiClient({this.baseUrl = 'http://localhost:8310/api/v1'}) {
+  ApiClient({this.baseUrl = 'http://127.0.0.1:8310/api/v1'}) {
     _dio = Dio(BaseOptions(
       baseUrl: baseUrl,
       connectTimeout: const Duration(seconds: 5),

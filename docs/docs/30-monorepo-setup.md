@@ -3,7 +3,7 @@
 ## 1. 目标结构
 
 ```text
-lifecore/
+lifly/
 ├─ apps/
 │  └─ client_flutter/
 ├─ services/
@@ -40,8 +40,8 @@ lifecore/
 ## 3. 初始化命令
 
 ```bash
-mkdir lifecore
-cd lifecore
+mkdir lifly
+cd lifly
 git init
 
 mkdir -p apps services packages infra docs scripts .github/ISSUE_TEMPLATE
@@ -56,7 +56,7 @@ mkdir -p infra/postgres infra/powersync infra/minio infra/redis
 
 ```json
 {
-  "name": "lifecore",
+  "name": "lifly",
   "private": true,
   "packageManager": "pnpm@latest",
   "scripts": {

@@ -41,6 +41,7 @@ class _AssetListPageState extends State<AssetListPage> {
       appBar: AppBar(title: const Text('附件库'), scrolledUnderElevation: 0),
       body: _buildBody(),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'asset-create-fab',
         onPressed: () => _showAddSheet(context),
         child: const Icon(Icons.add),
       ),

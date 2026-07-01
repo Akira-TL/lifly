@@ -3,59 +3,152 @@ description: 给 AI agent 执行的标准任务
 title: "[LC-XXXX] "
 labels: ["status:ready"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        这是 Lifly AI agent 的标准任务合同。创建 Issue 时必须写清目标、上下文、边界、禁止事项和验收标准。
+
+        Agent 执行前必须读取：
+        - docs/26-v0.1-architecture-freeze.md
+        - 当前 Issue
+        - 相关模块 docs
+
+  - type: dropdown
+    id: agent_role
+    attributes:
+      label: Agent Role
+      description: 该任务主要由哪个 AI agent 执行
+      options:
+        - Architect
+        - Client
+        - Backend
+        - MCP
+        - Sync
+        - Asset
+        - Import
+        - QA
+        - DevOps
+        - Docs
+    validations:
+      required: true
+
+  - type: dropdown
+    id: milestone_group
+    attributes:
+      label: Milestone
+      description: 任务属于哪个阶段
+      options:
+        - M0 Repo Bootstrap & Technical Spikes
+        - M1 Local Data MVP
+        - M2 Cloud Sync MVP
+        - M3 Cloud MCP MVP
+        - M4 Assets & Import MVP
+        - M5 Windows Local MCP
+    validations:
+      required: true
+
   - type: textarea
     id: goal
     attributes:
       label: Goal
       description: 这个任务要完成什么
+      placeholder: "实现 Cloud MCP memo_create tool，并通过后端 API 创建 memo。"
     validations:
       required: true
+
   - type: textarea
     id: context
     attributes:
       label: Context
       description: AI agent 必须知道的背景
+      placeholder: |
+        相关架构边界、已有代码、前置任务、当前限制。
     validations:
       required: true
+
   - type: textarea
     id: scope
     attributes:
       label: Scope
       description: 本 Issue 允许做什么
+      placeholder: |
+        - 新增/修改哪些能力
+        - 允许触达哪些模块
+        - 允许新增哪些测试
     validations:
       required: true
+
   - type: textarea
     id: allowed_files
     attributes:
       label: Allowed Files / Directories
       description: 允许修改的文件或目录
+      placeholder: |
+        services/cloud-mcp/**
+        packages/protocol/**
+        docs/08-mcp-design.md
     validations:
       required: true
+
   - type: textarea
     id: forbidden
     attributes:
       label: Forbidden Changes
       description: 明确不允许做什么
+      placeholder: |
+        - 不要新增未批准 MCP tool
+        - 不要绕过后端 API 直接写数据库
+        - 不要修改架构冻结项
     validations:
       required: true
+
   - type: textarea
     id: acceptance
     attributes:
       label: Acceptance Criteria
-      description: 验收标准
+      description: 验收标准，必须可检查
+      placeholder: |
+        - MCP 调用 memo_create 可创建 memo
+        - 写入 audit_log
+        - 返回 memo id
+        - 相关测试通过
     validations:
       required: true
+
   - type: textarea
     id: validation
     attributes:
       label: Validation
       description: 如何验证
+      placeholder: |
+        pnpm --filter @lifly/cloud-mcp test
+        uv run pytest
+        curl http://localhost:8310/api/v1/health
     validations:
       required: true
+
   - type: textarea
     id: related_docs
     attributes:
       label: Related Docs
       description: 相关文档
+      placeholder: |
+        docs/26-v0.1-architecture-freeze.md
+        docs/08-mcp-design.md
+        docs/31-agent-task-protocol.md
+    validations:
+      required: true
+
+  - type: textarea
+    id: output_contract
+    attributes:
+      label: Required Agent Output
+      description: Agent 交付时必须按这个结构输出
+      value: |
+        Summary:
+        Changed Files:
+        Validation:
+        Risks:
+        Follow-ups:
     validations:
       required: true

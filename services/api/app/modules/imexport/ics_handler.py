@@ -43,7 +43,7 @@ def export_ics(events: list[dict]) -> bytes:
     lines: list[str] = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        "PRODID:-//Lifily//Calendar//CN",
+        "PRODID:-//Lifly//Calendar//CN",
     ]
 
     for event in events:

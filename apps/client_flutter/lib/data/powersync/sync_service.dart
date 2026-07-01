@@ -1,44 +1,81 @@
+import 'package:client_flutter/data/powersync/powersync_schema.dart';
+import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 import 'package:powersync/powersync.dart';
 
 class SyncService {
-  late final PowerSyncDatabase db;
-  bool _initialized = false;
+  PowerSyncDatabase? _db;
+  String? _dbPath;
 
-  bool get isInitialized => _initialized;
+  PowerSyncDatabase get db {
+    final currentDb = _db;
+    if (currentDb == null) {
+      throw StateError('PowerSync database has not been initialized.');
+    }
+    return currentDb;
+  }
 
-  Future<void> initialize(String dbPath) async {
-    db = PowerSyncDatabase(
-      schema: _lifilySchema,
-      path: dbPath,
+  String? get dbPath => _dbPath;
+
+  bool get isInitialized => _db != null;
+
+  Future<void> initialize({String? dbPath}) async {
+    if (isInitialized) return;
+
+    final resolvedPath = dbPath ?? await defaultDatabasePath();
+    final nextDb = PowerSyncDatabase(
+      schema: liflyPowerSyncSchema,
+      path: resolvedPath,
     );
 
-    await db.initialize();
-    _initialized = true;
+    await nextDb.initialize();
+    _db = nextDb;
+    _dbPath = resolvedPath;
+  }
+
+  Future<void> ensureInitialized() => initialize();
+
+  Future<String> defaultDatabasePath() async {
+    if (kIsWeb) {
+      return 'lifly-local-core.db';
+    }
+
+    final directory = await getApplicationSupportDirectory();
+    return path.join(directory.path, 'lifly-local-core.db');
   }
 
   Future<void> connect(String powerSyncEndpoint, String token) async {
-    if (!_initialized) return;
+    if (!isInitialized) return;
     await db.connect(
-      connector: _LifilyConnector(powerSyncEndpoint, token),
+      connector: _LiflyConnector(powerSyncEndpoint, token),
     );
   }
 
-  Future<void> disconnect() async {
-    if (_initialized) {
+  Future<void> disconnect({bool clearLocal = false}) async {
+    if (!isInitialized) return;
+
+    if (clearLocal) {
       await db.disconnectAndClear();
+      return;
     }
+
+    await db.disconnect();
   }
 
   void dispose() {
-    if (_initialized) db.close();
+    if (!isInitialized) return;
+    db.close();
+    _db = null;
+    _dbPath = null;
   }
 }
 
-class _LifilyConnector extends PowerSyncBackendConnector {
+class _LiflyConnector extends PowerSyncBackendConnector {
   final String endpoint;
   final String token;
 
-  _LifilyConnector(this.endpoint, this.token);
+  _LiflyConnector(this.endpoint, this.token);
 
   @override
   Future<PowerSyncCredentials?> fetchCredentials() async {
@@ -52,44 +89,3 @@ class _LifilyConnector extends PowerSyncBackendConnector {
     await batch.complete();
   }
 }
-
-const _lifilySchema = Schema([
-  Table('memos', [
-    Column.text('id'),
-    Column.text('user_id'),
-    Column.text('type'),
-    Column.text('title'),
-    Column.text('content_markdown'),
-    Column.text('mood'),
-    Column.text('status'),
-    Column.text('created_at'),
-    Column.text('updated_at'),
-  ]),
-  Table('tasks', [
-    Column.text('id'),
-    Column.text('user_id'),
-    Column.text('title'),
-    Column.text('description'),
-    Column.text('due_at'),
-    Column.text('remind_at'),
-    Column.text('priority'),
-    Column.text('task_status'),
-    Column.text('status'),
-    Column.text('created_at'),
-    Column.text('updated_at'),
-    Column.text('completed_at'),
-  ]),
-  Table('ledger_transactions', [
-    Column.text('id'),
-    Column.text('user_id'),
-    Column.text('direction'),
-    Column.real('amount'),
-    Column.text('currency'),
-    Column.text('merchant'),
-    Column.text('note'),
-    Column.text('occurred_at'),
-    Column.text('status'),
-    Column.text('created_at'),
-    Column.text('updated_at'),
-  ]),
-]);

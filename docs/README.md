@@ -1,10 +1,10 @@
-# Lifily 开发文档总览
+# Lifly 开发文档总览
 
-> 版本：v0.1 Draft  
-> 日期：2026-06-21  
-> 状态：开发团队启动版
+> 版本：v0.2.8 release gate
+> 日期：2026-07-02
+> 状态：Local Data MVP 收口版
 
-Lifily 是一个 AI-first / Chat-first 的个人生活数据系统。它不是传统意义上的日程 App、记账 App 或备忘录 App，而是一个以 **备忘录、记账、任务提醒** 为最小闭环，以 **MCP 服务** 为 AI 接入边界，以 **本地优先 + 云端同步** 为数据策略的个人生活数据基础设施。
+Lifly 是一个 AI-first / Chat-first 的个人生活数据系统。它不是传统意义上的日程 App、记账 App 或备忘录 App，而是一个以 **备忘录、记账、任务提醒** 为最小闭环，以 **MCP 服务** 为 AI 接入边界，以 **本地优先 + 云端同步** 为数据策略的个人生活数据基础设施。
 
 ## 目录结构
 
@@ -35,6 +35,10 @@ docs/
 ├─ 22-ui-information-architecture.md  # 页面与信息架构
 ├─ 23-open-source-commercial.md       # 开源与商业化策略
 ├─ 24-roadmap.md                      # 路线图
+├─ 59-version-control-plan.md         # 版本控制与后续开发计划
+├─ 60-major-version-roadmap.md        # 大版本开发路线图
+├─ 62-local-core-persistence-regression.md # Local Core 持久化回归验证
+├─ 63-v0.2-release-gate.md            # v0.2 发布门禁结果
 └─ 99-glossary.md                     # 术语表
 ```
 

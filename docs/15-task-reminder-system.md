@@ -72,14 +72,14 @@ MVP：
 输入：
 
 ```text
-明天晚上 8 点提醒我改 PeTalk 登录页
+明天晚上 8 点提醒我改 Lifly 登录页
 ```
 
 输出：
 
 ```json
 {
-  "title": "改 PeTalk 登录页",
+  "title": "改 Lifly 登录页",
   "remind_at": "2026-06-22T20:00:00+08:00"
 }
 ```

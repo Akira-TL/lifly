@@ -12,8 +12,8 @@ from app.core.config import settings
 from app.core.security import create_access_token
 
 cloud_mcp = FastMCP(
-    "lifily-cloud",
-    instructions="Lifily Cloud MCP — AI 接入边界。捕获自然语言输入、管理备忘/账单/任务、上传附件。",
+    "lifly-cloud",
+    instructions="Lifly Cloud MCP — AI 接入边界。捕获自然语言输入、管理备忘/账单/任务、上传附件。",
     stateless_http=True,
     json_response=True,
     streamable_http_path="/mcp",

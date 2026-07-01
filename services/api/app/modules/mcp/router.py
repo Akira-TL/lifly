@@ -4,35 +4,57 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select, func
+from pydantic import ValidationError
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.security import create_access_token
-from app.db.models import (
-    Memo,
-    LedgerTransaction,
-    Task,
-    Asset,
-    AuditLog,
-    MemoAssetRef,
+from app.db.models import AuditLog, LedgerTransaction, Memo, Task
+from app.modules.assets.service import (
+    asset_to_dict,
+    create_internal_asset_upload_record,
+    register_external_asset_record,
 )
-from app.schemas.common import json_serialize
-from app.modules.mcp.parse_engine import (
-    parse_mixed_input,
-    CAPTURE_STORE,
-    UNDO_STORE,
-    UndoEntry,
-    add_undo_entry,
-    get_undo_entries,
+from app.modules.ledger.service import (
+    create_ledger_transaction_record,
+    ledger_transaction_to_dict,
+)
+from app.modules.memos.service import (
+    DEFAULT_LOCAL_USER_ID,
+    create_memo_record,
+)
+from app.modules.mcp.parse_engine import CAPTURE_STORE, parse_mixed_input
+from app.modules.mcp.undo_service import consume_undo_entries, persist_undo_entries
+from app.modules.tasks.service import complete_task_record, create_task_record, task_to_dict
+from app.schemas.common import (
+    AssetCreateUploadUrl,
+    AssetRegisterExternalUrl,
+    CaptureUndoRequest,
+    LedgerTransactionCreate,
+    McpExpenseSummaryRequest,
+    McpSearchRequest,
+    McpTaskCompleteRequest,
+    McpTaskListRequest,
+    MemoCreate,
+    TaskCreate,
+    json_serialize,
 )
 
 router = APIRouter()
 
-UNDO_TOKENS: dict[str, str] = {}  # undo_token -> capture_id mapping
-
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+async def _read_json_body(request: Request) -> dict:
+    try:
+        body = await request.json()
+    except ValueError:
+        return {}
+    if body is None:
+        return {}
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=422, detail="request body must be a JSON object")
+    return body
+
 
 async def _write_audit(
     db: AsyncSession,
@@ -77,40 +99,28 @@ def _memo_dict(memo: Memo) -> dict:
 
 
 def _tx_dict(tx: LedgerTransaction) -> dict:
-    return {
-        "id": tx.id,
-        "user_id": tx.user_id,
-        "direction": tx.direction,
-        "amount": float(tx.amount),
-        "currency": tx.currency,
-        "merchant": tx.merchant,
-        "note": tx.note,
-        "occurred_at": tx.occurred_at.isoformat() if tx.occurred_at else None,
-        "status": tx.status,
-        "created_at": tx.created_at.isoformat() if tx.created_at else None,
-        "updated_at": tx.updated_at.isoformat() if tx.updated_at else None,
-    }
+    return ledger_transaction_to_dict(tx)
 
 
 def _task_dict(task: Task) -> dict:
-    return {
-        "id": task.id,
-        "user_id": task.user_id,
-        "title": task.title,
-        "description": task.description,
-        "due_at": task.due_at.isoformat() if task.due_at else None,
-        "remind_at": task.remind_at.isoformat() if task.remind_at else None,
-        "priority": task.priority,
-        "task_status": task.task_status,
-        "status": task.status,
-        "completed_at": task.completed_at.isoformat() if task.completed_at else None,
-        "created_at": task.created_at.isoformat() if task.created_at else None,
-        "updated_at": task.updated_at.isoformat() if task.updated_at else None,
-    }
+    return task_to_dict(task)
+
+
+async def _persist_create_undo_entries(
+    db: AsyncSession,
+    *,
+    undo_token: str,
+    created_entities: list[dict],
+) -> None:
+    await persist_undo_entries(
+        db,
+        undo_token=undo_token,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        entries=[{**entity, "action": "create"} for entity in created_entities],
+    )
 
 
 # ─── capture_parse ────────────────────────────────────────────────────────────
-
 @router.post("/capture/parse")
 async def capture_parse(request: Request, db: AsyncSession = Depends(get_db)):
     body = await request.json()
@@ -139,7 +149,6 @@ async def capture_parse(request: Request, db: AsyncSession = Depends(get_db)):
 
 
 # ─── capture_commit ───────────────────────────────────────────────────────────
-
 @router.post("/capture/commit")
 async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
     body = await request.json()
@@ -162,80 +171,81 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
         payload = act.payload
 
         if act.type == "memo_create":
-            memo = Memo(
-                user_id="local-dev",
-                type=payload.get("type", "memo"),
-                title=payload.get("title"),
-                content_markdown=payload.get("content_markdown", ""),
-                tags=payload.get("tags"),
-                mood=payload.get("mood"),
-                source_capture_id=capture_id,
-                source="ai",
+            try:
+                data = MemoCreate.model_validate({
+                    **payload,
+                    "type": payload.get("type") or "memo",
+                    "source": payload.get("source") or "ai",
+                    "source_capture_id": capture_id,
+                })
+            except ValidationError as exc:
+                raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
+            memo = await create_memo_record(
+                db,
+                data,
+                user_id=DEFAULT_LOCAL_USER_ID,
+                actor_type="ai",
+                source_channel="mcp",
+                tool_name="capture_commit",
+                source_text=body.get("source_text") or act.raw_text,
             )
-            db.add(memo)
-            await db.flush()
-            await _write_audit(db, "local-dev", "create", "memo", memo.id,
-                               after=json_serialize(_memo_dict(memo)),
-                               tool_name="capture_commit",
-                               source_text=act.raw_text)
             created_entities.append({"type": "memo", "id": memo.id})
 
         elif act.type == "expense_create":
-            occurred_at = payload.get("occurred_at")
-            if occurred_at and isinstance(occurred_at, str):
-                occurred_at = datetime.fromisoformat(occurred_at)
+            try:
+                data = LedgerTransactionCreate.model_validate({
+                    **payload,
+                    "direction": payload.get("direction") or "expense",
+                    "source": payload.get("source") or "ai",
+                    "source_capture_id": capture_id,
+                    "confidence": payload.get("confidence") if payload.get("confidence") is not None else act.confidence,
+                })
+            except ValidationError as exc:
+                raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
-            tx = LedgerTransaction(
-                user_id="local-dev",
-                direction=payload.get("direction", "expense"),
-                amount=payload.get("amount", 0),
-                currency=payload.get("currency", "CNY"),
-                merchant=payload.get("merchant"),
-                category_id=payload.get("category_id"),
-                note=payload.get("note"),
-                occurred_at=occurred_at or datetime.now(timezone.utc),
-                source="ai",
-                source_capture_id=capture_id,
-                confidence=act.confidence,
+            tx = await create_ledger_transaction_record(
+                db,
+                data,
+                user_id=DEFAULT_LOCAL_USER_ID,
+                actor_type="ai",
+                source_channel="mcp",
+                tool_name="capture_commit",
+                source_text=body.get("source_text") or act.raw_text,
             )
-            db.add(tx)
-            await db.flush()
-            await _write_audit(db, "local-dev", "create", "ledger_transaction", tx.id,
-                               after=json_serialize(_tx_dict(tx)),
-                               tool_name="capture_commit",
-                               source_text=act.raw_text)
             created_entities.append({"type": "ledger_transaction", "id": tx.id})
 
         elif act.type == "task_create":
-            remind_at = payload.get("remind_at")
-            if remind_at and isinstance(remind_at, str):
-                remind_at = datetime.fromisoformat(remind_at)
+            try:
+                data = TaskCreate.model_validate({
+                    **payload,
+                    "source": payload.get("source") or "ai",
+                    "source_capture_id": capture_id,
+                })
+            except ValidationError as exc:
+                raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
-            task = Task(
-                user_id="local-dev",
-                title=payload.get("title", ""),
-                description=payload.get("description"),
-                due_at=payload.get("due_at"),
-                remind_at=remind_at,
-                priority=payload.get("priority", "normal"),
-                source_capture_id=capture_id,
-                source="ai",
+            task = await create_task_record(
+                db,
+                data,
+                user_id=DEFAULT_LOCAL_USER_ID,
+                actor_type="ai",
+                source_channel="mcp",
+                tool_name="capture_commit",
+                source_text=body.get("source_text") or act.raw_text,
             )
-            db.add(task)
-            await db.flush()
-            await _write_audit(db, "local-dev", "create", "task", task.id,
-                               after=json_serialize(_task_dict(task)),
-                               tool_name="capture_commit",
-                               source_text=act.raw_text)
             created_entities.append({"type": "task", "id": task.id})
+
+    undo_token = str(uuid.uuid4())
+    if created_entities:
+        await _persist_create_undo_entries(
+            db,
+            undo_token=undo_token,
+            created_entities=created_entities,
+        )
 
     session.committed = True
     await db.commit()
-
-    undo_token = str(uuid.uuid4())
-    for ent in created_entities:
-        add_undo_entry(undo_token, ent["type"], ent["id"], "create")
-    UNDO_TOKENS[undo_token] = capture_id
 
     return {
         "committed": True,
@@ -245,20 +255,26 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
 
 
 # ─── capture_undo ────────────────────────────────────────────────────────────
-
 @router.post("/capture/undo")
 async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
     body = await request.json()
-    undo_token = body.get("undo_token")
+    try:
+        data = CaptureUndoRequest.model_validate(body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
-    if not undo_token:
-        raise HTTPException(status_code=400, detail="undo_token is required")
-
-    entries = get_undo_entries(undo_token)
+    undo_token = data.undo_token
+    entries = await consume_undo_entries(
+        db,
+        undo_token=undo_token,
+        user_id=DEFAULT_LOCAL_USER_ID,
+    )
     if not entries:
         raise HTTPException(status_code=404, detail="Undo token not found or expired")
 
-    undone = 0
+    undone_entities: list[dict] = []
+    failed_entities: list[dict] = []
+
     for entry in entries:
         model_class = {
             "memo": Memo,
@@ -267,16 +283,26 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
         }.get(entry.entity_type)
 
         if not model_class:
+            failed_entities.append({
+                "type": entry.entity_type,
+                "id": entry.entity_id,
+                "reason": "unsupported_entity_type",
+            })
             continue
 
         result = await db.execute(
             select(model_class).where(
                 getattr(model_class, "id") == entry.entity_id,
-                getattr(model_class, "user_id") == "local-dev",
+                getattr(model_class, "user_id") == DEFAULT_LOCAL_USER_ID,
             )
         )
         entity = result.scalar_one_or_none()
         if not entity:
+            failed_entities.append({
+                "type": entry.entity_type,
+                "id": entry.entity_id,
+                "reason": "not_found",
+            })
             continue
 
         before_snap = json_serialize(
@@ -292,59 +318,84 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
         if hasattr(entity, "revision"):
             entity.revision += 1
 
-        await _write_audit(db, "local-dev", "undo_delete", entry.entity_type, entry.entity_id,
-                           before=before_snap,
-                           tool_name="capture_undo",
-                           source_text=f"undo_token={undo_token}")
-        undone += 1
+        await _write_audit(
+            db,
+            DEFAULT_LOCAL_USER_ID,
+            "undo_delete",
+            entry.entity_type,
+            entry.entity_id,
+            before=before_snap,
+            tool_name="capture_undo",
+            source_text=f"undo_token={undo_token}",
+        )
+        undone_entities.append({"type": entry.entity_type, "id": entry.entity_id})
 
     await db.commit()
-    return {"undone": undone, "entities": [{"type": e.entity_type, "id": e.entity_id} for e in entries]}
+    return {
+        "undone": len(undone_entities),
+        "entities": undone_entities,
+        "failed_entities": failed_entities,
+    }
 
 
 # ─── Direct CRUD Tools ────────────────────────────────────────────────────────
-
 @router.post("/memo/create")
 async def mcp_memo_create(request: Request, db: AsyncSession = Depends(get_db)):
     body = await request.json()
-    memo = Memo(
-        user_id="local-dev",
-        type=body.get("type", "memo"),
-        title=body.get("title"),
-        content_markdown=body.get("content_markdown", ""),
-        tags=body.get("tags"),
-        mood=body.get("mood"),
-        source="ai",
+    try:
+        data = MemoCreate.model_validate({
+            **body,
+            "source": body.get("source") or "ai",
+        })
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
+    memo = await create_memo_record(
+        db,
+        data,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        actor_type="ai",
+        source_channel="mcp",
+        tool_name="memo_create",
+        source_text=body.get("source_text") or body.get("content_markdown"),
     )
-    db.add(memo)
-    await db.flush()
-    await _write_audit(db, "local-dev", "create", "memo", memo.id,
-                       after=json_serialize(_memo_dict(memo)),
-                       tool_name="memo_create")
+
+    undo_token = str(uuid.uuid4())
+    await _persist_create_undo_entries(
+        db,
+        undo_token=undo_token,
+        created_entities=[{"type": "memo", "id": memo.id}],
+    )
+
     await db.commit()
     await db.refresh(memo)
 
-    undo_token = str(uuid.uuid4())
-    add_undo_entry(undo_token, "memo", memo.id, "create")
-
-    return {"memo": _memo_dict(memo), "undo_token": undo_token}
+    memo_data = _memo_dict(memo)
+    return {
+        "memo_id": memo.id,
+        "status": memo.status,
+        "memo": memo_data,
+        "undo_token": undo_token,
+    }
 
 
 @router.post("/memo/search")
 async def mcp_memo_search(request: Request, db: AsyncSession = Depends(get_db)):
-    body = await request.json()
-    q = body.get("q", "")
-    limit = body.get("limit", 20)
+    body = await _read_json_body(request)
+    try:
+        data = McpSearchRequest.model_validate(body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
     query = select(Memo).where(
-        Memo.user_id == "local-dev",
+        Memo.user_id == DEFAULT_LOCAL_USER_ID,
         Memo.status == "active",
     )
-    if q:
+    if data.q:
         query = query.where(
-            Memo.title.ilike(f"%{q}%") | Memo.content_markdown.ilike(f"%{q}%")
+            Memo.title.ilike(f"%{data.q}%") | Memo.content_markdown.ilike(f"%{data.q}%")
         )
-    query = query.order_by(Memo.created_at.desc()).limit(limit)
+    query = query.order_by(Memo.created_at.desc()).limit(data.limit)
     result = await db.execute(query)
     return {"memos": [_memo_dict(m) for m in result.scalars().all()]}
 
@@ -352,57 +403,67 @@ async def mcp_memo_search(request: Request, db: AsyncSession = Depends(get_db)):
 @router.post("/expense/create")
 async def mcp_expense_create(request: Request, db: AsyncSession = Depends(get_db)):
     body = await request.json()
-    occurred_at = body.get("occurred_at")
-    if occurred_at and isinstance(occurred_at, str):
-        occurred_at = datetime.fromisoformat(occurred_at)
+    try:
+        data = LedgerTransactionCreate.model_validate({
+            **body,
+            "direction": body.get("direction") or "expense",
+            "source": body.get("source") or "ai",
+        })
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
-    tx = LedgerTransaction(
-        user_id="local-dev",
-        direction=body.get("direction", "expense"),
-        amount=body.get("amount", 0),
-        currency=body.get("currency", "CNY"),
-        merchant=body.get("merchant"),
-        category_id=body.get("category_id"),
-        note=body.get("note"),
-        occurred_at=occurred_at or datetime.now(timezone.utc),
-        source="ai",
+    tx = await create_ledger_transaction_record(
+        db,
+        data,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        actor_type="ai",
+        source_channel="mcp",
+        tool_name="expense_create",
+        source_text=body.get("source_text") or body.get("note") or body.get("merchant"),
     )
-    db.add(tx)
-    await db.flush()
-    await _write_audit(db, "local-dev", "create", "ledger_transaction", tx.id,
-                       after=json_serialize(_tx_dict(tx)),
-                       tool_name="expense_create")
-    await db.commit()
-    await db.refresh(tx)
 
     undo_token = str(uuid.uuid4())
-    add_undo_entry(undo_token, "ledger_transaction", tx.id, "create")
+    await _persist_create_undo_entries(
+        db,
+        undo_token=undo_token,
+        created_entities=[{"type": "ledger_transaction", "id": tx.id}],
+    )
+
+    await db.commit()
+    await db.refresh(tx)
 
     return {"transaction": _tx_dict(tx), "undo_token": undo_token}
 
 
 @router.post("/expense/search")
 async def mcp_expense_search(request: Request, db: AsyncSession = Depends(get_db)):
-    body = await request.json()
-    q = body.get("q", "")
-    limit = body.get("limit", 20)
+    body = await _read_json_body(request)
+    try:
+        data = McpSearchRequest.model_validate(body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
     query = select(LedgerTransaction).where(
-        LedgerTransaction.user_id == "local-dev",
+        LedgerTransaction.user_id == DEFAULT_LOCAL_USER_ID,
         LedgerTransaction.status == "active",
     )
-    if q:
+    if data.q:
         query = query.where(
-            LedgerTransaction.merchant.ilike(f"%{q}%") | LedgerTransaction.note.ilike(f"%{q}%")
+            LedgerTransaction.merchant.ilike(f"%{data.q}%") | LedgerTransaction.note.ilike(f"%{data.q}%")
         )
-    query = query.order_by(LedgerTransaction.occurred_at.desc()).limit(limit)
+    query = query.order_by(LedgerTransaction.occurred_at.desc()).limit(data.limit)
     result = await db.execute(query)
     return {"transactions": [_tx_dict(t) for t in result.scalars().all()]}
 
 
 @router.post("/expense/summary")
 async def mcp_expense_summary(request: Request, db: AsyncSession = Depends(get_db)):
-    # 当月汇总
+    body = await _read_json_body(request)
+    try:
+        data = McpExpenseSummaryRequest.model_validate(body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
     now = datetime.now(timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
@@ -411,7 +472,7 @@ async def mcp_expense_summary(request: Request, db: AsyncSession = Depends(get_d
             func.sum(LedgerTransaction.amount).label("total_expense"),
             func.count().label("count"),
         ).where(
-            LedgerTransaction.user_id == "local-dev",
+            LedgerTransaction.user_id == DEFAULT_LOCAL_USER_ID,
             LedgerTransaction.direction == "expense",
             LedgerTransaction.status == "active",
             LedgerTransaction.occurred_at >= month_start,
@@ -421,79 +482,133 @@ async def mcp_expense_summary(request: Request, db: AsyncSession = Depends(get_d
     total = float(row.total_expense or 0) if row else 0
     count = row.count if row else 0
 
-    return {"period": "current_month", "total_expense": total, "count": count}
+    return {"period": data.period, "total_expense": total, "count": count}
 
 
 @router.post("/task/create")
 async def mcp_task_create(request: Request, db: AsyncSession = Depends(get_db)):
     body = await request.json()
-    remind_at = body.get("remind_at")
-    if remind_at and isinstance(remind_at, str):
-        remind_at = datetime.fromisoformat(remind_at)
+    try:
+        data = TaskCreate.model_validate({
+            **body,
+            "source": body.get("source") or "ai",
+        })
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
-    task = Task(
-        user_id="local-dev",
-        title=body.get("title", ""),
-        description=body.get("description"),
-        due_at=body.get("due_at"),
-        remind_at=remind_at,
-        priority=body.get("priority", "normal"),
-        source="ai",
+    task = await create_task_record(
+        db,
+        data,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        actor_type="ai",
+        source_channel="mcp",
+        tool_name="task_create",
+        source_text=body.get("source_text") or body.get("title") or body.get("description"),
     )
-    db.add(task)
-    await db.flush()
-    await _write_audit(db, "local-dev", "create", "task", task.id,
-                       after=json_serialize(_task_dict(task)),
-                       tool_name="task_create")
-    await db.commit()
-    await db.refresh(task)
 
     undo_token = str(uuid.uuid4())
-    add_undo_entry(undo_token, "task", task.id, "create")
+    await _persist_create_undo_entries(
+        db,
+        undo_token=undo_token,
+        created_entities=[{"type": "task", "id": task.id}],
+    )
+
+    await db.commit()
+    await db.refresh(task)
 
     return {"task": _task_dict(task), "undo_token": undo_token}
 
 
 @router.post("/task/list")
 async def mcp_task_list(request: Request, db: AsyncSession = Depends(get_db)):
-    body = await request.json()
-    task_status = body.get("task_status", None)
-    limit = body.get("limit", 20)
+    body = await _read_json_body(request)
+    try:
+        data = McpTaskListRequest.model_validate(body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
     query = select(Task).where(
-        Task.user_id == "local-dev",
+        Task.user_id == DEFAULT_LOCAL_USER_ID,
         Task.status == "active",
     )
-    if task_status:
-        query = query.where(Task.task_status == task_status)
-    query = query.order_by(Task.created_at.desc()).limit(limit)
+    if data.task_status:
+        query = query.where(Task.task_status == data.task_status)
+    query = query.order_by(Task.created_at.desc()).limit(data.limit)
     result = await db.execute(query)
     return {"tasks": [_task_dict(t) for t in result.scalars().all()]}
 
 
 @router.post("/task/complete")
 async def mcp_task_complete(request: Request, db: AsyncSession = Depends(get_db)):
-    body = await request.json()
-    task_id = body.get("task_id")
+    body = await _read_json_body(request)
+    try:
+        data = McpTaskCompleteRequest.model_validate(body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
-    if not task_id:
-        raise HTTPException(status_code=400, detail="task_id is required")
-
-    result = await db.execute(
-        select(Task).where(Task.id == task_id, Task.user_id == "local-dev")
+    task = await complete_task_record(
+        db,
+        task_id=data.task_id,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        actor_type="ai",
+        source_channel="mcp",
+        tool_name="task_complete",
+        source_text=body.get("source_text") or data.task_id,
     )
-    task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    before = json_serialize(_task_dict(task))
-    task.task_status = "done"
-    task.completed_at = datetime.now(timezone.utc)
-    task.revision += 1
-
-    await _write_audit(db, "local-dev", "complete", "task", task_id,
-                       before=before, after=json_serialize(_task_dict(task)),
-                       tool_name="task_complete")
     await db.commit()
     await db.refresh(task)
     return {"task": _task_dict(task)}
+
+
+@router.post("/asset/create-upload-url")
+async def mcp_asset_create_upload_url(request: Request, db: AsyncSession = Depends(get_db)):
+    body = await request.json()
+    try:
+        data = AssetCreateUploadUrl.model_validate(body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
+    asset, upload_url = await create_internal_asset_upload_record(
+        db,
+        data,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        actor_type="ai",
+        source_channel="mcp",
+        tool_name="asset_create_upload_url",
+        source_text=body.get("source_text") or body.get("filename"),
+    )
+    await db.commit()
+    await db.refresh(asset)
+
+    return {
+        "asset_id": asset.id,
+        "storage_key": asset.storage_key,
+        "upload_url": upload_url,
+        "asset": asset_to_dict(asset),
+    }
+
+
+@router.post("/asset/register-external-url")
+async def mcp_asset_register_external_url(request: Request, db: AsyncSession = Depends(get_db)):
+    body = await request.json()
+    try:
+        data = AssetRegisterExternalUrl.model_validate(body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
+    asset = await register_external_asset_record(
+        db,
+        data,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        actor_type="ai",
+        source_channel="mcp",
+        tool_name="asset_register_external_url",
+        source_text=body.get("source_text") or body.get("external_url"),
+    )
+    await db.commit()
+    await db.refresh(asset)
+
+    return {"asset": asset_to_dict(asset)}

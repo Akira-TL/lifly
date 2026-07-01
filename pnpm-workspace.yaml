@@ -1,4 +1,3 @@
 packages:
-  - "services/cloud-mcp"
   - "services/local-mcp"
   - "packages/*"

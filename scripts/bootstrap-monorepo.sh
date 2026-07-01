@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="${1:-lifecore}"
+ROOT="${1:-lifly}"
 mkdir -p "$ROOT"
 cd "$ROOT"
 git init
@@ -13,7 +13,7 @@ mkdir -p infra/postgres infra/powersync infra/minio infra/redis
 
 cat > package.json <<'JSON'
 {
-  "name": "lifecore",
+  "name": "lifly",
   "private": true,
   "packageManager": "pnpm@latest",
   "scripts": {

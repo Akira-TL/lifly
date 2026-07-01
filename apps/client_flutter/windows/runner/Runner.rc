@@ -89,11 +89,11 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.lifily" "\0"
+            VALUE "CompanyName", "com.lifly" "\0"
             VALUE "FileDescription", "client_flutter" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "client_flutter" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.lifily. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 com.lifly. All rights reserved." "\0"
             VALUE "OriginalFilename", "client_flutter.exe" "\0"
             VALUE "ProductName", "client_flutter" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"

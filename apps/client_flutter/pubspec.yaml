@@ -1,5 +1,5 @@
 name: client_flutter
-description: "Lifily - AI-first personal life data system"
+description: "Lifly - AI-first personal life data system"
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -14,7 +14,10 @@ dependencies:
   provider: ^6.1.2
   intl: ^0.20.1
   powersync: ^1.12.4
+  powersync_flutter_libs: ^0.4.15
   sqlite3_flutter_libs: ^0.5.27
+  sqlite_async: ^0.13.1
+  path: ^1.9.1
   path_provider: ^2.1.5
 
 dev_dependencies:
