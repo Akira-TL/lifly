@@ -139,7 +139,7 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   ) {
-    return _unsupported('task delete');
+    return _taskStore.deleteTask(input, context);
   }
 
   @override

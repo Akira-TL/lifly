@@ -81,6 +81,56 @@ class PowerSyncTaskStore {
     return rows.map(LocalTaskMapper.fromRow).toList(growable: false);
   }
 
+  Future<LocalTaskRecord> deleteTask(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final deleteInput = LocalTaskDeleteInput.fromMap(input);
+    late final LocalTaskRecord deletedTask;
+
+    await LocalCoreWriteExecutor(syncService: syncService).run((handle) async {
+      final oldTask = await _findActiveTask(handle, deleteInput.taskId);
+      if (oldTask == null) {
+        throw StateError('Task not found: ${deleteInput.taskId}');
+      }
+
+      final metadata = policy.metadataForUpdate(
+        context,
+        currentRevision: oldTask.revision,
+        createdAt: oldTask.createdAt,
+      );
+      deletedTask = LocalTaskRecord(
+        id: oldTask.id,
+        title: oldTask.title,
+        description: oldTask.description,
+        dueAt: oldTask.dueAt,
+        remindAt: oldTask.remindAt,
+        priority: oldTask.priority,
+        taskStatus: oldTask.taskStatus,
+        completedAt: oldTask.completedAt,
+        status: deleteInput.status,
+        revision: metadata.revision,
+        createdAt: oldTask.createdAt,
+        updatedAt: metadata.timestamps.updatedAt,
+      );
+
+      await _softDeleteTask(handle, deletedTask, metadata);
+      await auditLogWriter.write(
+        handle,
+        LocalCoreAuditLogInput(
+          context: context,
+          action: 'task.delete',
+          entityType: 'task',
+          entityId: deletedTask.id,
+          beforeSnapshot: LocalTaskMapper.snapshot(oldTask),
+          afterSnapshot: LocalTaskMapper.snapshot(deletedTask),
+        ),
+      );
+    });
+
+    return deletedTask;
+  }
+
   Future<LocalTaskRecord> completeTask(
     Map<String, Object?> input,
     LocalCoreContext context,
@@ -241,6 +291,25 @@ class PowerSyncTaskStore {
         metadata.timestamps.createdAtIso,
         metadata.timestamps.updatedAtIso,
         metadata.revision,
+      ],
+    );
+  }
+
+  Future<void> _softDeleteTask(
+    LocalCoreWriteHandle handle,
+    LocalTaskRecord task,
+    LocalCoreWriteMetadata metadata,
+  ) async {
+    await handle.execute(
+      'UPDATE tasks SET status = ?, deleted_at = ?, updated_at = ?, revision = ? '
+      'WHERE id = ? AND status = ?',
+      [
+        task.status,
+        metadata.timestamps.updatedAtIso,
+        metadata.timestamps.updatedAtIso,
+        metadata.revision,
+        task.id,
+        'active',
       ],
     );
   }
