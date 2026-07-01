@@ -80,6 +80,29 @@ class PowerSyncExpenseStore {
     return rows.map(LocalExpenseMapper.fromRow).toList(growable: false);
   }
 
+  Future<LocalExpenseSummary> summarizeExpenses(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final summaryInput = LocalExpenseSummaryInput.fromMap(input);
+    await syncService.ensureInitialized();
+    final row = await syncService.db.get(
+      'SELECT '
+      'coalesce(sum(CASE WHEN direction = ? THEN amount ELSE 0 END), 0) AS total_expense, '
+      'coalesce(sum(CASE WHEN direction = ? THEN amount ELSE 0 END), 0) AS total_income, '
+      'count(*) AS count '
+      'FROM ledger_transactions WHERE status = ?',
+      ['expense', 'income', 'active'],
+    );
+
+    return LocalExpenseSummary(
+      period: summaryInput.period,
+      totalExpense: (row['total_expense'] as num).toDouble(),
+      totalIncome: (row['total_income'] as num).toDouble(),
+      count: row['count'] as int,
+    );
+  }
+
   Future<List<Map<String, Object?>>> _searchRows({
     required String query,
     required int limit,

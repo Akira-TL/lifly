@@ -103,7 +103,7 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   ) {
-    return _unsupported('expense summary');
+    return _expenseStore.summarizeExpenses(input, context);
   }
 
   @override
