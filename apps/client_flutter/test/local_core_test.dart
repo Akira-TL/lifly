@@ -14,21 +14,47 @@ void main() {
     expect(health.mode, 'fake');
   });
 
-  test('FakeLocalCoreBridge creates and searches memos', () async {
-    final core = FakeLocalCoreBridge();
-    final memo = await core.createMemo({
-      'type': 'memo',
-      'title': 'Local memo',
-      'content_markdown': 'created through dart local core',
-      'tags': ['local'],
-    }, context);
+  test(
+    'FakeLocalCoreBridge creates, updates, searches, and deletes memos',
+    () async {
+      final core = FakeLocalCoreBridge();
+      final memo = await core.createMemo({
+        'type': 'memo',
+        'title': 'Local memo',
+        'content_markdown': 'created through dart local core',
+        'tags': ['local'],
+      }, context);
 
-    expect(memo.id, 'local_memo_0001');
-    expect(memo.revision, 1);
+      expect(memo.id, 'local_memo_0001');
+      expect(memo.revision, 1);
 
-    final results = await core.searchMemos({'q': 'dart local core', 'limit': 20}, context);
-    expect(results.map((item) => item.id), contains(memo.id));
-  });
+      final results = await core.searchMemos({
+        'q': 'dart local core',
+        'limit': 20,
+      }, context);
+      expect(results.map((item) => item.id), contains(memo.id));
+
+      final updated = await core.updateMemo({
+        'memo_id': memo.id,
+        'title': 'Updated local memo',
+        'content_markdown': 'updated through fake local core',
+        'tags': ['local', 'updated'],
+      }, context);
+      expect(updated.revision, 2);
+      expect(updated.title, 'Updated local memo');
+      expect(updated.tags, ['local', 'updated']);
+
+      final deleted = await core.deleteMemo({'memo_id': memo.id}, context);
+      expect(deleted.revision, 3);
+      expect(deleted.status, 'deleted');
+
+      final afterDelete = await core.searchMemos({
+        'q': 'updated',
+        'limit': 20,
+      }, context);
+      expect(afterDelete.map((item) => item.id), isNot(contains(memo.id)));
+    },
+  );
 
   test('FakeLocalCoreBridge creates expenses and summarizes them', () async {
     final core = FakeLocalCoreBridge();
@@ -42,10 +68,15 @@ void main() {
 
     expect(tx.id, 'local_tx_0001');
 
-    final results = await core.searchExpenses({'q': 'merchant', 'limit': 20}, context);
+    final results = await core.searchExpenses({
+      'q': 'merchant',
+      'limit': 20,
+    }, context);
     expect(results, hasLength(1));
 
-    final summary = await core.summarizeExpenses({'period': 'current_month'}, context);
+    final summary = await core.summarizeExpenses({
+      'period': 'current_month',
+    }, context);
     expect(summary.totalExpense, 12.5);
     expect(summary.count, 1);
   });
@@ -61,7 +92,10 @@ void main() {
     expect(task.id, 'local_task_0001');
     expect(task.taskStatus, 'todo');
 
-    final tasks = await core.listTasks({'task_status': 'todo', 'limit': 20}, context);
+    final tasks = await core.listTasks({
+      'task_status': 'todo',
+      'limit': 20,
+    }, context);
     expect(tasks.map((item) => item.id), contains(task.id));
 
     final completed = await core.completeTask({'task_id': task.id}, context);
@@ -70,24 +104,31 @@ void main() {
     expect(completed.revision, 2);
   });
 
-  test('FakeLocalCoreBridge parses, commits, and undoes capture sessions', () async {
-    final core = FakeLocalCoreBridge();
-    final parsed = await core.captureParse({
-      'text': '记一下 Dart Local Core capture',
-      'timezone': 'Asia/Shanghai',
-      'locale': 'zh-CN',
-    }, context);
+  test(
+    'FakeLocalCoreBridge parses, commits, and undoes capture sessions',
+    () async {
+      final core = FakeLocalCoreBridge();
+      final parsed = await core.captureParse({
+        'text': '记一下 Dart Local Core capture',
+        'timezone': 'Asia/Shanghai',
+        'locale': 'zh-CN',
+      }, context);
 
-    expect(parsed.captureId, 'local_capture_0001');
-    expect(parsed.actions, hasLength(1));
+      expect(parsed.captureId, 'local_capture_0001');
+      expect(parsed.actions, hasLength(1));
 
-    final committed = await core.captureCommit({'capture_id': parsed.captureId}, context);
-    expect(committed.committed, isTrue);
-    expect(committed.createdEntities, hasLength(1));
-    expect(committed.undoToken, 'local_undo_0001');
+      final committed = await core.captureCommit({
+        'capture_id': parsed.captureId,
+      }, context);
+      expect(committed.committed, isTrue);
+      expect(committed.createdEntities, hasLength(1));
+      expect(committed.undoToken, 'local_undo_0001');
 
-    final undone = await core.captureUndo({'undo_token': committed.undoToken}, context);
-    expect(undone.undone, 1);
-    expect(undone.failedEntities, isEmpty);
-  });
+      final undone = await core.captureUndo({
+        'undo_token': committed.undoToken,
+      }, context);
+      expect(undone.undone, 1);
+      expect(undone.failedEntities, isEmpty);
+    },
+  );
 }
