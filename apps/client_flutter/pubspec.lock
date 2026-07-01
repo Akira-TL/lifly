@@ -300,7 +300,7 @@ packages:
     source: hosted
     version: "2.2.0"
   path:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: path
       sha256: "75cca69d1490965be98c73ceaea117e8a04dd21217b37b292c9ddbec0d955bc5"
@@ -388,7 +388,7 @@ packages:
     source: hosted
     version: "1.8.0"
   powersync_flutter_libs:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: powersync_flutter_libs
       sha256: "3836fd9b4f351aae3229eed1fb0346a2dffa9151792c90f83682e6508ff4df0b"

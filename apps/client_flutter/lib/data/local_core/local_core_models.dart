@@ -2,8 +2,18 @@ class LocalCoreHealth {
   final String status;
   final String mode;
   final String version;
+  final String? detail;
+  final DateTime? checkedAt;
 
-  const LocalCoreHealth({required this.status, required this.mode, required this.version});
+  const LocalCoreHealth({
+    required this.status,
+    required this.mode,
+    required this.version,
+    this.detail,
+    this.checkedAt,
+  });
+
+  bool get healthy => status == 'ok';
 }
 
 class LocalCoreEntityRef {

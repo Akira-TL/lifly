@@ -1,14 +1,13 @@
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_context.dart';
+import 'package:client_flutter/data/local_core/local_core_ids.dart';
 import 'package:client_flutter/data/local_core/local_core_models.dart';
 
 class FakeLocalCoreBridge implements LocalCoreBridge {
-  int _memoSeq = 0;
-  int _expenseSeq = 0;
-  int _taskSeq = 0;
-  int _assetSeq = 0;
-  int _captureSeq = 0;
-  int _undoSeq = 0;
+  final LocalCoreIdGenerator _idGenerator;
+
+  FakeLocalCoreBridge({LocalCoreIdGenerator? idGenerator})
+      : _idGenerator = idGenerator ?? LocalCoreIdGenerator();
 
   final List<LocalMemoRecord> _memos = [];
   final List<LocalLedgerTransactionRecord> _expenses = [];
@@ -19,14 +18,20 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
 
   @override
   Future<LocalCoreHealth> health() async {
-    return const LocalCoreHealth(status: 'ok', mode: 'fake', version: '0.1.0');
+    return LocalCoreHealth(
+      status: 'ok',
+      mode: 'fake',
+      version: '0.2.1',
+      detail: 'in-memory fallback bridge',
+      checkedAt: DateTime.now().toUtc(),
+    );
   }
 
   @override
   Future<LocalMemoRecord> createMemo(Map<String, Object?> input, LocalCoreContext context) async {
     final now = context.effectiveNow;
     final memo = LocalMemoRecord(
-      id: _nextId('memo', ++_memoSeq),
+      id: _nextStableId('memo'),
       type: input['type'] as String? ?? 'memo',
       title: input['title'] as String?,
       contentMarkdown: input['content_markdown'] as String? ?? '',
@@ -55,7 +60,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
   Future<LocalLedgerTransactionRecord> createExpense(Map<String, Object?> input, LocalCoreContext context) async {
     final now = context.effectiveNow;
     final tx = LocalLedgerTransactionRecord(
-      id: _nextId('tx', ++_expenseSeq),
+      id: _nextStableId('tx'),
       direction: input['direction'] as String? ?? 'expense',
       amount: (input['amount'] as num).toDouble(),
       currency: input['currency'] as String? ?? 'CNY',
@@ -97,7 +102,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
   Future<LocalTaskRecord> createTask(Map<String, Object?> input, LocalCoreContext context) async {
     final now = context.effectiveNow;
     final task = LocalTaskRecord(
-      id: _nextId('task', ++_taskSeq),
+      id: _nextStableId('task'),
       title: input['title'] as String? ?? '',
       description: input['description'] as String?,
       dueAt: DateTime.tryParse(input['due_at'] as String? ?? ''),
@@ -155,7 +160,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
   Future<LocalAssetRecord> registerExternalAsset(Map<String, Object?> input, LocalCoreContext context) async {
     final now = context.effectiveNow;
     final asset = LocalAssetRecord(
-      id: _nextId('asset', ++_assetSeq),
+      id: _nextStableId('asset'),
       kind: 'external',
       assetType: input['asset_type'] as String? ?? 'link',
       title: input['title'] as String?,
@@ -172,7 +177,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
   @override
   Future<LocalCaptureSession> captureParse(Map<String, Object?> input, LocalCoreContext context) async {
     final session = LocalCaptureSession(
-      captureId: _nextId('capture', ++_captureSeq),
+      captureId: _nextStableId('capture'),
       actions: [
         LocalCaptureAction(
           type: 'memo_create',
@@ -210,7 +215,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
       }
     }
 
-    final undoToken = _nextId('undo', ++_undoSeq);
+    final undoToken = _nextStableId('undo');
     _undoEntries[undoToken] = created;
     _captures.remove(captureId);
     return LocalCaptureCommitResult(committed: true, createdEntities: created, undoToken: undoToken);
@@ -253,5 +258,5 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
     return LocalCaptureUndoResult(undone: undone, failedEntities: failed);
   }
 
-  String _nextId(String prefix, int seq) => 'local_${prefix}_${seq.toString().padLeft(4, '0')}';
+  String _nextStableId(String prefix) => _idGenerator.nextStable(prefix);
 }

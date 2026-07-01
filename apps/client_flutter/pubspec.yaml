@@ -14,7 +14,9 @@ dependencies:
   provider: ^6.1.2
   intl: ^0.20.1
   powersync: ^1.12.4
+  powersync_flutter_libs: ^0.4.15
   sqlite3_flutter_libs: ^0.5.27
+  path: ^1.9.1
   path_provider: ^2.1.5
 
 dev_dependencies:

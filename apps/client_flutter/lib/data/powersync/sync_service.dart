@@ -1,36 +1,73 @@
+import 'package:client_flutter/data/powersync/powersync_schema.dart';
+import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 import 'package:powersync/powersync.dart';
 
 class SyncService {
-  late final PowerSyncDatabase db;
-  bool _initialized = false;
+  PowerSyncDatabase? _db;
+  String? _dbPath;
 
-  bool get isInitialized => _initialized;
+  PowerSyncDatabase get db {
+    final currentDb = _db;
+    if (currentDb == null) {
+      throw StateError('PowerSync database has not been initialized.');
+    }
+    return currentDb;
+  }
 
-  Future<void> initialize(String dbPath) async {
-    db = PowerSyncDatabase(
-      schema: _liflySchema,
-      path: dbPath,
+  String? get dbPath => _dbPath;
+
+  bool get isInitialized => _db != null;
+
+  Future<void> initialize({String? dbPath}) async {
+    if (isInitialized) return;
+
+    final resolvedPath = dbPath ?? await defaultDatabasePath();
+    final nextDb = PowerSyncDatabase(
+      schema: liflyPowerSyncSchema,
+      path: resolvedPath,
     );
 
-    await db.initialize();
-    _initialized = true;
+    await nextDb.initialize();
+    _db = nextDb;
+    _dbPath = resolvedPath;
+  }
+
+  Future<void> ensureInitialized() => initialize();
+
+  Future<String> defaultDatabasePath() async {
+    if (kIsWeb) {
+      return 'lifly-local-core.db';
+    }
+
+    final directory = await getApplicationSupportDirectory();
+    return path.join(directory.path, 'lifly-local-core.db');
   }
 
   Future<void> connect(String powerSyncEndpoint, String token) async {
-    if (!_initialized) return;
+    if (!isInitialized) return;
     await db.connect(
       connector: _LiflyConnector(powerSyncEndpoint, token),
     );
   }
 
-  Future<void> disconnect() async {
-    if (_initialized) {
+  Future<void> disconnect({bool clearLocal = false}) async {
+    if (!isInitialized) return;
+
+    if (clearLocal) {
       await db.disconnectAndClear();
+      return;
     }
+
+    await db.disconnect();
   }
 
   void dispose() {
-    if (_initialized) db.close();
+    if (!isInitialized) return;
+    db.close();
+    _db = null;
+    _dbPath = null;
   }
 }
 
@@ -52,148 +89,3 @@ class _LiflyConnector extends PowerSyncBackendConnector {
     await batch.complete();
   }
 }
-
-const _liflySchema = Schema([
-  Table('memos', [
-    Column.text('id'),
-    Column.text('user_id'),
-    Column.text('type'),
-    Column.text('title'),
-    Column.text('content_markdown'),
-    Column.text('tags'),
-    Column.text('mood'),
-    Column.text('source_capture_id'),
-    Column.text('source'),
-    Column.text('status'),
-    Column.text('created_at'),
-    Column.text('updated_at'),
-    Column.text('deleted_at'),
-    Column.integer('revision'),
-  ]),
-  Table('tasks', [
-    Column.text('id'),
-    Column.text('user_id'),
-    Column.text('title'),
-    Column.text('description'),
-    Column.text('due_at'),
-    Column.text('remind_at'),
-    Column.text('priority'),
-    Column.text('task_status'),
-    Column.text('source_capture_id'),
-    Column.text('source'),
-    Column.text('status'),
-    Column.text('created_at'),
-    Column.text('updated_at'),
-    Column.text('completed_at'),
-    Column.text('deleted_at'),
-    Column.integer('revision'),
-  ]),
-  Table('ledger_transactions', [
-    Column.text('id'),
-    Column.text('user_id'),
-    Column.text('account_id'),
-    Column.text('category_id'),
-    Column.text('direction'),
-    Column.real('amount'),
-    Column.text('currency'),
-    Column.text('merchant'),
-    Column.text('note'),
-    Column.text('occurred_at'),
-    Column.text('source'),
-    Column.text('source_capture_id'),
-    Column.text('import_batch_id'),
-    Column.real('confidence'),
-    Column.text('status'),
-    Column.text('created_at'),
-    Column.text('updated_at'),
-    Column.text('deleted_at'),
-    Column.integer('revision'),
-  ]),
-  Table('assets', [
-    Column.text('id'),
-    Column.text('user_id'),
-    Column.text('kind'),
-    Column.text('asset_type'),
-    Column.text('filename'),
-    Column.text('mime_type'),
-    Column.integer('size_bytes'),
-    Column.text('sha256'),
-    Column.text('storage_provider'),
-    Column.text('storage_key'),
-    Column.text('external_url'),
-    Column.text('external_provider'),
-    Column.text('visibility'),
-    Column.text('sync_status'),
-    Column.text('status'),
-    Column.text('created_at'),
-    Column.text('updated_at'),
-  ]),
-  Table('memo_asset_refs', [
-    Column.text('id'),
-    Column.text('memo_id'),
-    Column.text('asset_id'),
-    Column.text('ref_type'),
-    Column.text('position_hint'),
-    Column.text('created_at'),
-  ]),
-  Table('audit_logs', [
-    Column.text('id'),
-    Column.text('user_id'),
-    Column.text('actor_type'),
-    Column.text('actor_id'),
-    Column.text('action'),
-    Column.text('entity_type'),
-    Column.text('entity_id'),
-    Column.text('before_snapshot'),
-    Column.text('after_snapshot'),
-    Column.text('source_channel'),
-    Column.text('source_text'),
-    Column.text('tool_name'),
-    Column.text('request_id'),
-    Column.text('created_at'),
-  ]),
-  Table('mcp_undo_actions', [
-    Column.text('id'),
-    Column.text('user_id'),
-    Column.text('undo_token'),
-    Column.text('entity_type'),
-    Column.text('entity_id'),
-    Column.text('action'),
-    Column.text('status'),
-    Column.text('expires_at'),
-    Column.text('used_at'),
-    Column.text('created_at'),
-  ]),
-  Table('tombstones', [
-    Column.text('id'),
-    Column.text('user_id'),
-    Column.text('entity_type'),
-    Column.text('entity_id'),
-    Column.text('purged_at'),
-    Column.integer('last_revision'),
-  ]),
-  Table('ledger_accounts', [
-    Column.text('id'),
-    Column.text('user_id'),
-    Column.text('name'),
-    Column.text('type'),
-    Column.text('currency'),
-    Column.integer('is_default'),
-    Column.text('status'),
-    Column.text('created_at'),
-    Column.text('updated_at'),
-  ]),
-  Table('ledger_categories', [
-    Column.text('id'),
-    Column.text('user_id'),
-    Column.text('name'),
-    Column.text('parent_id'),
-    Column.text('type'),
-    Column.text('icon'),
-    Column.text('color'),
-    Column.integer('sort_order'),
-    Column.text('status'),
-    Column.text('created_at'),
-    Column.text('updated_at'),
-  ]),
-]);

@@ -1,5 +1,7 @@
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/api/api_diagnostics.dart';
+import 'package:client_flutter/data/local_core/local_core_bridge.dart';
+import 'package:client_flutter/data/local_core/local_core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -13,9 +15,12 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   ApiHealthStatus? _health;
   McpSmokeReport? _smokeReport;
+  LocalCoreHealth? _localCoreHealth;
   String? _diagnosticError;
+  String? _localCoreError;
   bool _checkingHealth = false;
   bool _runningSmoke = false;
+  bool _checkingLocalCore = false;
 
   Future<void> _checkHealth() async {
     setState(() {
@@ -59,6 +64,30 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _checkLocalCore() async {
+    setState(() {
+      _checkingLocalCore = true;
+      _localCoreError = null;
+    });
+
+    try {
+      final localCore = context.read<LocalCoreBridge>();
+      final health = await localCore.health();
+      if (!mounted) return;
+      setState(() {
+        _localCoreHealth = health;
+        _localCoreError = health.healthy ? null : health.detail;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _localCoreError = 'Local Core 检查失败：$error');
+    } finally {
+      if (mounted) {
+        setState(() => _checkingLocalCore = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final api = context.watch<ApiClient>();
@@ -79,7 +108,12 @@ class _SettingsPageState extends State<SettingsPage> {
             onRunMcpSmoke: _runMcpSmoke,
           ),
           const SizedBox(height: 12),
-          const _LocalMcpStatusCard(),
+          _LocalMcpStatusCard(
+            health: _localCoreHealth,
+            error: _localCoreError,
+            checking: _checkingLocalCore,
+            onCheck: _checkLocalCore,
+          ),
           const SizedBox(height: 12),
           const ListTile(
             leading: Icon(Icons.cloud_outlined),
@@ -205,11 +239,26 @@ class _ApiDiagnosticsCard extends StatelessWidget {
 }
 
 class _LocalMcpStatusCard extends StatelessWidget {
-  const _LocalMcpStatusCard();
+  final LocalCoreHealth? health;
+  final String? error;
+  final bool checking;
+  final VoidCallback onCheck;
+
+  const _LocalMcpStatusCard({
+    required this.health,
+    required this.error,
+    required this.checking,
+    required this.onCheck,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final localCoreStatus = health == null
+        ? '未检查'
+        : '${health!.status} / ${health!.mode} / v${health!.version}';
+    final checkedAt = health?.checkedAt?.toLocal().toIso8601String();
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -227,15 +276,32 @@ class _LocalMcpStatusCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            const _StatusRow(label: '当前模式', value: 'Cloud API 直连'),
-            const _StatusRow(label: 'Local Core', value: '已规划，未接入 Flutter'),
+            const _StatusRow(label: '当前模式', value: 'Cloud API + Local Core health'),
+            _StatusRow(label: 'Local Core', value: localCoreStatus),
             const _StatusRow(label: 'Local MCP', value: 'stdio skeleton，未由客户端启动'),
-            const _StatusRow(label: 'PowerSync', value: '未启用'),
-            const _StatusRow(label: '离线写入', value: '未启用'),
+            _StatusRow(label: 'PowerSync', value: health?.detail ?? '未初始化'),
+            const _StatusRow(label: '离线写入', value: '0.2.2+ 启用'),
+            if (checkedAt != null) _StatusRow(label: '检查时间', value: checkedAt),
+            if (error != null) ...[
+              const SizedBox(height: 8),
+              Text(error!, style: TextStyle(color: theme.colorScheme.error)),
+            ],
             const SizedBox(height: 8),
             Text(
-              '当前客户端仍通过后端 API 读写数据。本地 MCP / 离线写入会在 Local Core Bridge 与 PowerSync 接入后启用。',
+              '当前版本先接入 PowerSync 本地数据库初始化和 health 诊断；真实 CRUD 将从 0.2.2 起逐步落到 Local Core。',
               style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: checking ? null : onCheck,
+              icon: checking
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.storage_outlined),
+              label: const Text('检查 Local Core'),
             ),
           ],
         ),
