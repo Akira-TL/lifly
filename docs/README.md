@@ -1,8 +1,8 @@
 # Lifly 开发文档总览
 
-> 版本：v0.2.8 release gate
+> 版本：v0.3.0 planning
 > 日期：2026-07-02
-> 状态：Local Data MVP 收口版
+> 状态：Cloud Sync MVP 规划版
 
 Lifly 是一个 AI-first / Chat-first 的个人生活数据系统。它不是传统意义上的日程 App、记账 App 或备忘录 App，而是一个以 **备忘录、记账、任务提醒** 为最小闭环，以 **MCP 服务** 为 AI 接入边界，以 **本地优先 + 云端同步** 为数据策略的个人生活数据基础设施。
 
@@ -39,6 +39,7 @@ docs/
 ├─ 60-major-version-roadmap.md        # 大版本开发路线图
 ├─ 62-local-core-persistence-regression.md # Local Core 持久化回归验证
 ├─ 63-v0.2-release-gate.md            # v0.2 发布门禁结果
+├─ development-plans/v0.3.0-cloud-sync-mvp.md # v0.3 云同步开发计划
 └─ 99-glossary.md                     # 术语表
 ```
 
