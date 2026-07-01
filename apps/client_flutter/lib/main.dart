@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:client_flutter/app/app_config.dart';
+import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/app/shell/app_shell.dart';
 import 'package:client_flutter/app/theme/app_theme.dart';
 import 'package:client_flutter/data/api/api_client.dart';
@@ -12,6 +13,7 @@ void main() {
   runApp(
     MultiProvider(
       providers: [
+        Provider<LiflyDataMode>.value(value: AppConfig.dataMode),
         Provider<ApiClient>(
           create: (_) => ApiClient(baseUrl: AppConfig.apiBaseUrl),
         ),
@@ -20,7 +22,8 @@ void main() {
           dispose: (_, service) => service.dispose(),
         ),
         ProxyProvider<SyncService, LocalCoreBridge>(
-          update: (_, syncService, _) => PowerSyncLocalCoreBridge(syncService: syncService),
+          update: (_, syncService, _) =>
+              PowerSyncLocalCoreBridge(syncService: syncService),
         ),
       ],
       child: const LiflyApp(),
