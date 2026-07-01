@@ -10,7 +10,7 @@ void main() {
     final health = await PowerSyncLocalCoreBridge(syncService: service).health();
 
     expect(health.mode, 'powersync');
-    expect(health.version, '0.2.1');
+    expect(health.version, '0.2.3');
     expect(health.checkedAt, isNotNull);
     expect(health.status, anyOf('ok', 'error'));
 

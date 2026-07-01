@@ -3,6 +3,16 @@ import 'package:sqlite_async/sqlite_async.dart';
 
 abstract class LocalCoreWriteHandle {
   Future<void> execute(String sql, [List<Object?> parameters = const []]);
+
+  Future<Map<String, Object?>?> getOptional(
+    String sql, [
+    List<Object?> parameters = const [],
+  ]);
+
+  Future<List<Map<String, Object?>>> getAll(
+    String sql, [
+    List<Object?> parameters = const [],
+  ]);
 }
 
 class PowerSyncLocalCoreWriteHandle implements LocalCoreWriteHandle {
@@ -16,6 +26,26 @@ class PowerSyncLocalCoreWriteHandle implements LocalCoreWriteHandle {
     List<Object?> parameters = const [],
   ]) async {
     await _transaction.execute(sql, parameters);
+  }
+
+  @override
+  Future<Map<String, Object?>?> getOptional(
+    String sql, [
+    List<Object?> parameters = const [],
+  ]) async {
+    final row = await _transaction.getOptional(sql, parameters);
+    return row == null ? null : Map<String, Object?>.from(row);
+  }
+
+  @override
+  Future<List<Map<String, Object?>>> getAll(
+    String sql, [
+    List<Object?> parameters = const [],
+  ]) async {
+    final rows = await _transaction.getAll(sql, parameters);
+    return rows
+        .map((row) => Map<String, Object?>.from(row))
+        .toList(growable: false);
   }
 }
 

@@ -114,6 +114,22 @@ class _RecordingWriteHandle implements LocalCoreWriteHandle {
   ]) async {
     calls.add(_RecordedSqlCall(sql: sql, parameters: parameters));
   }
+
+  @override
+  Future<List<Map<String, Object?>>> getAll(
+    String sql, [
+    List<Object?> parameters = const [],
+  ]) async {
+    return const [];
+  }
+
+  @override
+  Future<Map<String, Object?>?> getOptional(
+    String sql, [
+    List<Object?> parameters = const [],
+  ]) async {
+    return null;
+  }
 }
 
 class _RecordedSqlCall {
