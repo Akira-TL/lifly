@@ -81,28 +81,47 @@ void main() {
     expect(summary.count, 1);
   });
 
-  test('FakeLocalCoreBridge creates, lists, and completes tasks', () async {
-    final core = FakeLocalCoreBridge();
-    final task = await core.createTask({
-      'title': 'Local task',
-      'description': 'local task description',
-      'priority': 'normal',
-    }, context);
+  test(
+    'FakeLocalCoreBridge creates, updates, completes, and deletes tasks',
+    () async {
+      final core = FakeLocalCoreBridge();
+      final task = await core.createTask({
+        'title': 'Local task',
+        'description': 'local task description',
+        'priority': 'normal',
+      }, context);
 
-    expect(task.id, 'local_task_0001');
-    expect(task.taskStatus, 'todo');
+      expect(task.id, 'local_task_0001');
+      expect(task.taskStatus, 'todo');
 
-    final tasks = await core.listTasks({
-      'task_status': 'todo',
-      'limit': 20,
-    }, context);
-    expect(tasks.map((item) => item.id), contains(task.id));
+      final tasks = await core.listTasks({
+        'task_status': 'todo',
+        'limit': 20,
+      }, context);
+      expect(tasks.map((item) => item.id), contains(task.id));
 
-    final completed = await core.completeTask({'task_id': task.id}, context);
-    expect(completed.taskStatus, 'done');
-    expect(completed.completedAt, fixedNow);
-    expect(completed.revision, 2);
-  });
+      final updated = await core.updateTask({
+        'task_id': task.id,
+        'title': 'Updated local task',
+        'priority': 'high',
+      }, context);
+      expect(updated.title, 'Updated local task');
+      expect(updated.priority, 'high');
+      expect(updated.revision, 2);
+
+      final completed = await core.completeTask({'task_id': task.id}, context);
+      expect(completed.taskStatus, 'done');
+      expect(completed.completedAt, fixedNow);
+      expect(completed.revision, 3);
+
+      final deleted = await core.deleteTask({'task_id': task.id}, context);
+      expect(deleted.status, 'deleted');
+      expect(deleted.revision, 4);
+
+      final afterDelete = await core.listTasks({'limit': 20}, context);
+      expect(afterDelete.map((item) => item.id), isNot(contains(task.id)));
+    },
+  );
 
   test(
     'FakeLocalCoreBridge parses, commits, and undoes capture sessions',
