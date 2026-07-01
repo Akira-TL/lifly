@@ -1,4 +1,7 @@
+import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/local_core/fake_local_core_bridge.dart';
+import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:client_flutter/main.dart';
 import 'package:provider/provider.dart';
@@ -44,7 +47,10 @@ class FakeApiClient extends ApiClient {
   };
 
   @override
-  Future<Map<String, dynamic>> get(String path, {Map<String, dynamic>? params}) async {
+  Future<Map<String, dynamic>> get(
+    String path, {
+    Map<String, dynamic>? params,
+  }) async {
     if (path == '/dashboard') {
       return {
         'success': true,
@@ -62,7 +68,12 @@ class FakeApiClient extends ApiClient {
     if (path == '/memos') {
       return {
         'success': true,
-        'data': {'total': 1, 'limit': 50, 'offset': 0, 'items': [memo]},
+        'data': {
+          'total': 1,
+          'limit': 50,
+          'offset': 0,
+          'items': [memo],
+        },
       };
     }
     if (path == '/memos/memo-test') {
@@ -71,7 +82,12 @@ class FakeApiClient extends ApiClient {
     if (path == '/ledger/transactions') {
       return {
         'success': true,
-        'data': {'total': 1, 'limit': 50, 'offset': 0, 'items': [transaction]},
+        'data': {
+          'total': 1,
+          'limit': 50,
+          'offset': 0,
+          'items': [transaction],
+        },
       };
     }
     if (path == '/ledger/transactions/tx-test') {
@@ -80,13 +96,22 @@ class FakeApiClient extends ApiClient {
     if (path == '/ledger/summary') {
       return {
         'success': true,
-        'data': {'expense_total': 12.3, 'income_total': 0, 'transaction_count': 1},
+        'data': {
+          'expense_total': 12.3,
+          'income_total': 0,
+          'transaction_count': 1,
+        },
       };
     }
     if (path == '/tasks') {
       return {
         'success': true,
-        'data': {'total': 1, 'limit': 50, 'offset': 0, 'items': [task]},
+        'data': {
+          'total': 1,
+          'limit': 50,
+          'offset': 0,
+          'items': [task],
+        },
       };
     }
     if (path == '/tasks/task-test') {
@@ -97,10 +122,16 @@ class FakeApiClient extends ApiClient {
 }
 
 void main() {
-  testWidgets('App displays real API backed shell pages and detail pages', (WidgetTester tester) async {
+  testWidgets('App displays real API backed shell pages and detail pages', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
-      Provider<ApiClient>(
-        create: (_) => FakeApiClient(),
+      MultiProvider(
+        providers: [
+          Provider<LiflyDataMode>.value(value: LiflyDataMode.api),
+          Provider<ApiClient>(create: (_) => FakeApiClient()),
+          Provider<LocalCoreBridge>(create: (_) => FakeLocalCoreBridge()),
+        ],
         child: const LiflyApp(),
       ),
     );
