@@ -19,6 +19,7 @@ from app.modules.assets.router import router as assets_router
 from app.modules.mcp.router import router as mcp_router
 from app.modules.imexport.router import router as imexport_router
 from app.modules.search.router import router as search_router
+from app.modules.sync.router import router as sync_router
 from app.modules.plugins.router import router as plugins_router
 from app.modules.mcp.cloud_server import cloud_mcp
 
@@ -65,6 +66,7 @@ app.include_router(
     imexport_router, prefix="/api/v1/imexport", tags=["import", "export"]
 )
 app.include_router(search_router, prefix="/api/v1", tags=["search", "dashboard"])
+app.include_router(sync_router, prefix="/api/v1/sync", tags=["sync"])
 app.include_router(plugins_router, prefix="/api/v1", tags=["plugins", "robots"])
 
 
