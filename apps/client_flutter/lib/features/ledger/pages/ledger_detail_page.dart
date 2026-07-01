@@ -1,4 +1,6 @@
+import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/repositories/ledger_repository.dart';
 import 'package:client_flutter/domain/entities/ledger_transaction.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
@@ -10,7 +12,11 @@ class LedgerDetailPage extends StatefulWidget {
   final String transactionId;
   final LedgerTransaction? initialTransaction;
 
-  const LedgerDetailPage({super.key, required this.transactionId, this.initialTransaction});
+  const LedgerDetailPage({
+    super.key,
+    required this.transactionId,
+    this.initialTransaction,
+  });
 
   @override
   State<LedgerDetailPage> createState() => _LedgerDetailPageState();
@@ -26,7 +32,11 @@ class _LedgerDetailPageState extends State<LedgerDetailPage> {
   @override
   void initState() {
     super.initState();
-    _repo = LedgerRepository(context.read<ApiClient>());
+    _repo = LedgerRepository(
+      context.read<ApiClient>(),
+      localCore: context.read<LocalCoreBridge>(),
+      dataMode: context.read<LiflyDataMode>(),
+    );
     _transaction = widget.initialTransaction;
     _load();
   }
@@ -51,7 +61,10 @@ class _LedgerDetailPageState extends State<LedgerDetailPage> {
   Future<void> _editTransaction() async {
     final transaction = _transaction;
     if (transaction == null) return;
-    final draft = await showDialog<_LedgerEditDraft>(context: context, builder: (_) => _LedgerEditDialog(transaction: transaction));
+    final draft = await showDialog<_LedgerEditDraft>(
+      context: context,
+      builder: (_) => _LedgerEditDialog(transaction: transaction),
+    );
     if (draft == null) return;
 
     setState(() => _isSaving = true);
@@ -67,10 +80,14 @@ class _LedgerDetailPageState extends State<LedgerDetailPage> {
       });
       if (!mounted) return;
       setState(() => _transaction = updated);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('账单已更新')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('账单已更新')));
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('更新账单失败：$error')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('更新账单失败：$error')));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -85,8 +102,14 @@ class _LedgerDetailPageState extends State<LedgerDetailPage> {
         title: const Text('删除账单？'),
         content: const Text('该账单将不再出现在列表中。'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('删除')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('删除'),
+          ),
         ],
       ),
     );
@@ -99,7 +122,9 @@ class _LedgerDetailPageState extends State<LedgerDetailPage> {
       Navigator.pop(context, true);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('删除账单失败：$error')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('删除账单失败：$error')));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -113,36 +138,68 @@ class _LedgerDetailPageState extends State<LedgerDetailPage> {
       appBar: AppBar(
         title: const Text('账单详情'),
         actions: [
-          IconButton(onPressed: _isSaving ? null : _editTransaction, icon: const Icon(Icons.edit_outlined)),
-          IconButton(onPressed: _isSaving ? null : _removeTransaction, icon: const Icon(Icons.delete_outline)),
+          IconButton(
+            onPressed: _isSaving ? null : _editTransaction,
+            icon: const Icon(Icons.edit_outlined),
+          ),
+          IconButton(
+            onPressed: _isSaving ? null : _removeTransaction,
+            icon: const Icon(Icons.delete_outline),
+          ),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? ErrorState(message: _error!, onRetry: _load)
-              : transaction == null
-                  ? const EmptyState(icon: Icons.account_balance_wallet_outlined, title: '未找到账单', subtitle: '该账单不存在或已被移除。')
-                  : RefreshIndicator(
-                      onRefresh: _load,
-                      child: ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.all(16),
-                        children: [
-                          Text(transaction.amountText, style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: color, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 8),
-                          Text(transaction.merchant ?? transaction.note ?? '未知交易', style: Theme.of(context).textTheme.titleMedium),
-                          const SizedBox(height: 20),
-                          _DetailRow(label: '类型', value: transaction.direction),
-                          _DetailRow(label: '币种', value: transaction.currency),
-                          _DetailRow(label: '分类', value: transaction.categoryId ?? '未分类'),
-                          _DetailRow(label: '来源', value: transaction.source),
-                          _DetailRow(label: '发生时间', value: DateFormat('yyyy-MM-dd HH:mm').format(transaction.occurredAt.toLocal())),
-                          _DetailRow(label: '创建时间', value: DateFormat('yyyy-MM-dd HH:mm').format(transaction.createdAt.toLocal())),
-                          _DetailRow(label: '备注', value: transaction.note ?? '无'),
-                        ],
-                      ),
+          ? ErrorState(message: _error!, onRetry: _load)
+          : transaction == null
+          ? const EmptyState(
+              icon: Icons.account_balance_wallet_outlined,
+              title: '未找到账单',
+              subtitle: '该账单不存在或已被移除。',
+            )
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Text(
+                    transaction.amountText,
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      color: color,
+                      fontWeight: FontWeight.bold,
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    transaction.merchant ?? transaction.note ?? '未知交易',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 20),
+                  _DetailRow(label: '类型', value: transaction.direction),
+                  _DetailRow(label: '币种', value: transaction.currency),
+                  _DetailRow(
+                    label: '分类',
+                    value: transaction.categoryId ?? '未分类',
+                  ),
+                  _DetailRow(label: '来源', value: transaction.source),
+                  _DetailRow(
+                    label: '发生时间',
+                    value: DateFormat(
+                      'yyyy-MM-dd HH:mm',
+                    ).format(transaction.occurredAt.toLocal()),
+                  ),
+                  _DetailRow(
+                    label: '创建时间',
+                    value: DateFormat(
+                      'yyyy-MM-dd HH:mm',
+                    ).format(transaction.createdAt.toLocal()),
+                  ),
+                  _DetailRow(label: '备注', value: transaction.note ?? '无'),
+                ],
+              ),
+            ),
     );
   }
 }
@@ -160,7 +217,10 @@ class _DetailRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 80, child: Text(label, style: Theme.of(context).textTheme.bodySmall)),
+          SizedBox(
+            width: 80,
+            child: Text(label, style: Theme.of(context).textTheme.bodySmall),
+          ),
           Expanded(child: Text(value)),
         ],
       ),
@@ -174,7 +234,12 @@ class _LedgerEditDraft {
   final String merchant;
   final String note;
 
-  const _LedgerEditDraft({required this.direction, required this.amount, required this.merchant, required this.note});
+  const _LedgerEditDraft({
+    required this.direction,
+    required this.amount,
+    required this.merchant,
+    required this.note,
+  });
 }
 
 class _LedgerEditDialog extends StatefulWidget {
@@ -195,9 +260,15 @@ class _LedgerEditDialogState extends State<_LedgerEditDialog> {
   @override
   void initState() {
     super.initState();
-    _amountController = TextEditingController(text: widget.transaction.amount.toStringAsFixed(2));
-    _merchantController = TextEditingController(text: widget.transaction.merchant ?? '');
-    _noteController = TextEditingController(text: widget.transaction.note ?? '');
+    _amountController = TextEditingController(
+      text: widget.transaction.amount.toStringAsFixed(2),
+    );
+    _merchantController = TextEditingController(
+      text: widget.transaction.merchant ?? '',
+    );
+    _noteController = TextEditingController(
+      text: widget.transaction.note ?? '',
+    );
     _direction = widget.transaction.direction;
   }
 
@@ -218,23 +289,50 @@ class _LedgerEditDialogState extends State<_LedgerEditDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             SegmentedButton<String>(
-              segments: const [ButtonSegment(value: 'expense', label: Text('支出')), ButtonSegment(value: 'income', label: Text('收入'))],
+              segments: const [
+                ButtonSegment(value: 'expense', label: Text('支出')),
+                ButtonSegment(value: 'income', label: Text('收入')),
+              ],
               selected: {_direction},
-              onSelectionChanged: (selected) => setState(() => _direction = selected.first),
+              onSelectionChanged: (selected) =>
+                  setState(() => _direction = selected.first),
             ),
-            TextField(controller: _amountController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: '金额')),
-            TextField(controller: _merchantController, decoration: const InputDecoration(labelText: '商户/来源')),
-            TextField(controller: _noteController, decoration: const InputDecoration(labelText: '备注')),
+            TextField(
+              controller: _amountController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(labelText: '金额'),
+            ),
+            TextField(
+              controller: _merchantController,
+              decoration: const InputDecoration(labelText: '商户/来源'),
+            ),
+            TextField(
+              controller: _noteController,
+              decoration: const InputDecoration(labelText: '备注'),
+            ),
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
         FilledButton(
           onPressed: () {
             final amount = double.tryParse(_amountController.text.trim());
             if (amount == null || amount <= 0) return;
-            Navigator.pop(context, _LedgerEditDraft(direction: _direction, amount: amount, merchant: _merchantController.text.trim(), note: _noteController.text.trim()));
+            Navigator.pop(
+              context,
+              _LedgerEditDraft(
+                direction: _direction,
+                amount: amount,
+                merchant: _merchantController.text.trim(),
+                note: _noteController.text.trim(),
+              ),
+            );
           },
           child: const Text('保存'),
         ),

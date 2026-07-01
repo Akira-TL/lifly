@@ -1,4 +1,6 @@
+import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/repositories/ledger_repository.dart';
 import 'package:client_flutter/domain/entities/ledger_transaction.dart';
 import 'package:client_flutter/features/ledger/pages/ledger_detail_page.dart';
@@ -35,7 +37,11 @@ class _LedgerListPageState extends State<LedgerListPage> {
   @override
   void initState() {
     super.initState();
-    _repo = LedgerRepository(context.read<ApiClient>());
+    _repo = LedgerRepository(
+      context.read<ApiClient>(),
+      localCore: context.read<LocalCoreBridge>(),
+      dataMode: context.read<LiflyDataMode>(),
+    );
     _scrollController.addListener(_handleScroll);
     _loadFirstPage();
   }
@@ -49,7 +55,12 @@ class _LedgerListPageState extends State<LedgerListPage> {
   }
 
   void _handleScroll() {
-    if (!_scrollController.hasClients || !_hasMore || _isLoading || _isLoadingMore) return;
+    if (!_scrollController.hasClients ||
+        !_hasMore ||
+        _isLoading ||
+        _isLoadingMore) {
+      return;
+    }
     final threshold = _scrollController.position.maxScrollExtent - 240;
     if (_scrollController.position.pixels >= threshold) {
       _loadMore();
@@ -63,7 +74,11 @@ class _LedgerListPageState extends State<LedgerListPage> {
     });
 
     try {
-      final page = await _repo.listPage(limit: _pageSize, offset: 0, direction: _direction);
+      final page = await _repo.listPage(
+        limit: _pageSize,
+        offset: 0,
+        direction: _direction,
+      );
       final summary = await _repo.summary();
       if (!mounted) return;
       setState(() {
@@ -86,7 +101,11 @@ class _LedgerListPageState extends State<LedgerListPage> {
     setState(() => _isLoadingMore = true);
 
     try {
-      final page = await _repo.listPage(limit: _pageSize, offset: _items.length, direction: _direction);
+      final page = await _repo.listPage(
+        limit: _pageSize,
+        offset: _items.length,
+        direction: _direction,
+      );
       if (!mounted) return;
       setState(() {
         _items.addAll(page.items);
@@ -94,14 +113,19 @@ class _LedgerListPageState extends State<LedgerListPage> {
       });
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载更多账单失败：$error')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('加载更多账单失败：$error')));
     } finally {
       if (mounted) setState(() => _isLoadingMore = false);
     }
   }
 
   Future<void> _createTransaction() async {
-    final draft = await showDialog<_LedgerDraft>(context: context, builder: (_) => const _LedgerEditorDialog());
+    final draft = await showDialog<_LedgerDraft>(
+      context: context,
+      builder: (_) => const _LedgerEditorDialog(),
+    );
     if (draft == null) return;
 
     setState(() => _isCreating = true);
@@ -118,7 +142,9 @@ class _LedgerListPageState extends State<LedgerListPage> {
       await _loadFirstPage();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('创建账单失败：$error')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('创建账单失败：$error')));
     } finally {
       if (mounted) setState(() => _isCreating = false);
     }
@@ -136,7 +162,10 @@ class _LedgerListPageState extends State<LedgerListPage> {
       appBar: AppBar(title: const Text('记账')),
       body: Column(
         children: [
-          _LedgerFilterBar(selectedDirection: _direction, onDirectionChanged: _setDirection),
+          _LedgerFilterBar(
+            selectedDirection: _direction,
+            onDirectionChanged: _setDirection,
+          ),
           Expanded(
             child: AsyncContentScaffold(
               isLoading: _isLoading,
@@ -153,21 +182,26 @@ class _LedgerListPageState extends State<LedgerListPage> {
                 children: [
                   _SummaryCard(summary: _summary),
                   const SizedBox(height: 12),
-                  ..._items.map((tx) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: _LedgerTile(
-                          transaction: tx,
-                          onTap: () async {
-                            await Navigator.push<bool>(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => LedgerDetailPage(transactionId: tx.id, initialTransaction: tx),
+                  ..._items.map(
+                    (tx) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _LedgerTile(
+                        transaction: tx,
+                        onTap: () async {
+                          await Navigator.push<bool>(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => LedgerDetailPage(
+                                transactionId: tx.id,
+                                initialTransaction: tx,
                               ),
-                            );
-                            if (context.mounted) await _loadFirstPage();
-                          },
-                        ),
-                      )),
+                            ),
+                          );
+                          if (context.mounted) await _loadFirstPage();
+                        },
+                      ),
+                    ),
+                  ),
                   PaginationFooter(
                     total: _total,
                     current: _items.length,
@@ -185,7 +219,11 @@ class _LedgerListPageState extends State<LedgerListPage> {
         heroTag: 'ledger-create-fab',
         onPressed: _isCreating ? null : _createTransaction,
         icon: _isCreating
-            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
             : const Icon(Icons.add),
         label: const Text('记一笔'),
       ),
@@ -197,7 +235,10 @@ class _LedgerFilterBar extends StatelessWidget {
   final String? selectedDirection;
   final ValueChanged<String?> onDirectionChanged;
 
-  const _LedgerFilterBar({required this.selectedDirection, required this.onDirectionChanged});
+  const _LedgerFilterBar({
+    required this.selectedDirection,
+    required this.onDirectionChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -222,16 +263,36 @@ class _SummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final income = _num(summary['income_total']);
     final expense = _num(summary['expense_total']);
-    final count = summary['transaction_count'] is num ? (summary['transaction_count'] as num).toInt() : 0;
+    final count = summary['transaction_count'] is num
+        ? (summary['transaction_count'] as num).toInt()
+        : 0;
 
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            Expanded(child: _SummaryMetric(label: '收入', value: '¥${income.toStringAsFixed(2)}', color: Colors.green)),
-            Expanded(child: _SummaryMetric(label: '支出', value: '¥${expense.toStringAsFixed(2)}', color: Colors.red)),
-            Expanded(child: _SummaryMetric(label: '笔数', value: count.toString(), color: Theme.of(context).colorScheme.primary)),
+            Expanded(
+              child: _SummaryMetric(
+                label: '收入',
+                value: '¥${income.toStringAsFixed(2)}',
+                color: Colors.green,
+              ),
+            ),
+            Expanded(
+              child: _SummaryMetric(
+                label: '支出',
+                value: '¥${expense.toStringAsFixed(2)}',
+                color: Colors.red,
+              ),
+            ),
+            Expanded(
+              child: _SummaryMetric(
+                label: '笔数',
+                value: count.toString(),
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
           ],
         ),
       ),
@@ -246,7 +307,11 @@ class _SummaryMetric extends StatelessWidget {
   final String value;
   final Color color;
 
-  const _SummaryMetric({required this.label, required this.value, required this.color});
+  const _SummaryMetric({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -255,7 +320,13 @@ class _SummaryMetric extends StatelessWidget {
       children: [
         Text(label, style: Theme.of(context).textTheme.bodySmall),
         const SizedBox(height: 4),
-        Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(color: color, fontWeight: FontWeight.bold)),
+        Text(
+          value,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: color,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ],
     );
   }
@@ -271,18 +342,31 @@ class _LedgerTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final isExpense = transaction.isExpense;
     final color = isExpense ? Colors.red : Colors.green;
-    final dateLabel = DateFormat('MM/dd HH:mm').format(transaction.occurredAt.toLocal());
+    final dateLabel = DateFormat(
+      'MM/dd HH:mm',
+    ).format(transaction.occurredAt.toLocal());
 
     return Card(
       child: ListTile(
         onTap: onTap,
         leading: CircleAvatar(
           backgroundColor: color.withAlpha(30),
-          child: Icon(isExpense ? Icons.shopping_bag_outlined : Icons.attach_money, color: color),
+          child: Icon(
+            isExpense ? Icons.shopping_bag_outlined : Icons.attach_money,
+            color: color,
+          ),
         ),
-        title: Text(transaction.merchant ?? transaction.note ?? '未知交易', maxLines: 1, overflow: TextOverflow.ellipsis),
+        title: Text(
+          transaction.merchant ?? transaction.note ?? '未知交易',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         subtitle: Text(
-          [if (transaction.note != null) transaction.note!, dateLabel, transaction.source].join(' · '),
+          [
+            if (transaction.note != null) transaction.note!,
+            dateLabel,
+            transaction.source,
+          ].join(' · '),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -301,7 +385,12 @@ class _LedgerDraft {
   final String merchant;
   final String note;
 
-  const _LedgerDraft({required this.direction, required this.amount, required this.merchant, required this.note});
+  const _LedgerDraft({
+    required this.direction,
+    required this.amount,
+    required this.merchant,
+    required this.note,
+  });
 }
 
 class _LedgerEditorDialog extends StatefulWidget {
@@ -339,20 +428,32 @@ class _LedgerEditorDialogState extends State<_LedgerEditorDialog> {
                 ButtonSegment(value: 'income', label: Text('收入')),
               ],
               selected: {_direction},
-              onSelectionChanged: (selected) => setState(() => _direction = selected.first),
+              onSelectionChanged: (selected) =>
+                  setState(() => _direction = selected.first),
             ),
             TextField(
               controller: _amountController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: const InputDecoration(labelText: '金额'),
             ),
-            TextField(controller: _merchantController, decoration: const InputDecoration(labelText: '商户/来源')),
-            TextField(controller: _noteController, decoration: const InputDecoration(labelText: '备注')),
+            TextField(
+              controller: _merchantController,
+              decoration: const InputDecoration(labelText: '商户/来源'),
+            ),
+            TextField(
+              controller: _noteController,
+              decoration: const InputDecoration(labelText: '备注'),
+            ),
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
         FilledButton(
           onPressed: () {
             final amount = double.tryParse(_amountController.text.trim());
