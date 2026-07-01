@@ -4,6 +4,8 @@ import 'package:client_flutter/data/api/api_diagnostics.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_models.dart';
 import 'package:client_flutter/data/powersync/powersync_credentials_service.dart';
+import 'package:client_flutter/data/powersync/sync_push_service.dart';
+import 'package:client_flutter/data/powersync/sync_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -19,6 +21,8 @@ class _SettingsPageState extends State<SettingsPage> {
   McpSmokeReport? _smokeReport;
   LocalCoreHealth? _localCoreHealth;
   LiflyPowerSyncCredentials? _powerSyncCredentials;
+  SyncPushUploadDiagnostics _uploadDiagnostics =
+      const SyncPushUploadDiagnostics.idle();
   String? _diagnosticError;
   String? _localCoreError;
   String? _powerSyncCredentialsError;
@@ -101,9 +105,14 @@ class _SettingsPageState extends State<SettingsPage> {
 
     try {
       final service = PowerSyncCredentialsService(context.read<ApiClient>());
+      final syncService = context.read<SyncService>();
       final credentials = await service.fetchCredentials();
+      final uploadDiagnostics = syncService.uploadDiagnostics;
       if (!mounted) return;
-      setState(() => _powerSyncCredentials = credentials);
+      setState(() {
+        _powerSyncCredentials = credentials;
+        _uploadDiagnostics = uploadDiagnostics;
+      });
     } catch (error) {
       if (!mounted) return;
       setState(() => _powerSyncCredentialsError = '同步凭据检查失败：$error');
@@ -146,6 +155,7 @@ class _SettingsPageState extends State<SettingsPage> {
           const SizedBox(height: 12),
           _PowerSyncCredentialsCard(
             credentials: _powerSyncCredentials,
+            uploadDiagnostics: _uploadDiagnostics,
             error: _powerSyncCredentialsError,
             checking: _checkingPowerSyncCredentials,
             onCheck: _checkPowerSyncCredentials,
@@ -303,12 +313,14 @@ class _DataModeCard extends StatelessWidget {
 
 class _PowerSyncCredentialsCard extends StatelessWidget {
   final LiflyPowerSyncCredentials? credentials;
+  final SyncPushUploadDiagnostics uploadDiagnostics;
   final String? error;
   final bool checking;
   final VoidCallback onCheck;
 
   const _PowerSyncCredentialsCard({
     required this.credentials,
+    required this.uploadDiagnostics,
     required this.error,
     required this.checking,
     required this.onCheck,
@@ -352,13 +364,26 @@ class _PowerSyncCredentialsCard extends StatelessWidget {
             ),
             _StatusRow(label: 'Mode', value: credentials?.mode ?? '未检查'),
             if (expiresAt != null) _StatusRow(label: '过期时间', value: expiresAt),
+            _StatusRow(label: '上传状态', value: uploadDiagnostics.statusLabel),
+            _StatusRow(
+              label: '上传变更',
+              value:
+                  '${uploadDiagnostics.uploadedChanges} 条业务 / ${uploadDiagnostics.ignoredChanges} 条忽略',
+            ),
+            _StatusRow(
+              label: '云端应用',
+              value:
+                  '${uploadDiagnostics.applied} applied / ${uploadDiagnostics.skipped} skipped',
+            ),
+            if (uploadDiagnostics.lastError != null)
+              _StatusRow(label: '上传错误', value: uploadDiagnostics.lastError!),
             if (error != null) ...[
               const SizedBox(height: 8),
               Text(error!, style: TextStyle(color: theme.colorScheme.error)),
             ],
             const SizedBox(height: 8),
             Text(
-              '0.3.2 使用开发期最小身份凭据；token 明文不会在页面展示。',
+              '0.3.3 已接入 uploadData 到 /sync/push；token 明文不会在页面展示。',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
