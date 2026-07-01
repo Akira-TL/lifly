@@ -80,6 +80,55 @@ class PowerSyncExpenseStore {
     return rows.map(LocalExpenseMapper.fromRow).toList(growable: false);
   }
 
+  Future<LocalLedgerTransactionRecord> deleteExpense(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final deleteInput = LocalExpenseDeleteInput.fromMap(input);
+    late final LocalLedgerTransactionRecord deletedTx;
+
+    await LocalCoreWriteExecutor(syncService: syncService).run((handle) async {
+      final oldTx = await _findActiveExpense(handle, deleteInput.transactionId);
+      if (oldTx == null) {
+        throw StateError('Expense not found: ${deleteInput.transactionId}');
+      }
+
+      final metadata = policy.metadataForUpdate(
+        context,
+        currentRevision: oldTx.revision,
+        createdAt: oldTx.createdAt,
+      );
+      deletedTx = LocalLedgerTransactionRecord(
+        id: oldTx.id,
+        direction: oldTx.direction,
+        amount: oldTx.amount,
+        currency: oldTx.currency,
+        merchant: oldTx.merchant,
+        note: oldTx.note,
+        occurredAt: oldTx.occurredAt,
+        status: deleteInput.status,
+        revision: metadata.revision,
+        createdAt: oldTx.createdAt,
+        updatedAt: metadata.timestamps.updatedAt,
+      );
+
+      await _softDeleteExpense(handle, deletedTx, metadata);
+      await auditLogWriter.write(
+        handle,
+        LocalCoreAuditLogInput(
+          context: context,
+          action: 'expense.delete',
+          entityType: 'expense',
+          entityId: deletedTx.id,
+          beforeSnapshot: LocalExpenseMapper.snapshot(oldTx),
+          afterSnapshot: LocalExpenseMapper.snapshot(deletedTx),
+        ),
+      );
+    });
+
+    return deletedTx;
+  }
+
   Future<LocalExpenseSummary> summarizeExpenses(
     Map<String, Object?> input,
     LocalCoreContext context,
@@ -122,6 +171,18 @@ class PowerSyncExpenseStore {
         .toList(growable: false);
   }
 
+  Future<LocalLedgerTransactionRecord?> _findActiveExpense(
+    LocalCoreWriteHandle handle,
+    String transactionId,
+  ) async {
+    final row = await handle.getOptional(
+      'SELECT id, direction, amount, currency, merchant, note, occurred_at, status, revision, created_at, updated_at '
+      'FROM ledger_transactions WHERE id = ? AND status = ?',
+      [transactionId, 'active'],
+    );
+    return row == null ? null : LocalExpenseMapper.fromRow(row);
+  }
+
   Future<void> _insertExpense(
     LocalCoreWriteHandle handle,
     LocalLedgerTransactionRecord tx,
@@ -146,6 +207,25 @@ class PowerSyncExpenseStore {
         metadata.timestamps.createdAtIso,
         metadata.timestamps.updatedAtIso,
         metadata.revision,
+      ],
+    );
+  }
+
+  Future<void> _softDeleteExpense(
+    LocalCoreWriteHandle handle,
+    LocalLedgerTransactionRecord tx,
+    LocalCoreWriteMetadata metadata,
+  ) async {
+    await handle.execute(
+      'UPDATE ledger_transactions SET status = ?, deleted_at = ?, updated_at = ?, revision = ? '
+      'WHERE id = ? AND status = ?',
+      [
+        tx.status,
+        metadata.timestamps.updatedAtIso,
+        metadata.timestamps.updatedAtIso,
+        metadata.revision,
+        tx.id,
+        'active',
       ],
     );
   }

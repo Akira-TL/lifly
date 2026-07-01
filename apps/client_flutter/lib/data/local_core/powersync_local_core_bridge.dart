@@ -111,7 +111,7 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   ) {
-    return _unsupported('expense delete');
+    return _expenseStore.deleteExpense(input, context);
   }
 
   @override
