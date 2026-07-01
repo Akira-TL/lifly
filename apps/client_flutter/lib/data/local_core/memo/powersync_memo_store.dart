@@ -76,6 +76,53 @@ class PowerSyncMemoStore {
     return rows.map(LocalMemoMapper.fromRow).toList(growable: false);
   }
 
+  Future<LocalMemoRecord> updateMemo(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final updateInput = LocalMemoUpdateInput.fromMap(input);
+    late final LocalMemoRecord updatedMemo;
+
+    await LocalCoreWriteExecutor(syncService: syncService).run((handle) async {
+      final oldMemo = await _findActiveMemo(handle, updateInput.memoId);
+      if (oldMemo == null) {
+        throw StateError('Memo not found: ${updateInput.memoId}');
+      }
+
+      final metadata = policy.metadataForUpdate(
+        context,
+        currentRevision: oldMemo.revision,
+        createdAt: oldMemo.createdAt,
+      );
+      updatedMemo = LocalMemoRecord(
+        id: oldMemo.id,
+        type: updateInput.type ?? oldMemo.type,
+        title: updateInput.title ?? oldMemo.title,
+        contentMarkdown: updateInput.contentMarkdown ?? oldMemo.contentMarkdown,
+        tags: updateInput.tags ?? oldMemo.tags,
+        status: oldMemo.status,
+        revision: metadata.revision,
+        createdAt: oldMemo.createdAt,
+        updatedAt: metadata.timestamps.updatedAt,
+      );
+
+      await _updateMemo(handle, updatedMemo, metadata);
+      await auditLogWriter.write(
+        handle,
+        LocalCoreAuditLogInput(
+          context: context,
+          action: 'memo.update',
+          entityType: 'memo',
+          entityId: updatedMemo.id,
+          beforeSnapshot: LocalMemoMapper.snapshot(oldMemo),
+          afterSnapshot: LocalMemoMapper.snapshot(updatedMemo),
+        ),
+      );
+    });
+
+    return updatedMemo;
+  }
+
   Future<List<Map<String, Object?>>> _searchRows({
     required String query,
     required int limit,
@@ -93,6 +140,18 @@ class PowerSyncMemoStore {
     return rows
         .map((row) => Map<String, Object?>.from(row))
         .toList(growable: false);
+  }
+
+  Future<LocalMemoRecord?> _findActiveMemo(
+    LocalCoreWriteHandle handle,
+    String memoId,
+  ) async {
+    final row = await handle.getOptional(
+      'SELECT id, type, title, content_markdown, tags, status, revision, created_at, updated_at '
+      'FROM memos WHERE id = ? AND status = ?',
+      [memoId, 'active'],
+    );
+    return row == null ? null : LocalMemoMapper.fromRow(row);
   }
 
   Future<void> _insertMemo(
@@ -116,6 +175,27 @@ class PowerSyncMemoStore {
         metadata.timestamps.createdAtIso,
         metadata.timestamps.updatedAtIso,
         metadata.revision,
+      ],
+    );
+  }
+
+  Future<void> _updateMemo(
+    LocalCoreWriteHandle handle,
+    LocalMemoRecord memo,
+    LocalCoreWriteMetadata metadata,
+  ) async {
+    await handle.execute(
+      'UPDATE memos SET type = ?, title = ?, content_markdown = ?, tags = ?, updated_at = ?, revision = ? '
+      'WHERE id = ? AND status = ?',
+      [
+        memo.type,
+        memo.title,
+        memo.contentMarkdown,
+        LocalMemoMapper.encodeTags(memo.tags),
+        metadata.timestamps.updatedAtIso,
+        metadata.revision,
+        memo.id,
+        'active',
       ],
     );
   }

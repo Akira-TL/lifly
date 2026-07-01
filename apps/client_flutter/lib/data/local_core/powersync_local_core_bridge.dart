@@ -63,7 +63,7 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   ) {
-    return _unsupported('memo update');
+    return _memoStore.updateMemo(input, context);
   }
 
   @override
