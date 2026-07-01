@@ -2,6 +2,7 @@ import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_context.dart';
 import 'package:client_flutter/data/local_core/local_core_models.dart';
 import 'package:client_flutter/data/local_core/memo/powersync_memo_store.dart';
+import 'package:client_flutter/data/local_core/task/powersync_task_store.dart';
 import 'package:client_flutter/data/powersync/sync_service.dart';
 
 class PowerSyncLocalCoreBridge implements LocalCoreBridge {
@@ -10,8 +11,11 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
   late final PowerSyncMemoStore _memoStore = PowerSyncMemoStore(
     syncService: syncService,
   );
+  late final PowerSyncTaskStore _taskStore = PowerSyncTaskStore(
+    syncService: syncService,
+  );
 
-  PowerSyncLocalCoreBridge({required this.syncService, this.version = '0.2.3'});
+  PowerSyncLocalCoreBridge({required this.syncService, this.version = '0.2.4'});
 
   @override
   Future<LocalCoreHealth> health() async {
@@ -103,7 +107,7 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   ) {
-    return _unsupported('task create');
+    return _taskStore.createTask(input, context);
   }
 
   @override

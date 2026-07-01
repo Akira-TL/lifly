@@ -7,10 +7,12 @@ void main() {
     final service = SyncService();
     addTearDown(service.dispose);
 
-    final health = await PowerSyncLocalCoreBridge(syncService: service).health();
+    final health = await PowerSyncLocalCoreBridge(
+      syncService: service,
+    ).health();
 
     expect(health.mode, 'powersync');
-    expect(health.version, '0.2.3');
+    expect(health.version, '0.2.4');
     expect(health.checkedAt, isNotNull);
     expect(health.status, anyOf('ok', 'error'));
 
