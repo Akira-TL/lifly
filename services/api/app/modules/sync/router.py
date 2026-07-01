@@ -4,11 +4,17 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.modules.sync.schemas import SyncPushRequest, SyncPushResponse
-from app.modules.sync.service import apply_sync_push
+from app.modules.sync.schemas import PowerSyncCredentialsResponse, SyncPushRequest, SyncPushResponse
+from app.modules.sync.service import apply_sync_push, issue_powersync_credentials
 from app.schemas.common import ApiResponse
 
 router = APIRouter()
+
+
+@router.get("/credentials", response_model=ApiResponse)
+async def get_credentials() -> ApiResponse:
+    credentials: PowerSyncCredentialsResponse = issue_powersync_credentials()
+    return ApiResponse(data=credentials.model_dump())
 
 
 @router.post("/push", response_model=ApiResponse)

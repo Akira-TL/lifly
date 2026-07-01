@@ -1,17 +1,41 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
+from app.core.security import create_access_token
 from app.db.models import AuditLog, LedgerTransaction, Memo, Task
 from app.modules.ledger.service import ledger_transaction_to_dict
 from app.modules.memos.service import memo_to_response
-from app.modules.sync.schemas import SyncApplyResult, SyncChange, SyncPushRequest, SyncPushResponse
+from app.modules.sync.schemas import (
+    PowerSyncCredentialsResponse,
+    SyncApplyResult,
+    SyncChange,
+    SyncPushRequest,
+    SyncPushResponse,
+)
 from app.modules.tasks.service import task_to_dict
 from app.schemas.common import json_serialize
+
+
+def issue_powersync_credentials() -> PowerSyncCredentialsResponse:
+    expires_at = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.powersync_token_expire_minutes
+    )
+    token = create_access_token(
+        settings.powersync_dev_user_id,
+        expires_delta=timedelta(minutes=settings.powersync_token_expire_minutes),
+    )
+    return PowerSyncCredentialsResponse(
+        endpoint=settings.powersync_url,
+        token=token,
+        user_id=settings.powersync_dev_user_id,
+        expires_at=expires_at,
+    )
 
 
 async def apply_sync_push(db: AsyncSession, request: SyncPushRequest) -> SyncPushResponse:
