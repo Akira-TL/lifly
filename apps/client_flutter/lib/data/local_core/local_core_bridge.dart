@@ -46,6 +46,14 @@ abstract class LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   );
+  Future<LocalTaskRecord> updateTask(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
+  Future<LocalTaskRecord> deleteTask(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
 
   Future<LocalAssetRecord> registerExternalAsset(
     Map<String, Object?> input,

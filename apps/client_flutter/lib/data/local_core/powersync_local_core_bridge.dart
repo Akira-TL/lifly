@@ -123,6 +123,22 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
+  Future<LocalTaskRecord> updateTask(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _unsupported('task update');
+  }
+
+  @override
+  Future<LocalTaskRecord> deleteTask(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _unsupported('task delete');
+  }
+
+  @override
   Future<LocalAssetRecord> registerExternalAsset(
     Map<String, Object?> input,
     LocalCoreContext context,

@@ -255,6 +255,72 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
+  Future<LocalTaskRecord> updateTask(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final taskId = input['task_id'] as String? ?? input['id'] as String?;
+    final index = _tasks.indexWhere(
+      (task) => task.id == taskId && task.status == 'active',
+    );
+    if (index < 0) throw StateError('Task not found: $taskId');
+
+    final old = _tasks[index];
+    final updated = LocalTaskRecord(
+      id: old.id,
+      title: input['title'] as String? ?? old.title,
+      description: input.containsKey('description')
+          ? input['description'] as String?
+          : old.description,
+      dueAt: input.containsKey('due_at')
+          ? DateTime.tryParse(input['due_at'] as String? ?? '')
+          : old.dueAt,
+      remindAt: input.containsKey('remind_at')
+          ? DateTime.tryParse(input['remind_at'] as String? ?? '')
+          : old.remindAt,
+      priority: input['priority'] as String? ?? old.priority,
+      taskStatus: input['task_status'] as String? ?? old.taskStatus,
+      completedAt: old.completedAt,
+      status: old.status,
+      revision: old.revision + 1,
+      createdAt: old.createdAt,
+      updatedAt: context.effectiveNow,
+    );
+    _tasks[index] = updated;
+    return updated;
+  }
+
+  @override
+  Future<LocalTaskRecord> deleteTask(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final taskId = input['task_id'] as String? ?? input['id'] as String?;
+    final index = _tasks.indexWhere(
+      (task) => task.id == taskId && task.status == 'active',
+    );
+    if (index < 0) throw StateError('Task not found: $taskId');
+
+    final old = _tasks[index];
+    final updated = LocalTaskRecord(
+      id: old.id,
+      title: old.title,
+      description: old.description,
+      dueAt: old.dueAt,
+      remindAt: old.remindAt,
+      priority: old.priority,
+      taskStatus: old.taskStatus,
+      completedAt: old.completedAt,
+      status: input['status'] as String? ?? 'deleted',
+      revision: old.revision + 1,
+      createdAt: old.createdAt,
+      updatedAt: context.effectiveNow,
+    );
+    _tasks[index] = updated;
+    return updated;
+  }
+
+  @override
   Future<LocalAssetRecord> registerExternalAsset(
     Map<String, Object?> input,
     LocalCoreContext context,
