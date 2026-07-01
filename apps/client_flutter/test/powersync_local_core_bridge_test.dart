@@ -12,7 +12,7 @@ void main() {
     ).health();
 
     expect(health.mode, 'powersync');
-    expect(health.version, '0.2.4');
+    expect(health.version, '0.2.5');
     expect(health.checkedAt, isNotNull);
     expect(health.status, anyOf('ok', 'error'));
 

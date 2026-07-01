@@ -1,3 +1,4 @@
+import 'package:client_flutter/data/local_core/ledger/powersync_expense_store.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_context.dart';
 import 'package:client_flutter/data/local_core/local_core_models.dart';
@@ -8,6 +9,9 @@ import 'package:client_flutter/data/powersync/sync_service.dart';
 class PowerSyncLocalCoreBridge implements LocalCoreBridge {
   final SyncService syncService;
   final String version;
+  late final PowerSyncExpenseStore _expenseStore = PowerSyncExpenseStore(
+    syncService: syncService,
+  );
   late final PowerSyncMemoStore _memoStore = PowerSyncMemoStore(
     syncService: syncService,
   );
@@ -15,7 +19,7 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
     syncService: syncService,
   );
 
-  PowerSyncLocalCoreBridge({required this.syncService, this.version = '0.2.4'});
+  PowerSyncLocalCoreBridge({required this.syncService, this.version = '0.2.5'});
 
   @override
   Future<LocalCoreHealth> health() async {
@@ -83,7 +87,7 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   ) {
-    return _unsupported('expense create');
+    return _expenseStore.createExpense(input, context);
   }
 
   @override
