@@ -101,7 +101,7 @@ void main() {
     await tester.pumpWidget(
       Provider<ApiClient>(
         create: (_) => FakeApiClient(),
-        child: const LifilyApp(),
+        child: const LiflyApp(),
       ),
     );
 

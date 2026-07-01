@@ -48,7 +48,7 @@ def decode_token(token: str) -> dict | None:
 
 def create_api_token(user_id: str, name: str = "default") -> tuple[str, str]:
     token_id = str(uuid.uuid4())
-    prefix = "lifily_mcp_"
+    prefix = "lifly_mcp_"
     token = prefix + jwt.encode(
         {"sub": user_id, "token_id": token_id, "name": name, "type": "api"},
         settings.jwt_secret,

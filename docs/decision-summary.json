@@ -1,7 +1,7 @@
 {
-  "project": "Lifily",
-  "version": "v0.1-draft",
-  "date": "2026-06-21",
+  "project": "Lifly",
+  "version": "v0.1.0-dev",
+  "date": "2026-07-01",
   "decisions": {
     "positioning": "personal-first, commercial-later",
     "client": "Flutter",

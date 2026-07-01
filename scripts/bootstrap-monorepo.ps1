@@ -1,4 +1,4 @@
-param([string]$Root = "lifecore")
+param([string]$Root = "lifly")
 $ErrorActionPreference = "Stop"
 
 New-Item -ItemType Directory -Force -Path $Root | Out-Null
@@ -15,7 +15,7 @@ foreach ($dir in $dirs) { New-Item -ItemType Directory -Force -Path $dir | Out-N
 
 @'
 {
-  "name": "lifecore",
+  "name": "lifly",
   "private": true,
   "packageManager": "pnpm@latest",
   "scripts": {

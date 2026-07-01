@@ -2,7 +2,7 @@
 
 ## 1. 核心领域对象
 
-Lifily 的核心对象包括：
+Lifly 的核心对象包括：
 
 ```text
 Capture       原始输入

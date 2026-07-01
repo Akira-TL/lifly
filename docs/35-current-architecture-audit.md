@@ -16,7 +16,7 @@
 
 已基本对齐 v0.1 架构冻结的部分：
 
-- 项目命名已从 LifeCore / lifecore / Lifily 大部分统一为 Lifly / lifly。
+- 项目命名已统一为 Lifly / lifly，历史命名残留已完成清理。
 - FastAPI 主应用已存在，并提供 `/api/v1/health`。
 - 后端已经挂载 memo、ledger、task、asset、mcp、trash、import/export、search、plugin 等 router。
 - Cloud MCP 已挂载，并且第一版工具清单基本已经在 Python FastMCP 层实现。
@@ -28,8 +28,8 @@
 
 主要差异和风险：
 
-- Cloud MCP 服务名仍有 `lifily-cloud` / `Lifily Cloud MCP` 拼写残留，应改成 `lifly-cloud` / `Lifly Cloud MCP`。
-- 第一版 MCP tool schema 已在 Python `services/api/app/modules/mcp/cloud_server.py` 中隐式存在，但尚未抽象到冻结文档要求的 `packages/protocol`。
+- Cloud MCP 服务名已统一为 `lifly-cloud` / `Lifly Cloud MCP`。
+- 第一版 MCP tool schema 已抽象到 `packages/protocol`，Python FastMCP runtime 仍需继续与该 schema 保持一致。
 - 当前 Cloud MCP 和 internal API 都在 Python 后端内，尚未形成冻结文档中的 TypeScript Cloud MCP 服务边界。
 - MCP 内部写入仍使用固定 `user_id="local-dev"`，后续必须接入真实 auth/token user context。
 - Asset 创建、更新、删除路径目前没有统一写 audit log，和“所有创建、修改、删除、导入、导出、MCP 写操作必须写 audit_logs”的冻结要求不完全一致。
@@ -218,13 +218,13 @@ asset_register_external_url
 
 1. 工具 schema 目前隐式分散在 Python 函数签名中，未进入 `packages/protocol`。
 2. Cloud MCP 当前不是独立 TypeScript 服务，而是 Python FastMCP 内嵌到 API。
-3. 服务名仍有 `lifily-cloud` / `Lifily Cloud MCP` 拼写残留。
+3. 服务名已统一为 `lifly-cloud` / `Lifly Cloud MCP`。
 
 建议：
 
 - #4 不应从零发明 tool schema，而应以当前 Python FastMCP 实现为输入，反向抽象出 `packages/protocol`。
 - 短期可以保留 Python FastMCP 作为 M0/M1/M3 验证实现，但必须创建 ADR 说明“Python 内嵌 MCP 是过渡实现还是正式实现”。
-- 立即创建一个小修复 Issue，统一 `lifily-cloud` 拼写。
+- 命名清理已完成；后续仅需避免再次引入历史命名。
 
 ---
 
@@ -270,7 +270,7 @@ Asset 删除当前将 `status` 设为 `deleted`，而不是 `user_trashed` / `ai
 当前本地验证已通过：
 
 ```json
-{"status":"ok","version":"0.7.0","port":8310}
+{"status":"ok","version":"0.1.0","port":8310}
 ```
 
 当前 `docker-compose.yml` 已统一 lifly 命名，并提供：
@@ -312,18 +312,19 @@ Asset 删除当前将 `status` 设为 `deleted`，而不是 `user_trashed` / `ai
 
 ## 8. 建议后续 Issue
 
-### LC-0004 Fix Lifly Cloud MCP naming leftovers
+### LC-0004 Verify Lifly naming consistency
 
-目标：修复 `services/api/app/modules/mcp/cloud_server.py` 中的 `lifily-cloud` 和 `Lifily Cloud MCP` 拼写。
+目标：持续验证代码、文档、脚本中不再出现历史命名残留。
 
 范围：
 
-- `services/api/app/modules/mcp/cloud_server.py`
+- 代码、文档、脚本、Flutter native package 标识
 
 验收：
 
 - 服务名为 `lifly-cloud`
 - instructions 中显示 `Lifly Cloud MCP`
+- 搜索不到历史命名残留
 - 不修改 tool schema
 - 不修改业务逻辑
 
@@ -405,8 +406,8 @@ Asset 删除当前将 `status` 设为 `deleted`，而不是 `user_trashed` / `ai
 ```text
 1. 合并本审计报告 PR
 2. 关闭 #3
-3. 创建并执行 LC-0004：修复 Lifly Cloud MCP 拼写残留
-4. 执行 #4：定义 packages/protocol MCP schema v0.1
+3. 持续验证 Lifly 命名一致性
+4. 维护 packages/protocol MCP schema v0.1
 5. 创建 ADR：确认 Cloud MCP 技术边界
 6. 做 memo_create 最小闭环 contract test
 7. 做 asset audit log 补齐

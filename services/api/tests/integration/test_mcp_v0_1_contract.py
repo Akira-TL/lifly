@@ -58,7 +58,7 @@ def test_health_reports_patch_version(api: LiflyApiClient) -> None:
     body = api.request_json("GET", "/api/v1/health")
 
     assert body["status"] == "ok"
-    assert body["version"] == "0.7.1"
+    assert body["version"] == "0.1.0"
     assert body["port"] == 8310
 
 

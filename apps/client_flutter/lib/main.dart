@@ -13,18 +13,18 @@ void main() {
           create: (_) => ApiClient(baseUrl: AppConfig.apiBaseUrl),
         ),
       ],
-      child: const LifilyApp(),
+      child: const LiflyApp(),
     ),
   );
 }
 
-class LifilyApp extends StatelessWidget {
-  const LifilyApp({super.key});
+class LiflyApp extends StatelessWidget {
+  const LiflyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Lifily',
+      title: 'Lifly',
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,

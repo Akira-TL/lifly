@@ -1,4 +1,4 @@
-# Lifily Flutter Client
+# Lifly Flutter Client
 
 Flutter 客户端当前处于真实 API 接入早期阶段。默认连接本机 Lifly API：
 

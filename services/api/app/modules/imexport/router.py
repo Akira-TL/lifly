@@ -404,6 +404,6 @@ async def export_stream(
         io.BytesIO(content),
         media_type=media_type_map.get(entity_type, "application/octet-stream"),
         headers={
-            "Content-Disposition": f'attachment; filename="lifily-export-{entity_type}.{ext_map.get(entity_type, "data")}"',
+            "Content-Disposition": f'attachment; filename="lifly-export-{entity_type}.{ext_map.get(entity_type, "data")}"',
         },
     )

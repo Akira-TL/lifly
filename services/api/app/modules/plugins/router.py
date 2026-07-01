@@ -18,12 +18,12 @@ async def list_plugins():
 # ─── Robots: Templates ────────────────────────────────────────────────────────
 
 ROBOT_TEMPLATES: dict[str, dict] = {
-    "lifily-bot": {
-        "id": "lifily-bot",
-        "name": "Lifily 通用助理",
+    "lifly-bot": {
+        "id": "lifly-bot",
+        "name": "Lifly 通用助理",
         "description": "通用生活数据助理，支持计账、备忘、任务创建",
         "system_prompt":
-            "你是 Lifily 通用生活助理。你的任务是帮助用户将自然语言转换为结构化生活数据。\n\n"
+            "你是 Lifly 通用生活助理。你的任务是帮助用户将自然语言转换为结构化生活数据。\n\n"
             "你可以：\n"
             "- 记账：识别金额、商户、时间、分类，调用 expense_create\n"
             "- 备忘：记录想法、日记、灵感，调用 memo_create\n"
@@ -45,7 +45,7 @@ ROBOT_TEMPLATES: dict[str, dict] = {
         "name": "财务记账助理",
         "description": "专注账单记录与财务分析",
         "system_prompt": (
-            "你是 Lifily 财务记账助理。专注于账单记录和财务分析。\n\n"
+            "你是 Lifly 财务记账助理。专注于账单记录和财务分析。\n\n"
             "核心能力：\n"
             "- 快速记账：从自然语言提取金额/商户/分类\n"
             "- 查询账单：按时间/金额/商户搜索\n"
@@ -65,7 +65,7 @@ ROBOT_TEMPLATES: dict[str, dict] = {
         "name": "日记助手",
         "description": "帮助记录日记、反思和灵感",
         "system_prompt": (
-            "你是 Lifily 日记助手。帮助用户记录生活、反思和灵感。\n\n"
+            "你是 Lifly 日记助手。帮助用户记录生活、反思和灵感。\n\n"
             "能力：\n"
             "- 记录日记/反思（journal 类型）\n"
             "- 收集灵感/想法（clip 类型）\n"

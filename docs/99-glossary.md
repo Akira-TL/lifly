@@ -1,12 +1,12 @@
 # 99. 术语表
 
-## Lifily
+## Lifly
 
 项目代号。AI-first / Chat-first 的个人生活数据系统。
 
 ## MCP
 
-Model Context Protocol。Lifily 用 MCP 向 AI、Hermes、OpenClaw、机器人等暴露工具能力。
+Model Context Protocol。Lifly 用 MCP 向 AI、Hermes、OpenClaw、机器人等暴露工具能力。
 
 ## Cloud MCP
 
@@ -34,7 +34,7 @@ Capture 被解析后生成的具体动作，例如 expense_create、memo_create�
 
 ## Internal Asset
 
-用户上传到 Lifily 存储空间的私有附件。
+用户上传到 Lifly 存储空间的私有附件。
 
 ## External Asset
 

@@ -19,8 +19,8 @@ r = urllib.request.urlopen('$API/plugins')
 print(r.read().decode()[:500])
 ")
 echo "$PLUGINS"
-check "包含 lifily.core.import" "lifily.core.import" "$PLUGINS"
-check "包含 lifily.core.capture" "lifily.core.capture" "$PLUGINS"
+check "包含 lifly.core.import" "lifly.core.import" "$PLUGINS"
+check "包含 lifly.core.capture" "lifly.core.capture" "$PLUGINS"
 
 # ── 2. 机器人列表 ──
 echo -e "\n--- 2. 机器人列表 ---"
@@ -31,14 +31,14 @@ d = json.load(r)['data']
 for b in d['robots']: print(f\"  {b['id']}: {b['name']}\")
 ")
 echo "$BOTS"
-check "包含 lifily-bot" "lifily-bot" "$BOTS"
+check "包含 lifly-bot" "lifly-bot" "$BOTS"
 check "包含 finance-bot" "finance-bot" "$BOTS"
 
 # ── 3. 机器人详情 ──
-echo -e "\n--- 3. 机器人详情 (lifily-bot) ---"
+echo -e "\n--- 3. 机器人详情 (lifly-bot) ---"
 BOT=$(python3 -c "
 import urllib.request, json
-r = urllib.request.urlopen('$API/robots/lifily-bot')
+r = urllib.request.urlopen('$API/robots/lifly-bot')
 d = json.load(r)['data']
 print(f'name={d[\"name\"]}, tools={len(d[\"tools\"])}, endpoint={d[\"mcp_endpoint\"]}')
 ")
@@ -49,11 +49,11 @@ check "包含 tools" "tools" "$BOT"
 echo -e "\n--- 4. System Prompt ---"
 PROMPT=$(python3 -c "
 import urllib.request
-r = urllib.request.urlopen('$API/robots/lifily-bot/system-prompt')
+r = urllib.request.urlopen('$API/robots/lifly-bot/system-prompt')
 print(r.read().decode()[:150])
 ")
 echo "$PROMPT"
-check "包含 Lifily" "Lifily" "$PROMPT"
+check "包含 Lifly" "Lifly" "$PROMPT"
 
 # ── 5. ICS 导出解析 ──
 echo -e "\n--- 5. ICS 往返测试 ---"

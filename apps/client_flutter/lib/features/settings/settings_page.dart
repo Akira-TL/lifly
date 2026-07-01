@@ -92,7 +92,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const ListTile(
             leading: Icon(Icons.info_outline),
-            title: Text('关于 Lifily'),
+            title: Text('关于 Lifly'),
             subtitle: Text('v0.1.0'),
           ),
         ],

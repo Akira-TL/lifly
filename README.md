@@ -16,6 +16,8 @@ docs/31-agent-task-protocol.md
 docs/32-pr-review-protocol.md
 docs/33-github-gitlab-project-setup.md
 docs/34-architecture-decision-record-template.md
+docs/59-version-control-plan.md
+docs/60-major-version-roadmap.md
 ```
 
 ## Quick Start

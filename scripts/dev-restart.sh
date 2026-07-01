@@ -2,13 +2,13 @@
 set -euo pipefail
 
 # ============================================
-# Lifily - 重启开发环境
+# Lifly - 重启开发环境
 # ============================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-echo "=== 重启 Lifily 开发环境 ==="
+echo "=== 重启 Lifly 开发环境 ==="
 
 # 停止
 "$SCRIPT_DIR/dev-stop.sh"
@@ -22,4 +22,4 @@ fi
 # 启动
 "$SCRIPT_DIR/dev-start.sh"
 
-echo "=== Lifily 开发环境已重启 ==="
+echo "=== Lifly 开发环境已重启 ==="

@@ -2,13 +2,13 @@
 set -euo pipefail
 
 # ============================================
-# Lifily - 启动开发环境
+# Lifly - 启动开发环境
 # ============================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-echo "=== 启动 Lifily 开发环境 ==="
+echo "=== 启动 Lifly 开发环境 ==="
 
 # 1. Docker 基础设施
 echo "[1/3] 启动 Docker 基础设施 (PostgreSQL/Redis/MinIO)..."
@@ -32,7 +32,7 @@ echo "[3/3] 等待服务就绪..."
 sleep 2
 
 echo ""
-echo "=== Lifily 开发环境已启动 ==="
+echo "=== Lifly 开发环境已启动 ==="
 echo "API:      http://localhost:8310"
 echo "Docs:     http://localhost:8310/docs"
 echo "MinIO:    http://localhost:8301"
