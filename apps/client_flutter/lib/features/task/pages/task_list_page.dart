@@ -1,4 +1,6 @@
+import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/repositories/task_repository.dart';
 import 'package:client_flutter/domain/entities/task.dart';
 import 'package:client_flutter/features/task/pages/task_detail_page.dart';
@@ -34,7 +36,11 @@ class _TaskListPageState extends State<TaskListPage> {
   @override
   void initState() {
     super.initState();
-    _repo = TaskRepository(context.read<ApiClient>());
+    _repo = TaskRepository(
+      context.read<ApiClient>(),
+      localCore: context.read<LocalCoreBridge>(),
+      dataMode: context.read<LiflyDataMode>(),
+    );
     _scrollController.addListener(_handleScroll);
     _loadFirstPage();
   }
@@ -48,7 +54,12 @@ class _TaskListPageState extends State<TaskListPage> {
   }
 
   void _handleScroll() {
-    if (!_scrollController.hasClients || !_hasMore || _isLoading || _isLoadingMore) return;
+    if (!_scrollController.hasClients ||
+        !_hasMore ||
+        _isLoading ||
+        _isLoadingMore) {
+      return;
+    }
     final threshold = _scrollController.position.maxScrollExtent - 240;
     if (_scrollController.position.pixels >= threshold) {
       _loadMore();
@@ -62,7 +73,11 @@ class _TaskListPageState extends State<TaskListPage> {
     });
 
     try {
-      final page = await _repo.listPage(limit: _pageSize, offset: 0, taskStatus: _taskStatus);
+      final page = await _repo.listPage(
+        limit: _pageSize,
+        offset: 0,
+        taskStatus: _taskStatus,
+      );
       if (!mounted) return;
       setState(() {
         _items
@@ -83,7 +98,11 @@ class _TaskListPageState extends State<TaskListPage> {
     setState(() => _isLoadingMore = true);
 
     try {
-      final page = await _repo.listPage(limit: _pageSize, offset: _items.length, taskStatus: _taskStatus);
+      final page = await _repo.listPage(
+        limit: _pageSize,
+        offset: _items.length,
+        taskStatus: _taskStatus,
+      );
       if (!mounted) return;
       setState(() {
         _items.addAll(page.items);
@@ -91,14 +110,19 @@ class _TaskListPageState extends State<TaskListPage> {
       });
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('加载更多任务失败：$error')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('加载更多任务失败：$error')));
     } finally {
       if (mounted) setState(() => _isLoadingMore = false);
     }
   }
 
   Future<void> _createTask() async {
-    final draft = await showDialog<_TaskDraft>(context: context, builder: (_) => const _TaskEditorDialog());
+    final draft = await showDialog<_TaskDraft>(
+      context: context,
+      builder: (_) => const _TaskEditorDialog(),
+    );
     if (draft == null) return;
 
     setState(() => _isCreating = true);
@@ -112,7 +136,9 @@ class _TaskListPageState extends State<TaskListPage> {
       await _loadFirstPage();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('创建任务失败：$error')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('创建任务失败：$error')));
     } finally {
       if (mounted) setState(() => _isCreating = false);
     }
@@ -125,7 +151,9 @@ class _TaskListPageState extends State<TaskListPage> {
       await _loadFirstPage();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('完成任务失败：$error')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('完成任务失败：$error')));
     }
   }
 
@@ -141,7 +169,10 @@ class _TaskListPageState extends State<TaskListPage> {
       appBar: AppBar(title: const Text('任务')),
       body: Column(
         children: [
-          _TaskFilterBar(selectedTaskStatus: _taskStatus, onTaskStatusChanged: _setTaskStatus),
+          _TaskFilterBar(
+            selectedTaskStatus: _taskStatus,
+            onTaskStatusChanged: _setTaskStatus,
+          ),
           Expanded(
             child: AsyncContentScaffold(
               isLoading: _isLoading,
@@ -174,7 +205,10 @@ class _TaskListPageState extends State<TaskListPage> {
                       await Navigator.push<bool>(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => TaskDetailPage(taskId: _items[index].id, initialTask: _items[index]),
+                          builder: (_) => TaskDetailPage(
+                            taskId: _items[index].id,
+                            initialTask: _items[index],
+                          ),
                         ),
                       );
                       if (context.mounted) await _loadFirstPage();
@@ -190,7 +224,11 @@ class _TaskListPageState extends State<TaskListPage> {
         heroTag: 'task-create-fab',
         onPressed: _isCreating ? null : _createTask,
         icon: _isCreating
-            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
             : const Icon(Icons.add),
         label: const Text('新建'),
       ),
@@ -202,7 +240,10 @@ class _TaskFilterBar extends StatelessWidget {
   final String? selectedTaskStatus;
   final ValueChanged<String?> onTaskStatusChanged;
 
-  const _TaskFilterBar({required this.selectedTaskStatus, required this.onTaskStatusChanged});
+  const _TaskFilterBar({
+    required this.selectedTaskStatus,
+    required this.onTaskStatusChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -224,39 +265,61 @@ class _TaskTile extends StatelessWidget {
   final VoidCallback onComplete;
   final VoidCallback onTap;
 
-  const _TaskTile({required this.task, required this.onComplete, required this.onTap});
+  const _TaskTile({
+    required this.task,
+    required this.onComplete,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final dueLabel = task.dueAt == null ? null : DateFormat('MM/dd HH:mm').format(task.dueAt!.toLocal());
-    final statusLabel = task.isDone ? '已完成' : task.isOverdue ? '已逾期' : '进行中';
+    final dueLabel = task.dueAt == null
+        ? null
+        : DateFormat('MM/dd HH:mm').format(task.dueAt!.toLocal());
+    final statusLabel = task.isDone
+        ? '已完成'
+        : task.isOverdue
+        ? '已逾期'
+        : '进行中';
     final statusColor = task.isDone
         ? Colors.green
         : task.isOverdue
-            ? theme.colorScheme.error
-            : theme.colorScheme.primary;
+        ? theme.colorScheme.error
+        : theme.colorScheme.primary;
 
     return Card(
       child: ListTile(
         onTap: onTap,
         leading: CircleAvatar(
           backgroundColor: statusColor.withAlpha(24),
-          child: Icon(task.isDone ? Icons.done : Icons.check_circle_outline, color: statusColor),
+          child: Icon(
+            task.isDone ? Icons.done : Icons.check_circle_outline,
+            color: statusColor,
+          ),
         ),
         title: Text(
           task.title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: task.isDone ? const TextStyle(decoration: TextDecoration.lineThrough) : null,
+          style: task.isDone
+              ? const TextStyle(decoration: TextDecoration.lineThrough)
+              : null,
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (task.description != null && task.description!.isNotEmpty)
-              Text(task.description!, maxLines: 2, overflow: TextOverflow.ellipsis),
+              Text(
+                task.description!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
             const SizedBox(height: 4),
-            Text([statusLabel, task.priority, ?dueLabel].join(' · '), style: theme.textTheme.bodySmall),
+            Text(
+              [statusLabel, task.priority, ?dueLabel].join(' · '),
+              style: theme.textTheme.bodySmall,
+            ),
           ],
         ),
         trailing: Checkbox(
@@ -273,7 +336,11 @@ class _TaskDraft {
   final String description;
   final String priority;
 
-  const _TaskDraft({required this.title, required this.description, required this.priority});
+  const _TaskDraft({
+    required this.title,
+    required this.description,
+    required this.priority,
+  });
 }
 
 class _TaskEditorDialog extends StatefulWidget {
@@ -303,8 +370,14 @@ class _TaskEditorDialogState extends State<_TaskEditorDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: _titleController, decoration: const InputDecoration(labelText: '标题')),
-            TextField(controller: _descriptionController, decoration: const InputDecoration(labelText: '描述')),
+            TextField(
+              controller: _titleController,
+              decoration: const InputDecoration(labelText: '标题'),
+            ),
+            TextField(
+              controller: _descriptionController,
+              decoration: const InputDecoration(labelText: '描述'),
+            ),
             DropdownButtonFormField<String>(
               initialValue: _priority,
               decoration: const InputDecoration(labelText: '优先级'),
@@ -314,20 +387,28 @@ class _TaskEditorDialogState extends State<_TaskEditorDialog> {
                 DropdownMenuItem(value: 'high', child: Text('高')),
                 DropdownMenuItem(value: 'urgent', child: Text('紧急')),
               ],
-              onChanged: (value) => setState(() => _priority = value ?? 'normal'),
+              onChanged: (value) =>
+                  setState(() => _priority = value ?? 'normal'),
             ),
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
         FilledButton(
           onPressed: () {
             final title = _titleController.text.trim();
             if (title.isEmpty) return;
             Navigator.pop(
               context,
-              _TaskDraft(title: title, description: _descriptionController.text.trim(), priority: _priority),
+              _TaskDraft(
+                title: title,
+                description: _descriptionController.text.trim(),
+                priority: _priority,
+              ),
             );
           },
           child: const Text('保存'),
