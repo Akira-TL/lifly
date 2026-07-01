@@ -81,6 +81,56 @@ class PowerSyncTaskStore {
     return rows.map(LocalTaskMapper.fromRow).toList(growable: false);
   }
 
+  Future<LocalTaskRecord> completeTask(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final completeInput = LocalTaskCompleteInput.fromMap(input);
+    late final LocalTaskRecord completedTask;
+
+    await LocalCoreWriteExecutor(syncService: syncService).run((handle) async {
+      final oldTask = await _findActiveTask(handle, completeInput.taskId);
+      if (oldTask == null) {
+        throw StateError('Task not found: ${completeInput.taskId}');
+      }
+
+      final metadata = policy.metadataForUpdate(
+        context,
+        currentRevision: oldTask.revision,
+        createdAt: oldTask.createdAt,
+      );
+      completedTask = LocalTaskRecord(
+        id: oldTask.id,
+        title: oldTask.title,
+        description: oldTask.description,
+        dueAt: oldTask.dueAt,
+        remindAt: oldTask.remindAt,
+        priority: oldTask.priority,
+        taskStatus: 'done',
+        completedAt: metadata.timestamps.updatedAt,
+        status: oldTask.status,
+        revision: metadata.revision,
+        createdAt: oldTask.createdAt,
+        updatedAt: metadata.timestamps.updatedAt,
+      );
+
+      await _completeTask(handle, completedTask, metadata);
+      await auditLogWriter.write(
+        handle,
+        LocalCoreAuditLogInput(
+          context: context,
+          action: 'task.complete',
+          entityType: 'task',
+          entityId: completedTask.id,
+          beforeSnapshot: LocalTaskMapper.snapshot(oldTask),
+          afterSnapshot: LocalTaskMapper.snapshot(completedTask),
+        ),
+      );
+    });
+
+    return completedTask;
+  }
+
   Future<LocalTaskRecord> updateTask(
     Map<String, Object?> input,
     LocalCoreContext context,
@@ -191,6 +241,25 @@ class PowerSyncTaskStore {
         metadata.timestamps.createdAtIso,
         metadata.timestamps.updatedAtIso,
         metadata.revision,
+      ],
+    );
+  }
+
+  Future<void> _completeTask(
+    LocalCoreWriteHandle handle,
+    LocalTaskRecord task,
+    LocalCoreWriteMetadata metadata,
+  ) async {
+    await handle.execute(
+      'UPDATE tasks SET task_status = ?, completed_at = ?, updated_at = ?, revision = ? '
+      'WHERE id = ? AND status = ?',
+      [
+        task.taskStatus,
+        task.completedAt?.toIso8601String(),
+        metadata.timestamps.updatedAtIso,
+        metadata.revision,
+        task.id,
+        'active',
       ],
     );
   }

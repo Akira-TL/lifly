@@ -123,7 +123,7 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   ) {
-    return _unsupported('task complete');
+    return _taskStore.completeTask(input, context);
   }
 
   @override
