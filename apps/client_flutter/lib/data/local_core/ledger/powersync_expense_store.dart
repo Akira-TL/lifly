@@ -68,6 +68,37 @@ class PowerSyncExpenseStore {
     return tx;
   }
 
+  Future<List<LocalLedgerTransactionRecord>> searchExpenses(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final searchInput = LocalExpenseSearchInput.fromMap(input);
+    final rows = await _searchRows(
+      query: searchInput.query,
+      limit: searchInput.limit,
+    );
+    return rows.map(LocalExpenseMapper.fromRow).toList(growable: false);
+  }
+
+  Future<List<Map<String, Object?>>> _searchRows({
+    required String query,
+    required int limit,
+  }) async {
+    await syncService.ensureInitialized();
+    final likeQuery = '%$query%';
+    final rows = await syncService.db.getAll(
+      'SELECT id, direction, amount, currency, merchant, note, occurred_at, status, revision, created_at, updated_at '
+      'FROM ledger_transactions '
+      'WHERE status = ? AND (? = ? OR lower(coalesce(merchant, ?) || ? || coalesce(note, ?)) LIKE ?) '
+      'ORDER BY occurred_at DESC, updated_at DESC '
+      'LIMIT ?',
+      ['active', query, '', '', '\n', '', likeQuery, limit],
+    );
+    return rows
+        .map((row) => Map<String, Object?>.from(row))
+        .toList(growable: false);
+  }
+
   Future<void> _insertExpense(
     LocalCoreWriteHandle handle,
     LocalLedgerTransactionRecord tx,

@@ -95,7 +95,7 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   ) {
-    return _unsupported('expense search');
+    return _expenseStore.searchExpenses(input, context);
   }
 
   @override
