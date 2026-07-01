@@ -7,7 +7,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
   final LocalCoreIdGenerator _idGenerator;
 
   FakeLocalCoreBridge({LocalCoreIdGenerator? idGenerator})
-      : _idGenerator = idGenerator ?? LocalCoreIdGenerator();
+    : _idGenerator = idGenerator ?? LocalCoreIdGenerator();
 
   final List<LocalMemoRecord> _memos = [];
   final List<LocalLedgerTransactionRecord> _expenses = [];
@@ -28,7 +28,10 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
-  Future<LocalMemoRecord> createMemo(Map<String, Object?> input, LocalCoreContext context) async {
+  Future<LocalMemoRecord> createMemo(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
     final now = context.effectiveNow;
     final memo = LocalMemoRecord(
       id: _nextStableId('memo'),
@@ -46,18 +49,85 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
-  Future<List<LocalMemoRecord>> searchMemos(Map<String, Object?> input, LocalCoreContext context) async {
+  Future<List<LocalMemoRecord>> searchMemos(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
     final q = (input['q'] as String? ?? '').trim().toLowerCase();
     final limit = input['limit'] as int? ?? 20;
     return _memos
         .where((memo) => memo.status == 'active')
-        .where((memo) => q.isEmpty || '${memo.title ?? ''}\n${memo.contentMarkdown}'.toLowerCase().contains(q))
+        .where(
+          (memo) =>
+              q.isEmpty ||
+              '${memo.title ?? ''}\n${memo.contentMarkdown}'
+                  .toLowerCase()
+                  .contains(q),
+        )
         .take(limit)
         .toList();
   }
 
   @override
-  Future<LocalLedgerTransactionRecord> createExpense(Map<String, Object?> input, LocalCoreContext context) async {
+  Future<LocalMemoRecord> updateMemo(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final memoId = input['memo_id'] as String? ?? input['id'] as String?;
+    final index = _memos.indexWhere(
+      (memo) => memo.id == memoId && memo.status == 'active',
+    );
+    if (index < 0) throw StateError('Memo not found: $memoId');
+
+    final old = _memos[index];
+    final updated = LocalMemoRecord(
+      id: old.id,
+      type: input['type'] as String? ?? old.type,
+      title: input.containsKey('title') ? input['title'] as String? : old.title,
+      contentMarkdown:
+          input['content_markdown'] as String? ?? old.contentMarkdown,
+      tags: (input['tags'] as List?)?.whereType<String>().toList() ?? old.tags,
+      status: old.status,
+      revision: old.revision + 1,
+      createdAt: old.createdAt,
+      updatedAt: context.effectiveNow,
+    );
+    _memos[index] = updated;
+    return updated;
+  }
+
+  @override
+  Future<LocalMemoRecord> deleteMemo(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final memoId = input['memo_id'] as String? ?? input['id'] as String?;
+    final index = _memos.indexWhere(
+      (memo) => memo.id == memoId && memo.status == 'active',
+    );
+    if (index < 0) throw StateError('Memo not found: $memoId');
+
+    final old = _memos[index];
+    final deleted = LocalMemoRecord(
+      id: old.id,
+      type: old.type,
+      title: old.title,
+      contentMarkdown: old.contentMarkdown,
+      tags: old.tags,
+      status: input['status'] as String? ?? 'deleted',
+      revision: old.revision + 1,
+      createdAt: old.createdAt,
+      updatedAt: context.effectiveNow,
+    );
+    _memos[index] = deleted;
+    return deleted;
+  }
+
+  @override
+  Future<LocalLedgerTransactionRecord> createExpense(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
     final now = context.effectiveNow;
     final tx = LocalLedgerTransactionRecord(
       id: _nextStableId('tx'),
@@ -66,7 +136,8 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
       currency: input['currency'] as String? ?? 'CNY',
       merchant: input['merchant'] as String?,
       note: input['note'] as String?,
-      occurredAt: DateTime.tryParse(input['occurred_at'] as String? ?? '') ?? now,
+      occurredAt:
+          DateTime.tryParse(input['occurred_at'] as String? ?? '') ?? now,
       status: 'active',
       revision: 1,
       createdAt: now,
@@ -77,29 +148,48 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
-  Future<List<LocalLedgerTransactionRecord>> searchExpenses(Map<String, Object?> input, LocalCoreContext context) async {
+  Future<List<LocalLedgerTransactionRecord>> searchExpenses(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
     final q = (input['q'] as String? ?? '').trim().toLowerCase();
     final limit = input['limit'] as int? ?? 20;
     return _expenses
         .where((tx) => tx.status == 'active')
-        .where((tx) => q.isEmpty || '${tx.merchant ?? ''}\n${tx.note ?? ''}'.toLowerCase().contains(q))
+        .where(
+          (tx) =>
+              q.isEmpty ||
+              '${tx.merchant ?? ''}\n${tx.note ?? ''}'.toLowerCase().contains(
+                q,
+              ),
+        )
         .take(limit)
         .toList();
   }
 
   @override
-  Future<LocalExpenseSummary> summarizeExpenses(Map<String, Object?> input, LocalCoreContext context) async {
+  Future<LocalExpenseSummary> summarizeExpenses(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
     final active = _expenses.where((tx) => tx.status == 'active').toList();
     return LocalExpenseSummary(
       period: input['period'] as String? ?? 'current_month',
-      totalExpense: active.where((tx) => tx.direction == 'expense').fold<double>(0, (sum, tx) => sum + tx.amount),
-      totalIncome: active.where((tx) => tx.direction == 'income').fold<double>(0, (sum, tx) => sum + tx.amount),
+      totalExpense: active
+          .where((tx) => tx.direction == 'expense')
+          .fold<double>(0, (sum, tx) => sum + tx.amount),
+      totalIncome: active
+          .where((tx) => tx.direction == 'income')
+          .fold<double>(0, (sum, tx) => sum + tx.amount),
       count: active.length,
     );
   }
 
   @override
-  Future<LocalTaskRecord> createTask(Map<String, Object?> input, LocalCoreContext context) async {
+  Future<LocalTaskRecord> createTask(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
     final now = context.effectiveNow;
     final task = LocalTaskRecord(
       id: _nextStableId('task'),
@@ -120,7 +210,10 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
-  Future<List<LocalTaskRecord>> listTasks(Map<String, Object?> input, LocalCoreContext context) async {
+  Future<List<LocalTaskRecord>> listTasks(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
     final taskStatus = input['task_status'] as String?;
     final limit = input['limit'] as int? ?? 20;
     return _tasks
@@ -131,9 +224,14 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
-  Future<LocalTaskRecord> completeTask(Map<String, Object?> input, LocalCoreContext context) async {
+  Future<LocalTaskRecord> completeTask(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
     final taskId = input['task_id'] as String?;
-    final index = _tasks.indexWhere((task) => task.id == taskId && task.status == 'active');
+    final index = _tasks.indexWhere(
+      (task) => task.id == taskId && task.status == 'active',
+    );
     if (index < 0) throw StateError('Task not found: $taskId');
 
     final old = _tasks[index];
@@ -157,7 +255,10 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
-  Future<LocalAssetRecord> registerExternalAsset(Map<String, Object?> input, LocalCoreContext context) async {
+  Future<LocalAssetRecord> registerExternalAsset(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
     final now = context.effectiveNow;
     final asset = LocalAssetRecord(
       id: _nextStableId('asset'),
@@ -175,7 +276,10 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
-  Future<LocalCaptureSession> captureParse(Map<String, Object?> input, LocalCoreContext context) async {
+  Future<LocalCaptureSession> captureParse(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
     final session = LocalCaptureSession(
       captureId: _nextStableId('capture'),
       actions: [
@@ -197,13 +301,18 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
-  Future<LocalCaptureCommitResult> captureCommit(Map<String, Object?> input, LocalCoreContext context) async {
+  Future<LocalCaptureCommitResult> captureCommit(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
     final captureId = input['capture_id'] as String?;
     final session = _captures[captureId];
     if (session == null) throw StateError('Capture not found: $captureId');
 
     final rawIndexes = input['selected_action_indexes'] as List?;
-    final indexes = rawIndexes?.whereType<int>().toList() ?? List<int>.generate(session.actions.length, (index) => index);
+    final indexes =
+        rawIndexes?.whereType<int>().toList() ??
+        List<int>.generate(session.actions.length, (index) => index);
     final created = <LocalCoreEntityRef>[];
 
     for (final index in indexes) {
@@ -218,11 +327,18 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
     final undoToken = _nextStableId('undo');
     _undoEntries[undoToken] = created;
     _captures.remove(captureId);
-    return LocalCaptureCommitResult(committed: true, createdEntities: created, undoToken: undoToken);
+    return LocalCaptureCommitResult(
+      committed: true,
+      createdEntities: created,
+      undoToken: undoToken,
+    );
   }
 
   @override
-  Future<LocalCaptureUndoResult> captureUndo(Map<String, Object?> input, LocalCoreContext context) async {
+  Future<LocalCaptureUndoResult> captureUndo(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
     final undoToken = input['undo_token'] as String?;
     final entries = _undoEntries[undoToken];
     if (entries == null) throw StateError('Undo token not found: $undoToken');

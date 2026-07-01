@@ -42,13 +42,35 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
-  Future<LocalMemoRecord> createMemo(Map<String, Object?> input, LocalCoreContext context) {
+  Future<LocalMemoRecord> createMemo(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
     return _unsupported('memo create');
   }
 
   @override
-  Future<List<LocalMemoRecord>> searchMemos(Map<String, Object?> input, LocalCoreContext context) {
+  Future<List<LocalMemoRecord>> searchMemos(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
     return _unsupported('memo search');
+  }
+
+  @override
+  Future<LocalMemoRecord> updateMemo(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _unsupported('memo update');
+  }
+
+  @override
+  Future<LocalMemoRecord> deleteMemo(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _unsupported('memo delete');
   }
 
   @override
@@ -68,22 +90,34 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
-  Future<LocalExpenseSummary> summarizeExpenses(Map<String, Object?> input, LocalCoreContext context) {
+  Future<LocalExpenseSummary> summarizeExpenses(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
     return _unsupported('expense summary');
   }
 
   @override
-  Future<LocalTaskRecord> createTask(Map<String, Object?> input, LocalCoreContext context) {
+  Future<LocalTaskRecord> createTask(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
     return _unsupported('task create');
   }
 
   @override
-  Future<List<LocalTaskRecord>> listTasks(Map<String, Object?> input, LocalCoreContext context) {
+  Future<List<LocalTaskRecord>> listTasks(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
     return _unsupported('task list');
   }
 
   @override
-  Future<LocalTaskRecord> completeTask(Map<String, Object?> input, LocalCoreContext context) {
+  Future<LocalTaskRecord> completeTask(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
     return _unsupported('task complete');
   }
 
@@ -96,7 +130,10 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
-  Future<LocalCaptureSession> captureParse(Map<String, Object?> input, LocalCoreContext context) {
+  Future<LocalCaptureSession> captureParse(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
     return _unsupported('capture parse');
   }
 
@@ -109,11 +146,16 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
-  Future<LocalCaptureUndoResult> captureUndo(Map<String, Object?> input, LocalCoreContext context) {
+  Future<LocalCaptureUndoResult> captureUndo(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
     return _unsupported('capture undo');
   }
 
   Future<T> _unsupported<T>(String capability) {
-    throw UnsupportedError('$capability is planned after v0.2.1 local core foundation.');
+    throw UnsupportedError(
+      '$capability is planned after v0.2.1 local core foundation.',
+    );
   }
 }
