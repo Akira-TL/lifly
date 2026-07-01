@@ -18,7 +18,7 @@ void main() {
           create: (_) => ApiClient(baseUrl: AppConfig.apiBaseUrl),
         ),
         Provider<SyncService>(
-          create: (_) => SyncService(),
+          create: (context) => SyncService(api: context.read<ApiClient>()),
           dispose: (_, service) => service.dispose(),
         ),
         ProxyProvider<SyncService, LocalCoreBridge>(
