@@ -55,7 +55,7 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   ) {
-    return _unsupported('memo search');
+    return _memoStore.searchMemos(input, context);
   }
 
   @override

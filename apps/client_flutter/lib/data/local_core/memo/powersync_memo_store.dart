@@ -66,6 +66,35 @@ class PowerSyncMemoStore {
     return memo;
   }
 
+  Future<List<LocalMemoRecord>> searchMemos(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final searchInput = LocalMemoSearchInput.fromMap(input);
+    final query = searchInput.query.toLowerCase();
+    final rows = await _searchRows(query: query, limit: searchInput.limit);
+    return rows.map(LocalMemoMapper.fromRow).toList(growable: false);
+  }
+
+  Future<List<Map<String, Object?>>> _searchRows({
+    required String query,
+    required int limit,
+  }) async {
+    await syncService.ensureInitialized();
+    final likeQuery = '%$query%';
+    final rows = await syncService.db.getAll(
+      'SELECT id, type, title, content_markdown, tags, status, revision, created_at, updated_at '
+      'FROM memos '
+      'WHERE status = ? AND (? = ? OR lower(coalesce(title, ?) || ? || coalesce(content_markdown, ?)) LIKE ?) '
+      'ORDER BY updated_at DESC '
+      'LIMIT ?',
+      ['active', query, '', '', '\n', '', likeQuery, limit],
+    );
+    return rows
+        .map((row) => Map<String, Object?>.from(row))
+        .toList(growable: false);
+  }
+
   Future<void> _insertMemo(
     LocalCoreWriteHandle handle,
     LocalMemoRecord memo,
