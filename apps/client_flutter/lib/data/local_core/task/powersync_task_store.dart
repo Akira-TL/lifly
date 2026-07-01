@@ -69,6 +69,37 @@ class PowerSyncTaskStore {
     return task;
   }
 
+  Future<List<LocalTaskRecord>> listTasks(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final listInput = LocalTaskListInput.fromMap(input);
+    final rows = await _listRows(
+      taskStatus: listInput.taskStatus,
+      limit: listInput.limit,
+    );
+    return rows.map(LocalTaskMapper.fromRow).toList(growable: false);
+  }
+
+  Future<List<Map<String, Object?>>> _listRows({
+    required String? taskStatus,
+    required int limit,
+  }) async {
+    await syncService.ensureInitialized();
+    final rows = await syncService.db.getAll(
+      'SELECT id, title, description, due_at, remind_at, priority, task_status, '
+      'completed_at, status, revision, created_at, updated_at '
+      'FROM tasks '
+      'WHERE status = ? AND (? IS NULL OR task_status = ?) '
+      'ORDER BY updated_at DESC '
+      'LIMIT ?',
+      ['active', taskStatus, taskStatus, limit],
+    );
+    return rows
+        .map((row) => Map<String, Object?>.from(row))
+        .toList(growable: false);
+  }
+
   Future<void> _insertTask(
     LocalCoreWriteHandle handle,
     LocalTaskRecord task,

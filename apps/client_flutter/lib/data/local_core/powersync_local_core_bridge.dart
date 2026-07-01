@@ -115,7 +115,7 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   ) {
-    return _unsupported('task list');
+    return _taskStore.listTasks(input, context);
   }
 
   @override
