@@ -8,9 +8,12 @@ class LocalCoreAuditLogWriter {
   final LocalCoreWritePolicy policy;
 
   LocalCoreAuditLogWriter({LocalCoreWritePolicy? policy})
-      : policy = policy ?? LocalCoreWritePolicy();
+    : policy = policy ?? LocalCoreWritePolicy();
 
-  Future<String> write(LocalCoreWriteHandle handle, LocalCoreAuditLogInput input) async {
+  Future<String> write(
+    LocalCoreWriteHandle handle,
+    LocalCoreAuditLogInput input,
+  ) async {
     final id = policy.nextAuditLogId();
     final createdAt = policy.timestampsFor(input.context).createdAtIso;
 

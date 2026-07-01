@@ -11,7 +11,10 @@ class PowerSyncLocalCoreWriteHandle implements LocalCoreWriteHandle {
   const PowerSyncLocalCoreWriteHandle(this._transaction);
 
   @override
-  Future<void> execute(String sql, [List<Object?> parameters = const []]) async {
+  Future<void> execute(
+    String sql, [
+    List<Object?> parameters = const [],
+  ]) async {
     await _transaction.execute(sql, parameters);
   }
 }
@@ -21,7 +24,9 @@ class LocalCoreWriteExecutor {
 
   const LocalCoreWriteExecutor({required this.syncService});
 
-  Future<T> run<T>(Future<T> Function(LocalCoreWriteHandle handle) write) async {
+  Future<T> run<T>(
+    Future<T> Function(LocalCoreWriteHandle handle) write,
+  ) async {
     try {
       await syncService.ensureInitialized();
       return await syncService.db.writeTransaction((transaction) {

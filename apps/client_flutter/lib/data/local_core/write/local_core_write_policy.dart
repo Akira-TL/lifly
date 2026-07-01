@@ -5,7 +5,7 @@ class LocalCoreWritePolicy {
   final LocalCoreIdGenerator idGenerator;
 
   LocalCoreWritePolicy({LocalCoreIdGenerator? idGenerator})
-      : idGenerator = idGenerator ?? LocalCoreIdGenerator();
+    : idGenerator = idGenerator ?? LocalCoreIdGenerator();
 
   String nextEntityId(String prefix) => idGenerator.next(prefix);
 
@@ -63,7 +63,10 @@ class LocalCoreWriteTimestamps {
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  const LocalCoreWriteTimestamps({required this.createdAt, required this.updatedAt});
+  const LocalCoreWriteTimestamps({
+    required this.createdAt,
+    required this.updatedAt,
+  });
 
   factory LocalCoreWriteTimestamps.same(DateTime value) {
     final utc = value.toUtc();
