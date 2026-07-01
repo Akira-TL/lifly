@@ -1,3 +1,4 @@
+import 'package:client_flutter/data/powersync/powersync_credentials_service.dart';
 import 'package:client_flutter/data/powersync/powersync_schema.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
@@ -47,9 +48,13 @@ class SyncService {
 
   Future<void> connect(String powerSyncEndpoint, String token) async {
     if (!isInitialized) return;
-    await db.connect(
-      connector: _LiflyConnector(powerSyncEndpoint, token),
-    );
+    await db.connect(connector: _LiflyConnector(powerSyncEndpoint, token));
+  }
+
+  Future<void> connectWithCredentials(
+    LiflyPowerSyncCredentials credentials,
+  ) async {
+    await connect(credentials.endpoint, credentials.token);
   }
 
   Future<void> disconnect({bool clearLocal = false}) async {
