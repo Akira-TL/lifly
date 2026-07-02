@@ -7,6 +7,8 @@ import 'package:client_flutter/app/theme/app_theme.dart';
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/powersync_local_core_bridge.dart';
+import 'package:client_flutter/data/powersync/powersync_connection_coordinator.dart';
+import 'package:client_flutter/data/powersync/powersync_credentials_service.dart';
 import 'package:client_flutter/data/powersync/sync_service.dart';
 
 void main() {
@@ -20,6 +22,14 @@ void main() {
         Provider<SyncService>(
           create: (context) => SyncService(api: context.read<ApiClient>()),
           dispose: (_, service) => service.dispose(),
+        ),
+        Provider<PowerSyncConnectionCoordinator>(
+          create: (context) => PowerSyncConnectionCoordinator(
+            credentialsService: PowerSyncCredentialsService(
+              context.read<ApiClient>(),
+            ),
+            syncService: context.read<SyncService>(),
+          ),
         ),
         ProxyProvider<SyncService, LocalCoreBridge>(
           update: (_, syncService, _) =>
