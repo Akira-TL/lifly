@@ -1,12 +1,15 @@
 import { z } from "zod";
 
 /**
- * Lifly MCP Tool Schema v0.1
+ * Lifly MCP Tool Schema
  *
- * This package defines the shared contract for Cloud MCP and Local MCP.
- * Runtime services may be implemented in Python or TypeScript during M0/M1,
- * but tool names and input/output contracts must stay aligned with this file.
+ * packages/protocol is the source of truth for Cloud MCP, Local MCP,
+ * Flutter AI Capture, and contract tests. Runtime services may be
+ * implemented in Python, TypeScript, or Dart, but tool names and
+ * input/output contracts must stay aligned with this file.
  */
+
+export const LiflyMcpToolContractVersion = "0.4.1" as const;
 
 export const LiflyMcpToolNameSchema = z.enum([
   "capture_parse",
@@ -27,6 +30,13 @@ export const LiflyMcpToolNameSchema = z.enum([
 export type LiflyMcpToolName = z.infer<typeof LiflyMcpToolNameSchema>;
 
 const IsoDateTimeStringSchema = z.string().min(1).describe("ISO-8601 datetime string");
+const NullableStringSchema = z.string().nullable().optional();
+const EntityStatusSchema = z.enum(["active", "ai_trashed", "user_trashed"]);
+const RevisionSchema = z.number().int().positive().optional();
+const DateFieldsSchema = {
+  created_at: IsoDateTimeStringSchema.nullable().optional(),
+  updated_at: IsoDateTimeStringSchema.nullable().optional(),
+} as const;
 
 export const CaptureParseInputSchema = z.object({
   text: z.string().min(1),
@@ -154,6 +164,144 @@ export type LiflyMcpToolInputMap = {
   [K in keyof typeof LiflyMcpToolInputSchemas]: z.infer<(typeof LiflyMcpToolInputSchemas)[K]>;
 };
 
+export const LiflyMcpEntityRefSchema = z.object({
+  type: z.enum(["memo", "ledger_transaction", "task", "asset"]),
+  id: z.string().min(1),
+});
+
+export const LiflyMcpMemoSchema = z.object({
+  id: z.string().min(1),
+  user_id: z.string().min(1).optional(),
+  type: MemoTypeSchema,
+  title: NullableStringSchema,
+  content_markdown: z.string(),
+  tags: z.array(z.string()).nullable().optional(),
+  status: EntityStatusSchema,
+  revision: RevisionSchema,
+  ...DateFieldsSchema,
+}).passthrough();
+
+export const LiflyMcpLedgerTransactionSchema = z.object({
+  id: z.string().min(1),
+  user_id: z.string().min(1).optional(),
+  direction: ExpenseDirectionSchema,
+  amount: z.number().finite(),
+  currency: z.string().min(1),
+  merchant: NullableStringSchema,
+  note: NullableStringSchema,
+  category_hint: NullableStringSchema,
+  category_id: NullableStringSchema,
+  account_id: NullableStringSchema,
+  occurred_at: IsoDateTimeStringSchema,
+  status: EntityStatusSchema,
+  revision: RevisionSchema,
+  ...DateFieldsSchema,
+}).passthrough();
+
+export const LiflyMcpExpenseSummarySchema = z.object({
+  period: z.string().min(1),
+  total_expense: z.number().finite(),
+  total_income: z.number().finite().optional(),
+  count: z.number().int().nonnegative(),
+}).passthrough();
+
+export const LiflyMcpTaskSchema = z.object({
+  id: z.string().min(1),
+  user_id: z.string().min(1).optional(),
+  title: z.string().min(1),
+  description: NullableStringSchema,
+  due_at: IsoDateTimeStringSchema.nullable().optional(),
+  remind_at: IsoDateTimeStringSchema.nullable().optional(),
+  priority: z.enum(["low", "normal", "high", "urgent"]),
+  task_status: z.enum(["todo", "doing", "done", "cancelled"]),
+  completed_at: IsoDateTimeStringSchema.nullable().optional(),
+  status: EntityStatusSchema,
+  revision: RevisionSchema,
+  ...DateFieldsSchema,
+}).passthrough();
+
+export const LiflyMcpAssetSchema = z.object({
+  id: z.string().min(1),
+  kind: z.enum(["external", "internal", "internal_intent"]),
+  asset_type: z.string().min(1),
+  title: NullableStringSchema,
+  external_url: z.string().url().nullable().optional(),
+  storage_key: z.string().min(1).nullable().optional(),
+  sync_status: z.enum(["synced", "pending", "unsupported"]),
+  revision: RevisionSchema,
+  ...DateFieldsSchema,
+}).passthrough();
+
+export const LiflyMcpCaptureActionSchema = z.object({
+  type: z.enum(["memo_create", "expense_create", "task_create", "asset_register_external_url"]),
+  payload: z.record(z.unknown()),
+  confidence: z.number().min(0).max(1),
+});
+
+export const LiflyMcpToolOutputSchemas = {
+  capture_parse: z.object({
+    capture_id: z.string().min(1),
+    actions: z.array(LiflyMcpCaptureActionSchema),
+    requires_confirmation: z.boolean(),
+  }).passthrough(),
+  capture_commit: z.object({
+    committed: z.boolean(),
+    created_entities: z.array(LiflyMcpEntityRefSchema),
+    undo_token: z.string().min(1),
+  }).passthrough(),
+  capture_undo: z.object({
+    undone: z.number().int().nonnegative(),
+    entities: z.array(LiflyMcpEntityRefSchema).optional(),
+    failed_entities: z.array(LiflyMcpEntityRefSchema.passthrough()),
+  }).passthrough(),
+  memo_create: z.object({
+    memo_id: z.string().min(1),
+    memo: LiflyMcpMemoSchema,
+    undo_token: z.string().min(1).nullable().optional(),
+    status: EntityStatusSchema.optional(),
+  }).passthrough(),
+  memo_search: z.object({
+    memos: z.array(LiflyMcpMemoSchema),
+  }).passthrough(),
+  expense_create: z.object({
+    transaction: LiflyMcpLedgerTransactionSchema,
+    undo_token: z.string().min(1).nullable().optional(),
+  }).passthrough(),
+  expense_search: z.object({
+    transactions: z.array(LiflyMcpLedgerTransactionSchema),
+  }).passthrough(),
+  expense_summary: LiflyMcpExpenseSummarySchema,
+  task_create: z.object({
+    task: LiflyMcpTaskSchema,
+    undo_token: z.string().min(1).nullable().optional(),
+  }).passthrough(),
+  task_list: z.object({
+    tasks: z.array(LiflyMcpTaskSchema),
+  }).passthrough(),
+  task_complete: z.object({
+    task: LiflyMcpTaskSchema,
+  }).passthrough(),
+  asset_create_upload_url: z.union([
+    z.object({
+      asset_id: z.string().min(1),
+      storage_key: z.string().min(1),
+      upload_url: z.string().min(1),
+      asset: LiflyMcpAssetSchema,
+    }).passthrough(),
+    z.object({
+      unsupported: z.literal(true),
+      reason: z.string().min(1),
+    }).passthrough(),
+  ]),
+  asset_register_external_url: z.object({
+    asset: LiflyMcpAssetSchema,
+  }).passthrough(),
+} as const satisfies Record<LiflyMcpToolName, z.ZodTypeAny>;
+
+export type LiflyMcpToolOutputMap = {
+  [K in keyof typeof LiflyMcpToolOutputSchemas]: z.infer<(typeof LiflyMcpToolOutputSchemas)[K]>;
+};
+
 export const LiflyMcpToolDescriptions: Record<LiflyMcpToolName, string> = {
   capture_parse: "Parse natural language into candidate memo, expense, and task actions without committing them.",
   capture_commit: "Commit selected actions from a capture session and return an undo token.",
@@ -178,8 +326,20 @@ export const LiflyMcpToolSchemas = Object.entries(LiflyMcpToolInputSchemas).map(
   }),
 );
 
+export const LiflyMcpToolContracts = LiflyMcpToolNameSchema.options.map((name) => ({
+  name,
+  version: LiflyMcpToolContractVersion,
+  description: LiflyMcpToolDescriptions[name],
+  inputSchema: LiflyMcpToolInputSchemas[name],
+  outputSchema: LiflyMcpToolOutputSchemas[name],
+}));
+
 export function getLiflyMcpToolInputSchema(name: LiflyMcpToolName): z.ZodTypeAny {
   return LiflyMcpToolInputSchemas[name];
+}
+
+export function getLiflyMcpToolOutputSchema(name: LiflyMcpToolName): z.ZodTypeAny {
+  return LiflyMcpToolOutputSchemas[name];
 }
 
 export function parseLiflyMcpToolInput<TName extends LiflyMcpToolName>(
@@ -187,4 +347,11 @@ export function parseLiflyMcpToolInput<TName extends LiflyMcpToolName>(
   input: unknown,
 ): LiflyMcpToolInputMap[TName] {
   return LiflyMcpToolInputSchemas[name].parse(input) as LiflyMcpToolInputMap[TName];
+}
+
+export function parseLiflyMcpToolOutput<TName extends LiflyMcpToolName>(
+  name: TName,
+  output: unknown,
+): LiflyMcpToolOutputMap[TName] {
+  return LiflyMcpToolOutputSchemas[name].parse(output) as LiflyMcpToolOutputMap[TName];
 }
