@@ -52,9 +52,28 @@ router = APIRouter()
 CLOUD_MCP_SOURCE_CHANNEL = "cloud_mcp"
 MCP_AI_ACTOR_TYPE = "ai"
 MCP_ENTITY_SOURCE = "ai"
+MCP_MAX_CAPTURE_COMMIT_ACTIONS = 10
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+def _validation_error_detail(exc: ValidationError) -> list[dict]:
+    return [
+        {
+            "loc": list(error.get("loc", [])),
+            "msg": error.get("msg", "validation error"),
+            "type": error.get("type", "value_error"),
+        }
+        for error in exc.errors()
+    ]
+
+
+def _request_id(request: Request, body: dict | None = None) -> str | None:
+    value = request.headers.get("x-request-id") or (body or {}).get("request_id")
+    if value is None:
+        return None
+    return str(value)[:64]
+
+
 async def _read_json_body(request: Request) -> dict:
     try:
         body = await request.json()
@@ -78,6 +97,7 @@ async def _write_audit(
     source: str | None = CLOUD_MCP_SOURCE_CHANNEL,
     tool_name: str | None = None,
     source_text: str | None = None,
+    request_id: str | None = None,
 ):
     log = AuditLog(
         user_id=user_id,
@@ -90,6 +110,7 @@ async def _write_audit(
         source_channel=source,
         tool_name=tool_name,
         source_text=source_text,
+        request_id=request_id,
     )
     db.add(log)
 
@@ -177,6 +198,7 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
     if not capture_id:
         raise HTTPException(status_code=422, detail="capture_id is required")
     selected_indexes: list[int] | None = body.get("selected_action_indexes")
+    request_id = _request_id(request, body)
 
     db_session = await get_active_capture_session(
         db,
@@ -196,6 +218,13 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
         if db_session
         else memory_session.actions
     )
+    selected_count = len(session_actions) if selected_indexes is None else len(selected_indexes)
+    if selected_count > MCP_MAX_CAPTURE_COMMIT_ACTIONS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"capture_commit supports at most {MCP_MAX_CAPTURE_COMMIT_ACTIONS} actions per request",
+        )
+
     commit_result = await commit_capture_actions(
         db,
         capture_id=capture_id,
@@ -206,6 +235,7 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
         source_channel=CLOUD_MCP_SOURCE_CHANNEL,
         entity_source=MCP_ENTITY_SOURCE,
         source_text=body.get("source_text"),
+        request_id=request_id,
     )
 
     undo_token = str(uuid.uuid4())
@@ -240,6 +270,7 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
     undo_token = data.undo_token
+    request_id = _request_id(request, body)
     entries = await consume_undo_entries(
         db,
         undo_token=undo_token,
@@ -313,6 +344,7 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
             before=before_snap,
             tool_name="capture_undo",
             source_text=f"undo_token={undo_token}",
+            request_id=request_id,
         )
         undone_entities.append({"type": entry.entity_type, "id": entry.entity_id})
 
@@ -344,6 +376,7 @@ async def mcp_memo_create(request: Request, db: AsyncSession = Depends(get_db)):
         source_channel=CLOUD_MCP_SOURCE_CHANNEL,
         tool_name="memo_create",
         source_text=body.get("source_text") or body.get("content_markdown"),
+        request_id=_request_id(request, body),
     )
 
     undo_token = str(uuid.uuid4())
@@ -406,6 +439,7 @@ async def mcp_expense_create(request: Request, db: AsyncSession = Depends(get_db
         source_channel=CLOUD_MCP_SOURCE_CHANNEL,
         tool_name="expense_create",
         source_text=body.get("source_text") or body.get("note") or body.get("merchant"),
+        request_id=_request_id(request, body),
     )
 
     undo_token = str(uuid.uuid4())
@@ -490,6 +524,7 @@ async def mcp_task_create(request: Request, db: AsyncSession = Depends(get_db)):
         source_channel=CLOUD_MCP_SOURCE_CHANNEL,
         tool_name="task_create",
         source_text=body.get("source_text") or body.get("title") or body.get("description"),
+        request_id=_request_id(request, body),
     )
 
     undo_token = str(uuid.uuid4())
@@ -540,6 +575,7 @@ async def mcp_task_complete(request: Request, db: AsyncSession = Depends(get_db)
         source_channel=CLOUD_MCP_SOURCE_CHANNEL,
         tool_name="task_complete",
         source_text=body.get("source_text") or data.task_id,
+        request_id=_request_id(request, body),
     )
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -565,6 +601,7 @@ async def mcp_asset_create_upload_url(request: Request, db: AsyncSession = Depen
         source_channel=CLOUD_MCP_SOURCE_CHANNEL,
         tool_name="asset_create_upload_url",
         source_text=body.get("source_text") or body.get("filename"),
+        request_id=_request_id(request, body),
     )
     undo_token = str(uuid.uuid4())
     await _persist_create_undo_entries(
@@ -600,6 +637,7 @@ async def mcp_asset_register_external_url(request: Request, db: AsyncSession = D
         source_channel=CLOUD_MCP_SOURCE_CHANNEL,
         tool_name="asset_register_external_url",
         source_text=body.get("source_text") or body.get("external_url"),
+        request_id=_request_id(request, body),
     )
     undo_token = str(uuid.uuid4())
     await _persist_create_undo_entries(

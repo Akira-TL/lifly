@@ -20,6 +20,7 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   ApiHealthStatus? _health;
   McpSmokeReport? _smokeReport;
+  AiAuditSummary? _aiAuditSummary;
   LocalCoreHealth? _localCoreHealth;
   LiflyPowerSyncCredentials? _powerSyncCredentials;
   SyncPushUploadDiagnostics _uploadDiagnostics =
@@ -27,10 +28,12 @@ class _SettingsPageState extends State<SettingsPage> {
   PowerSyncConnectionDiagnostics _connectionDiagnostics =
       const PowerSyncConnectionDiagnostics.idle();
   String? _diagnosticError;
+  String? _aiAuditError;
   String? _localCoreError;
   String? _powerSyncCredentialsError;
   bool _checkingHealth = false;
   bool _runningSmoke = false;
+  bool _checkingAiAudit = false;
   bool _checkingLocalCore = false;
   bool _checkingPowerSyncCredentials = false;
   bool _connectingPowerSync = false;
@@ -53,6 +56,27 @@ class _SettingsPageState extends State<SettingsPage> {
     } finally {
       if (mounted) {
         setState(() => _checkingHealth = false);
+      }
+    }
+  }
+
+  Future<void> _checkAiAudit() async {
+    setState(() {
+      _checkingAiAudit = true;
+      _aiAuditError = null;
+    });
+
+    try {
+      final diagnostics = ApiDiagnosticsService(context.read<ApiClient>());
+      final summary = await diagnostics.fetchAiAuditSummary();
+      if (!mounted) return;
+      setState(() => _aiAuditSummary = summary);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _aiAuditError = 'AI audit check failed: $error');
+    } finally {
+      if (mounted) {
+        setState(() => _checkingAiAudit = false);
       }
     }
   }
@@ -202,6 +226,13 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const SizedBox(height: 12),
           _DataModeCard(dataMode: dataMode),
+          const SizedBox(height: 12),
+          _AiAuditSummaryCard(
+            summary: _aiAuditSummary,
+            error: _aiAuditError,
+            checking: _checkingAiAudit,
+            onCheck: _checkAiAudit,
+          ),
           const SizedBox(height: 12),
           _LocalMcpStatusCard(
             health: _localCoreHealth,
@@ -366,6 +397,77 @@ class _DataModeCard extends StatelessWidget {
             _StatusRow(label: '当前模式', value: dataMode.label),
             const _StatusRow(label: '切换方式', value: 'LIFLY_DATA_MODE=api|local'),
             const _StatusRow(label: '本地范围', value: 'memo / task / expense'),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AiAuditSummaryCard extends StatelessWidget {
+  final AiAuditSummary? summary;
+  final String? error;
+  final bool checking;
+  final VoidCallback onCheck;
+
+  const _AiAuditSummaryCard({
+    required this.summary,
+    required this.error,
+    required this.checking,
+    required this.onCheck,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.verified_user_outlined, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'AI 写入审计',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _StatusRow(label: 'AI 写入总数', value: '${summary?.total ?? 0}'),
+            if (summary != null && summary!.items.isNotEmpty)
+              ...summary!.items.map(
+                (item) => _StatusRow(
+                  label: '${item.sourceChannel}/${item.toolName}',
+                  value: '${item.count}',
+                ),
+              ),
+            if (error != null) ...[
+              const SizedBox(height: 8),
+              Text(error!, style: TextStyle(color: theme.colorScheme.error)),
+            ],
+            const SizedBox(height: 8),
+            Text(
+              '只展示聚合计数；具体 source_text 不在诊断页展示。',
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: checking ? null : onCheck,
+              icon: checking
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh_outlined),
+              label: const Text('刷新 AI 审计'),
+            ),
           ],
         ),
       ),

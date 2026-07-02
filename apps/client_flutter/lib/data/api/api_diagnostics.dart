@@ -42,6 +42,45 @@ class McpSmokeReport {
   int get totalCount => steps.length;
 }
 
+class AiAuditSummaryItem {
+  final String sourceChannel;
+  final String toolName;
+  final int count;
+
+  const AiAuditSummaryItem({
+    required this.sourceChannel,
+    required this.toolName,
+    required this.count,
+  });
+
+  factory AiAuditSummaryItem.fromJson(Map<String, dynamic> json) {
+    return AiAuditSummaryItem(
+      sourceChannel: json['source_channel'] as String? ?? 'unknown',
+      toolName: json['tool_name'] as String? ?? 'unknown',
+      count: json['count'] as int? ?? 0,
+    );
+  }
+}
+
+class AiAuditSummary {
+  final List<AiAuditSummaryItem> items;
+
+  const AiAuditSummary(this.items);
+
+  int get total => items.fold(0, (sum, item) => sum + item.count);
+
+  factory AiAuditSummary.fromJson(Map<String, dynamic> json) {
+    final data = json['data'] as Map<String, dynamic>? ?? const {};
+    final items = data['items'] as List? ?? const [];
+    return AiAuditSummary(
+      items
+          .whereType<Map>()
+          .map((item) => AiAuditSummaryItem.fromJson(Map<String, dynamic>.from(item)))
+          .toList(),
+    );
+  }
+}
+
 class ApiDiagnosticsService {
   final ApiClient api;
 
@@ -50,6 +89,11 @@ class ApiDiagnosticsService {
   Future<ApiHealthStatus> fetchHealth() async {
     final response = await api.get('/health');
     return ApiHealthStatus.fromJson(response);
+  }
+
+  Future<AiAuditSummary> fetchAiAuditSummary() async {
+    final response = await api.get('/audit/ai-summary');
+    return AiAuditSummary.fromJson(response);
   }
 
   Future<McpSmokeReport> runMcpSmoke() async {

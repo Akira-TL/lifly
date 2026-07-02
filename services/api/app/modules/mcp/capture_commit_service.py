@@ -46,6 +46,17 @@ class IndexedCaptureAction:
     action: CandidateAction
 
 
+def sanitize_validation_errors(exc: ValidationError) -> list[dict]:
+    return [
+        {
+            "loc": list(error.get("loc", [])),
+            "msg": error.get("msg", "validation error"),
+            "type": error.get("type", "value_error"),
+        }
+        for error in exc.errors()
+    ]
+
+
 def select_capture_actions(
     actions: list[CandidateAction],
     selected_indexes: list[int] | None,
@@ -82,6 +93,7 @@ async def commit_capture_actions(
     source_channel: str,
     entity_source: str,
     source_text: str | None,
+    request_id: str | None = None,
 ) -> CaptureCommitResult:
     selected_actions, failures = select_capture_actions(actions, selected_indexes)
     result = CaptureCommitResult(failed_actions=failures)
@@ -100,7 +112,7 @@ async def commit_capture_actions(
                 })
             except ValidationError as exc:
                 result.failed_actions.append(
-                    CaptureCommitFailure(indexed.index, action.type, "validation_error", exc.errors())
+                    CaptureCommitFailure(indexed.index, action.type, "validation_error", sanitize_validation_errors(exc))
                 )
                 continue
 
@@ -112,6 +124,7 @@ async def commit_capture_actions(
                 source_channel=source_channel,
                 tool_name="capture_commit",
                 source_text=source_text or action.raw_text,
+                request_id=request_id,
             )
             result.created_entities.append({"type": "memo", "id": memo.id})
             continue
@@ -127,7 +140,7 @@ async def commit_capture_actions(
                 })
             except ValidationError as exc:
                 result.failed_actions.append(
-                    CaptureCommitFailure(indexed.index, action.type, "validation_error", exc.errors())
+                    CaptureCommitFailure(indexed.index, action.type, "validation_error", sanitize_validation_errors(exc))
                 )
                 continue
 
@@ -139,6 +152,7 @@ async def commit_capture_actions(
                 source_channel=source_channel,
                 tool_name="capture_commit",
                 source_text=source_text or action.raw_text,
+                request_id=request_id,
             )
             result.created_entities.append({"type": "ledger_transaction", "id": tx.id})
             continue
@@ -152,7 +166,7 @@ async def commit_capture_actions(
                 })
             except ValidationError as exc:
                 result.failed_actions.append(
-                    CaptureCommitFailure(indexed.index, action.type, "validation_error", exc.errors())
+                    CaptureCommitFailure(indexed.index, action.type, "validation_error", sanitize_validation_errors(exc))
                 )
                 continue
 
@@ -164,6 +178,7 @@ async def commit_capture_actions(
                 source_channel=source_channel,
                 tool_name="capture_commit",
                 source_text=source_text or action.raw_text,
+                request_id=request_id,
             )
             result.created_entities.append({"type": "task", "id": task.id})
             continue

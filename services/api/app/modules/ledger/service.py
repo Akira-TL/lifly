@@ -50,6 +50,7 @@ async def write_ledger_audit(
     source_channel: str = "api",
     tool_name: str | None = None,
     source_text: str | None = None,
+    request_id: str | None = None,
 ) -> AuditLog:
     log = AuditLog(
         user_id=user_id,
@@ -62,6 +63,7 @@ async def write_ledger_audit(
         source_channel=source_channel,
         tool_name=tool_name,
         source_text=source_text,
+        request_id=request_id,
     )
     db.add(log)
     return log
@@ -76,6 +78,7 @@ async def create_ledger_transaction_record(
     source_channel: str = "api",
     tool_name: str | None = None,
     source_text: str | None = None,
+    request_id: str | None = None,
 ) -> LedgerTransaction:
     tx = LedgerTransaction(
         user_id=user_id,
@@ -104,5 +107,6 @@ async def create_ledger_transaction_record(
         source_channel=source_channel,
         tool_name=tool_name,
         source_text=source_text,
+        request_id=request_id,
     )
     return tx

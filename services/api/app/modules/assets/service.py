@@ -53,6 +53,7 @@ async def write_asset_audit(
     source_channel: str = "api",
     tool_name: str | None = None,
     source_text: str | None = None,
+    request_id: str | None = None,
 ) -> None:
     log = AuditLog(
         user_id=user_id,
@@ -65,6 +66,7 @@ async def write_asset_audit(
         source_channel=source_channel,
         tool_name=tool_name,
         source_text=source_text,
+        request_id=request_id,
     )
     db.add(log)
 
@@ -78,6 +80,7 @@ async def create_internal_asset_upload_record(
     source_channel: str = "api",
     tool_name: str | None = None,
     source_text: str | None = None,
+    request_id: str | None = None,
 ) -> tuple[Asset, str]:
     asset_id = str(uuid.uuid4())
     storage_key = f"attachments/{user_id}/{asset_id}/{data.filename}"
@@ -109,6 +112,7 @@ async def create_internal_asset_upload_record(
         source_channel=source_channel,
         tool_name=tool_name,
         source_text=source_text or data.filename,
+        request_id=request_id,
     )
     return asset, upload_url
 
@@ -122,6 +126,7 @@ async def register_external_asset_record(
     source_channel: str = "api",
     tool_name: str | None = None,
     source_text: str | None = None,
+    request_id: str | None = None,
 ) -> Asset:
     asset = Asset(
         user_id=user_id,
@@ -146,5 +151,6 @@ async def register_external_asset_record(
         source_channel=source_channel,
         tool_name=tool_name,
         source_text=source_text or data.external_url,
+        request_id=request_id,
     )
     return asset

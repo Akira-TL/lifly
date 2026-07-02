@@ -3,12 +3,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.db.models import AuditLog, Memo, LedgerTransaction, Task, Tombstone
-from app.schemas.common import ApiResponse, PaginatedResponse, json_serialize
+from app.db.models import AuditLog, LedgerTransaction, Memo, Task, Tombstone
+from app.schemas.common import ApiResponse
 
 router = APIRouter()
 
@@ -16,6 +16,10 @@ router = APIRouter()
 @router.get("/audit")
 async def list_audit_logs(
     entity_type: str | None = Query(default=None),
+    actor_type: str | None = Query(default=None),
+    source_channel: str | None = Query(default=None),
+    tool_name: str | None = Query(default=None),
+    request_id: str | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -23,13 +27,21 @@ async def list_audit_logs(
     query = select(AuditLog).where(AuditLog.user_id == "local-dev")
     if entity_type:
         query = query.where(AuditLog.entity_type == entity_type)
-    query = query.order_by(AuditLog.created_at.desc()).offset(offset).limit(limit)
+    if actor_type:
+        query = query.where(AuditLog.actor_type == actor_type)
+    if source_channel:
+        query = query.where(AuditLog.source_channel == source_channel)
+    if tool_name:
+        query = query.where(AuditLog.tool_name == tool_name)
+    if request_id:
+        query = query.where(AuditLog.request_id == request_id)
 
     count_result = await db.execute(
         select(func.count()).select_from(query.subquery())
     )
     total = count_result.scalar() or 0
 
+    query = query.order_by(AuditLog.created_at.desc()).offset(offset).limit(limit)
     result = await db.execute(query)
     logs = result.scalars().all()
     return ApiResponse(data={
@@ -44,8 +56,39 @@ async def list_audit_logs(
             "entity_id": log.entity_id,
             "tool_name": log.tool_name,
             "source_channel": log.source_channel,
+            "request_id": log.request_id,
+            "has_before_snapshot": log.before_snapshot is not None,
+            "has_after_snapshot": log.after_snapshot is not None,
             "created_at": log.created_at.isoformat(),
         } for log in logs],
+    })
+
+
+@router.get("/audit/ai-summary")
+async def ai_audit_summary(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(
+            AuditLog.source_channel,
+            AuditLog.tool_name,
+            func.count().label("count"),
+        )
+        .where(
+            AuditLog.user_id == "local-dev",
+            AuditLog.actor_type == "ai",
+        )
+        .group_by(AuditLog.source_channel, AuditLog.tool_name)
+    )
+    rows = result.all()
+    return ApiResponse(data={
+        "actor_type": "ai",
+        "items": [
+            {
+                "source_channel": row.source_channel,
+                "tool_name": row.tool_name,
+                "count": row.count,
+            }
+            for row in rows
+        ],
     })
 
 

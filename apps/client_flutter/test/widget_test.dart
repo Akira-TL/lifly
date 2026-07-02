@@ -118,6 +118,21 @@ class FakeApiClient extends ApiClient {
     if (path == '/tasks/task-test') {
       return {'success': true, 'data': task};
     }
+    if (path == '/audit/ai-summary') {
+      return {
+        'success': true,
+        'data': {
+          'actor_type': 'ai',
+          'items': [
+            {
+              'source_channel': 'cloud_mcp',
+              'tool_name': 'capture_commit',
+              'count': 1,
+            },
+          ],
+        },
+      };
+    }
     return {'success': true, 'data': {}};
   }
 }
