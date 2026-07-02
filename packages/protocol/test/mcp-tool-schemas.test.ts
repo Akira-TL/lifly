@@ -1,10 +1,16 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  LiflyMcpToolContractVersion,
+  LiflyMcpToolContracts,
+  LiflyMcpToolDescriptions,
   LiflyMcpToolInputSchemas,
   LiflyMcpToolNameSchema,
+  LiflyMcpToolOutputSchemas,
   LiflyMcpToolSchemas,
   parseLiflyMcpToolInput,
+  parseLiflyMcpToolOutput,
 } from "../src/index.js";
 
 const FROZEN_TOOL_NAMES = [
@@ -23,11 +29,147 @@ const FROZEN_TOOL_NAMES = [
   "asset_register_external_url",
 ] as const;
 
-describe("Lifly MCP Tool Schema v0.1", () => {
-  it("matches the frozen v0.1 tool list exactly", () => {
+const NOW = "2026-07-02T10:00:00.000Z";
+
+const MEMO = {
+  id: "memo_1",
+  type: "memo",
+  title: "灵感",
+  content_markdown: "# 想法",
+  tags: ["lifly"],
+  status: "active",
+  revision: 1,
+  created_at: NOW,
+  updated_at: NOW,
+};
+
+const TRANSACTION = {
+  id: "tx_1",
+  direction: "expense",
+  amount: 28,
+  currency: "CNY",
+  merchant: "食堂",
+  note: null,
+  category_hint: "餐饮",
+  occurred_at: NOW,
+  status: "active",
+  revision: 1,
+  created_at: NOW,
+  updated_at: NOW,
+};
+
+const TASK = {
+  id: "task_1",
+  title: "买猫粮",
+  description: null,
+  due_at: null,
+  remind_at: NOW,
+  priority: "normal",
+  task_status: "todo",
+  completed_at: null,
+  status: "active",
+  revision: 1,
+  created_at: NOW,
+  updated_at: NOW,
+};
+
+const ASSET = {
+  id: "asset_1",
+  kind: "external",
+  asset_type: "link",
+  title: "Lifly",
+  external_url: "https://example.com/lifly",
+  sync_status: "synced",
+  revision: 1,
+  created_at: NOW,
+  updated_at: NOW,
+};
+
+const OUTPUT_SAMPLES: Record<(typeof FROZEN_TOOL_NAMES)[number], unknown> = {
+  capture_parse: {
+    capture_id: "capture_1",
+    actions: [{ type: "memo_create", payload: { content_markdown: "记一下" }, confidence: 0.8 }],
+    requires_confirmation: false,
+  },
+  capture_commit: {
+    committed: true,
+    created_entities: [{ type: "memo", id: "memo_1" }],
+    undo_token: "undo_1",
+  },
+  capture_undo: {
+    undone: 1,
+    entities: [{ type: "memo", id: "memo_1" }],
+    failed_entities: [],
+  },
+  memo_create: {
+    memo_id: "memo_1",
+    memo: MEMO,
+    undo_token: "undo_1",
+  },
+  memo_search: {
+    memos: [MEMO],
+  },
+  expense_create: {
+    transaction: TRANSACTION,
+    undo_token: "undo_1",
+  },
+  expense_search: {
+    transactions: [TRANSACTION],
+  },
+  expense_summary: {
+    period: "current_month",
+    total_expense: 28,
+    total_income: 0,
+    count: 1,
+  },
+  task_create: {
+    task: TASK,
+    undo_token: "undo_1",
+  },
+  task_list: {
+    tasks: [TASK],
+  },
+  task_complete: {
+    task: { ...TASK, task_status: "done", completed_at: NOW },
+  },
+  asset_create_upload_url: {
+    asset_id: "asset_2",
+    storage_key: "attachments/local-dev/asset_2/demo.txt",
+    upload_url: "http://localhost:9000/upload/demo.txt",
+    asset: { ...ASSET, id: "asset_2", kind: "internal", asset_type: "file", external_url: null, sync_status: "pending" },
+  },
+  asset_register_external_url: {
+    asset: ASSET,
+  },
+};
+
+describe("Lifly MCP Tool Schema", () => {
+  it("matches the frozen tool list exactly", () => {
     expect(LiflyMcpToolNameSchema.options).toEqual(FROZEN_TOOL_NAMES);
     expect(Object.keys(LiflyMcpToolInputSchemas)).toEqual(FROZEN_TOOL_NAMES);
+    expect(Object.keys(LiflyMcpToolOutputSchemas)).toEqual(FROZEN_TOOL_NAMES);
+    expect(Object.keys(LiflyMcpToolDescriptions)).toEqual(FROZEN_TOOL_NAMES);
     expect(LiflyMcpToolSchemas.map((tool) => tool.name)).toEqual(FROZEN_TOOL_NAMES);
+    expect(LiflyMcpToolContracts.map((tool) => tool.name)).toEqual(FROZEN_TOOL_NAMES);
+  });
+
+  it("attaches input and output schemas to every contract", () => {
+    for (const contract of LiflyMcpToolContracts) {
+      expect(contract.version).toBe(LiflyMcpToolContractVersion);
+      expect(contract.description).toBe(LiflyMcpToolDescriptions[contract.name]);
+      expect(contract.inputSchema).toBe(LiflyMcpToolInputSchemas[contract.name]);
+      expect(contract.outputSchema).toBe(LiflyMcpToolOutputSchemas[contract.name]);
+    }
+  });
+
+  it("keeps the Python Cloud MCP tool list aligned with packages/protocol", () => {
+    const cloudServer = readFileSync(
+      new URL("../../../services/api/app/modules/mcp/cloud_server.py", import.meta.url),
+      "utf8",
+    );
+    const cloudToolNames = [...cloudServer.matchAll(/@cloud_mcp\.tool\(\s*name="([^"]+)"/g)].map((match) => match[1]);
+
+    expect(cloudToolNames).toEqual(FROZEN_TOOL_NAMES);
   });
 
   it("parses capture_parse input with defaults", () => {
@@ -133,5 +275,16 @@ describe("Lifly MCP Tool Schema v0.1", () => {
         external_url: "not-a-url",
       }),
     ).toThrow();
+  });
+
+  it("parses every declared tool output sample", () => {
+    for (const toolName of FROZEN_TOOL_NAMES) {
+      expect(parseLiflyMcpToolOutput(toolName, OUTPUT_SAMPLES[toolName])).toBeTruthy();
+    }
+  });
+
+  it("rejects invalid output shape", () => {
+    expect(() => parseLiflyMcpToolOutput("memo_create", { memo_id: "memo_1" })).toThrow();
+    expect(() => parseLiflyMcpToolOutput("capture_commit", { committed: true })).toThrow();
   });
 });
