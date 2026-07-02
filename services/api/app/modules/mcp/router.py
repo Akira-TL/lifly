@@ -42,6 +42,10 @@ from app.schemas.common import (
 
 router = APIRouter()
 
+CLOUD_MCP_SOURCE_CHANNEL = "cloud_mcp"
+MCP_AI_ACTOR_TYPE = "ai"
+MCP_ENTITY_SOURCE = "ai"
+
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 async def _read_json_body(request: Request) -> dict:
@@ -64,13 +68,13 @@ async def _write_audit(
     entity_id: str,
     before: dict | None = None,
     after: dict | None = None,
-    source: str | None = "mcp",
+    source: str | None = CLOUD_MCP_SOURCE_CHANNEL,
     tool_name: str | None = None,
     source_text: str | None = None,
 ):
     log = AuditLog(
         user_id=user_id,
-        actor_type="ai",
+        actor_type=MCP_AI_ACTOR_TYPE,
         action=action,
         entity_type=entity_type,
         entity_id=entity_id,
@@ -175,7 +179,7 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
                 data = MemoCreate.model_validate({
                     **payload,
                     "type": payload.get("type") or "memo",
-                    "source": payload.get("source") or "ai",
+                    "source": payload.get("source") or MCP_ENTITY_SOURCE,
                     "source_capture_id": capture_id,
                 })
             except ValidationError as exc:
@@ -185,8 +189,8 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
                 db,
                 data,
                 user_id=DEFAULT_LOCAL_USER_ID,
-                actor_type="ai",
-                source_channel="mcp",
+                actor_type=MCP_AI_ACTOR_TYPE,
+                source_channel=CLOUD_MCP_SOURCE_CHANNEL,
                 tool_name="capture_commit",
                 source_text=body.get("source_text") or act.raw_text,
             )
@@ -197,7 +201,7 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
                 data = LedgerTransactionCreate.model_validate({
                     **payload,
                     "direction": payload.get("direction") or "expense",
-                    "source": payload.get("source") or "ai",
+                    "source": payload.get("source") or MCP_ENTITY_SOURCE,
                     "source_capture_id": capture_id,
                     "confidence": payload.get("confidence") if payload.get("confidence") is not None else act.confidence,
                 })
@@ -208,8 +212,8 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
                 db,
                 data,
                 user_id=DEFAULT_LOCAL_USER_ID,
-                actor_type="ai",
-                source_channel="mcp",
+                actor_type=MCP_AI_ACTOR_TYPE,
+                source_channel=CLOUD_MCP_SOURCE_CHANNEL,
                 tool_name="capture_commit",
                 source_text=body.get("source_text") or act.raw_text,
             )
@@ -219,7 +223,7 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
             try:
                 data = TaskCreate.model_validate({
                     **payload,
-                    "source": payload.get("source") or "ai",
+                    "source": payload.get("source") or MCP_ENTITY_SOURCE,
                     "source_capture_id": capture_id,
                 })
             except ValidationError as exc:
@@ -229,8 +233,8 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
                 db,
                 data,
                 user_id=DEFAULT_LOCAL_USER_ID,
-                actor_type="ai",
-                source_channel="mcp",
+                actor_type=MCP_AI_ACTOR_TYPE,
+                source_channel=CLOUD_MCP_SOURCE_CHANNEL,
                 tool_name="capture_commit",
                 source_text=body.get("source_text") or act.raw_text,
             )
@@ -345,7 +349,7 @@ async def mcp_memo_create(request: Request, db: AsyncSession = Depends(get_db)):
     try:
         data = MemoCreate.model_validate({
             **body,
-            "source": body.get("source") or "ai",
+            "source": body.get("source") or MCP_ENTITY_SOURCE,
         })
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
@@ -354,8 +358,8 @@ async def mcp_memo_create(request: Request, db: AsyncSession = Depends(get_db)):
         db,
         data,
         user_id=DEFAULT_LOCAL_USER_ID,
-        actor_type="ai",
-        source_channel="mcp",
+        actor_type=MCP_AI_ACTOR_TYPE,
+        source_channel=CLOUD_MCP_SOURCE_CHANNEL,
         tool_name="memo_create",
         source_text=body.get("source_text") or body.get("content_markdown"),
     )
@@ -407,7 +411,7 @@ async def mcp_expense_create(request: Request, db: AsyncSession = Depends(get_db
         data = LedgerTransactionCreate.model_validate({
             **body,
             "direction": body.get("direction") or "expense",
-            "source": body.get("source") or "ai",
+            "source": body.get("source") or MCP_ENTITY_SOURCE,
         })
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
@@ -416,8 +420,8 @@ async def mcp_expense_create(request: Request, db: AsyncSession = Depends(get_db
         db,
         data,
         user_id=DEFAULT_LOCAL_USER_ID,
-        actor_type="ai",
-        source_channel="mcp",
+        actor_type=MCP_AI_ACTOR_TYPE,
+        source_channel=CLOUD_MCP_SOURCE_CHANNEL,
         tool_name="expense_create",
         source_text=body.get("source_text") or body.get("note") or body.get("merchant"),
     )
@@ -491,7 +495,7 @@ async def mcp_task_create(request: Request, db: AsyncSession = Depends(get_db)):
     try:
         data = TaskCreate.model_validate({
             **body,
-            "source": body.get("source") or "ai",
+            "source": body.get("source") or MCP_ENTITY_SOURCE,
         })
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
@@ -500,8 +504,8 @@ async def mcp_task_create(request: Request, db: AsyncSession = Depends(get_db)):
         db,
         data,
         user_id=DEFAULT_LOCAL_USER_ID,
-        actor_type="ai",
-        source_channel="mcp",
+        actor_type=MCP_AI_ACTOR_TYPE,
+        source_channel=CLOUD_MCP_SOURCE_CHANNEL,
         tool_name="task_create",
         source_text=body.get("source_text") or body.get("title") or body.get("description"),
     )
@@ -550,8 +554,8 @@ async def mcp_task_complete(request: Request, db: AsyncSession = Depends(get_db)
         db,
         task_id=data.task_id,
         user_id=DEFAULT_LOCAL_USER_ID,
-        actor_type="ai",
-        source_channel="mcp",
+        actor_type=MCP_AI_ACTOR_TYPE,
+        source_channel=CLOUD_MCP_SOURCE_CHANNEL,
         tool_name="task_complete",
         source_text=body.get("source_text") or data.task_id,
     )
@@ -575,8 +579,8 @@ async def mcp_asset_create_upload_url(request: Request, db: AsyncSession = Depen
         db,
         data,
         user_id=DEFAULT_LOCAL_USER_ID,
-        actor_type="ai",
-        source_channel="mcp",
+        actor_type=MCP_AI_ACTOR_TYPE,
+        source_channel=CLOUD_MCP_SOURCE_CHANNEL,
         tool_name="asset_create_upload_url",
         source_text=body.get("source_text") or body.get("filename"),
     )
@@ -603,8 +607,8 @@ async def mcp_asset_register_external_url(request: Request, db: AsyncSession = D
         db,
         data,
         user_id=DEFAULT_LOCAL_USER_ID,
-        actor_type="ai",
-        source_channel="mcp",
+        actor_type=MCP_AI_ACTOR_TYPE,
+        source_channel=CLOUD_MCP_SOURCE_CHANNEL,
         tool_name="asset_register_external_url",
         source_text=body.get("source_text") or body.get("external_url"),
     )
