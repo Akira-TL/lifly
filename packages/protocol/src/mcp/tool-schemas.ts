@@ -247,6 +247,12 @@ export const LiflyMcpToolOutputSchemas = {
   capture_commit: z.object({
     committed: z.boolean(),
     created_entities: z.array(LiflyMcpEntityRefSchema),
+    failed_actions: z.array(z.object({
+      action_index: z.number().int().nonnegative(),
+      action_type: z.string().nullable(),
+      reason: z.string().min(1),
+      detail: z.unknown().optional(),
+    }).passthrough()).default([]),
     undo_token: z.string().min(1),
   }).passthrough(),
   capture_undo: z.object({

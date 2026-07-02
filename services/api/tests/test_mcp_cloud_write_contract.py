@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 
-from app.modules.mcp import router as mcp_router
+from app.modules.mcp import capture_commit_service, router as mcp_router
 
 
 DIRECT_WRITE_HANDLERS = [
@@ -32,11 +32,20 @@ def test_direct_cloud_mcp_write_handlers_use_cloud_source_context() -> None:
         assert 'actor_type="ai"' not in source
 
 
-def test_capture_commit_uses_cloud_source_context_for_all_entity_writes() -> None:
+def test_capture_commit_passes_cloud_source_context_to_commit_service() -> None:
     source = inspect.getsource(mcp_router.capture_commit)
 
-    assert source.count("actor_type=MCP_AI_ACTOR_TYPE") == 3
-    assert source.count("source_channel=CLOUD_MCP_SOURCE_CHANNEL") == 3
+    assert "commit_capture_actions" in source
+    assert "actor_type=MCP_AI_ACTOR_TYPE" in source
+    assert "source_channel=CLOUD_MCP_SOURCE_CHANNEL" in source
+    assert "entity_source=MCP_ENTITY_SOURCE" in source
+    assert 'source_channel="mcp"' not in source
+    assert 'actor_type="ai"' not in source
+
+
+def test_capture_commit_service_uses_capture_commit_tool_name_for_all_entity_writes() -> None:
+    source = inspect.getsource(capture_commit_service.commit_capture_actions)
+
     assert source.count('tool_name="capture_commit"') == 3
     assert 'source_channel="mcp"' not in source
     assert 'actor_type="ai"' not in source

@@ -94,6 +94,7 @@ const OUTPUT_SAMPLES: Record<(typeof FROZEN_TOOL_NAMES)[number], unknown> = {
   capture_commit: {
     committed: true,
     created_entities: [{ type: "memo", id: "memo_1" }],
+    failed_actions: [],
     undo_token: "undo_1",
   },
   capture_undo: {
@@ -281,6 +282,17 @@ describe("Lifly MCP Tool Schema", () => {
     for (const toolName of FROZEN_TOOL_NAMES) {
       expect(parseLiflyMcpToolOutput(toolName, OUTPUT_SAMPLES[toolName])).toBeTruthy();
     }
+  });
+
+  it("parses capture_commit partial failure output", () => {
+    const parsed = parseLiflyMcpToolOutput("capture_commit", {
+      committed: true,
+      created_entities: [{ type: "memo", id: "memo_1" }],
+      failed_actions: [{ action_index: 2, action_type: "task_create", reason: "validation_error" }],
+      undo_token: "undo_1",
+    });
+
+    expect(parsed.failed_actions).toHaveLength(1);
   });
 
   it("rejects invalid output shape", () => {

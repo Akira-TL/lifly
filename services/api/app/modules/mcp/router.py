@@ -23,6 +23,7 @@ from app.modules.memos.service import (
     DEFAULT_LOCAL_USER_ID,
     create_memo_record,
 )
+from app.modules.mcp.capture_commit_service import commit_capture_actions
 from app.modules.mcp.capture_session_service import (
     deserialize_capture_actions,
     get_active_capture_session,
@@ -195,87 +196,24 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
         if db_session
         else memory_session.actions
     )
-    actions = session_actions
-    if selected_indexes is not None:
-        actions = [actions[i] for i in selected_indexes if 0 <= i < len(session_actions)]
-
-    created_entities: list[dict] = []
-
-    for act in actions:
-        payload = act.payload
-
-        if act.type == "memo_create":
-            try:
-                data = MemoCreate.model_validate({
-                    **payload,
-                    "type": payload.get("type") or "memo",
-                    "source": payload.get("source") or MCP_ENTITY_SOURCE,
-                    "source_capture_id": capture_id,
-                })
-            except ValidationError as exc:
-                raise HTTPException(status_code=422, detail=exc.errors()) from exc
-
-            memo = await create_memo_record(
-                db,
-                data,
-                user_id=DEFAULT_LOCAL_USER_ID,
-                actor_type=MCP_AI_ACTOR_TYPE,
-                source_channel=CLOUD_MCP_SOURCE_CHANNEL,
-                tool_name="capture_commit",
-                source_text=body.get("source_text") or act.raw_text,
-            )
-            created_entities.append({"type": "memo", "id": memo.id})
-
-        elif act.type == "expense_create":
-            try:
-                data = LedgerTransactionCreate.model_validate({
-                    **payload,
-                    "direction": payload.get("direction") or "expense",
-                    "source": payload.get("source") or MCP_ENTITY_SOURCE,
-                    "source_capture_id": capture_id,
-                    "confidence": payload.get("confidence") if payload.get("confidence") is not None else act.confidence,
-                })
-            except ValidationError as exc:
-                raise HTTPException(status_code=422, detail=exc.errors()) from exc
-
-            tx = await create_ledger_transaction_record(
-                db,
-                data,
-                user_id=DEFAULT_LOCAL_USER_ID,
-                actor_type=MCP_AI_ACTOR_TYPE,
-                source_channel=CLOUD_MCP_SOURCE_CHANNEL,
-                tool_name="capture_commit",
-                source_text=body.get("source_text") or act.raw_text,
-            )
-            created_entities.append({"type": "ledger_transaction", "id": tx.id})
-
-        elif act.type == "task_create":
-            try:
-                data = TaskCreate.model_validate({
-                    **payload,
-                    "source": payload.get("source") or MCP_ENTITY_SOURCE,
-                    "source_capture_id": capture_id,
-                })
-            except ValidationError as exc:
-                raise HTTPException(status_code=422, detail=exc.errors()) from exc
-
-            task = await create_task_record(
-                db,
-                data,
-                user_id=DEFAULT_LOCAL_USER_ID,
-                actor_type=MCP_AI_ACTOR_TYPE,
-                source_channel=CLOUD_MCP_SOURCE_CHANNEL,
-                tool_name="capture_commit",
-                source_text=body.get("source_text") or act.raw_text,
-            )
-            created_entities.append({"type": "task", "id": task.id})
+    commit_result = await commit_capture_actions(
+        db,
+        capture_id=capture_id,
+        actions=session_actions,
+        selected_indexes=selected_indexes,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        actor_type=MCP_AI_ACTOR_TYPE,
+        source_channel=CLOUD_MCP_SOURCE_CHANNEL,
+        entity_source=MCP_ENTITY_SOURCE,
+        source_text=body.get("source_text"),
+    )
 
     undo_token = str(uuid.uuid4())
-    if created_entities:
+    if commit_result.created_entities:
         await _persist_create_undo_entries(
             db,
             undo_token=undo_token,
-            created_entities=created_entities,
+            created_entities=commit_result.created_entities,
         )
 
     if db_session:
@@ -285,8 +223,9 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
     await db.commit()
 
     return {
-        "committed": True,
-        "created_entities": created_entities,
+        "committed": bool(commit_result.created_entities),
+        "created_entities": commit_result.created_entities,
+        "failed_actions": [failure.to_dict() for failure in commit_result.failed_actions],
         "undo_token": undo_token,
     }
 
