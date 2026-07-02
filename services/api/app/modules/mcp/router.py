@@ -23,6 +23,12 @@ from app.modules.memos.service import (
     DEFAULT_LOCAL_USER_ID,
     create_memo_record,
 )
+from app.modules.mcp.capture_session_service import (
+    deserialize_capture_actions,
+    get_active_capture_session,
+    mark_capture_session_committed,
+    persist_capture_session,
+)
 from app.modules.mcp.parse_engine import CAPTURE_STORE, parse_mixed_input
 from app.modules.mcp.undo_service import consume_undo_entries, persist_undo_entries
 from app.modules.tasks.service import complete_task_record, create_task_record, task_to_dict
@@ -127,15 +133,25 @@ async def _persist_create_undo_entries(
 # ─── capture_parse ────────────────────────────────────────────────────────────
 @router.post("/capture/parse")
 async def capture_parse(request: Request, db: AsyncSession = Depends(get_db)):
-    body = await request.json()
-    text = body.get("text", "")
-    timezone_str = body.get("timezone", "Asia/Shanghai")
-    locale = body.get("locale", "zh-CN")
+    body = await _read_json_body(request)
+    text = str(body.get("text", ""))
+    timezone_str = str(body.get("timezone", "Asia/Shanghai"))
+    locale = str(body.get("locale", "zh-CN"))
 
     if not text.strip():
         raise HTTPException(status_code=400, detail="text is required")
 
     result = parse_mixed_input(text, timezone_str=timezone_str, locale=locale)
+    await persist_capture_session(
+        db,
+        result=result,
+        original_text=text,
+        timezone_str=timezone_str,
+        locale=locale,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        source_channel=CLOUD_MCP_SOURCE_CHANNEL,
+    )
+    await db.commit()
 
     actions_out = []
     for act in result.actions:
@@ -157,17 +173,31 @@ async def capture_parse(request: Request, db: AsyncSession = Depends(get_db)):
 async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
     body = await request.json()
     capture_id = body.get("capture_id")
+    if not capture_id:
+        raise HTTPException(status_code=422, detail="capture_id is required")
     selected_indexes: list[int] | None = body.get("selected_action_indexes")
 
-    session = CAPTURE_STORE.get(capture_id)
-    if not session:
+    db_session = await get_active_capture_session(
+        db,
+        capture_id=capture_id,
+        user_id=DEFAULT_LOCAL_USER_ID,
+    )
+    memory_session = CAPTURE_STORE.get(capture_id)
+    if not db_session and not memory_session:
         raise HTTPException(status_code=404, detail="Capture session not found or expired")
-    if session.committed:
+    if db_session and db_session.committed:
+        raise HTTPException(status_code=409, detail="Capture session already committed")
+    if memory_session and memory_session.committed:
         raise HTTPException(status_code=409, detail="Capture session already committed")
 
-    actions = session.actions
+    session_actions = (
+        deserialize_capture_actions(db_session.actions)
+        if db_session
+        else memory_session.actions
+    )
+    actions = session_actions
     if selected_indexes is not None:
-        actions = [actions[i] for i in selected_indexes if 0 <= i < len(session.actions)]
+        actions = [actions[i] for i in selected_indexes if 0 <= i < len(session_actions)]
 
     created_entities: list[dict] = []
 
@@ -248,7 +278,10 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
             created_entities=created_entities,
         )
 
-    session.committed = True
+    if db_session:
+        await mark_capture_session_committed(db, db_session)
+    if memory_session:
+        memory_session.committed = True
     await db.commit()
 
     return {

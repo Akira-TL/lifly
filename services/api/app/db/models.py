@@ -297,6 +297,23 @@ class McpUndoAction(Base):
     )
 
 
+# ─── MCP Capture Session ────────────────────────────────────────────────────
+
+class McpCaptureSession(Base, TimestampMixin):
+    __tablename__ = "mcp_capture_sessions"
+
+    capture_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    original_text: Mapped[str] = mapped_column(Text, nullable=False)
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="Asia/Shanghai")
+    locale: Mapped[str] = mapped_column(String(16), nullable=False, default="zh-CN")
+    actions: Mapped[list] = mapped_column(JSONB, nullable=False)
+    requires_confirmation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    committed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    source_channel: Mapped[str] = mapped_column(String(32), nullable=False, default="cloud_mcp")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 # ─── Tombstone ──────────────────────────────────────────────────────────────
 
 class Tombstone(Base):
