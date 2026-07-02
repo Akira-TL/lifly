@@ -40,10 +40,18 @@ http_json() {
     args+=(-H "Content-Type: application/json" -d "$body")
   fi
 
-  code="$(curl "${args[@]}")" || fail "$name request failed"
+  code="$(curl "${args[@]}")" || {
+    if [[ "$name" == "health" ]]; then
+      return 1
+    fi
+    fail "$name request failed"
+  }
   LAST_BODY="$response_file"
 
   if [[ "$code" != "$expected_code" ]]; then
+    if [[ "$name" == "health" ]]; then
+      return 1
+    fi
     fail "$name expected HTTP $expected_code, got HTTP $code"
   fi
 }
@@ -79,7 +87,15 @@ MEMO_TITLE="Sync smoke memo $RUN_ID"
 TASK_TITLE="Sync smoke task $RUN_ID"
 MERCHANT="Sync Smoke Merchant $RUN_ID"
 
-http_json "health" GET "/api/v1/health" 200
+for attempt in {1..30}; do
+  if http_json "health" GET "/api/v1/health" 200; then
+    break
+  fi
+  if [[ "$attempt" == "30" ]]; then
+    fail "health request failed after 30 attempts"
+  fi
+  sleep 1
+done
 assert_jq '.status == "ok"' "health status should be ok"
 pass "health"
 
