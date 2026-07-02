@@ -270,9 +270,12 @@ def test_mcp_capture_parse_commit_and_undo_contract(
     assert undone["undone"] >= 1
     assert undone["failed_entities"] == []
 
-    api.request_json(
+    repeated = api.request_json(
         "POST",
         "/api/v1/mcp/capture/undo",
-        expected_status=404,
         json={"undo_token": undo_token},
     )
+
+    assert repeated["undone"] == 0
+    assert repeated["entities"] == []
+    assert repeated["failed_entities"] == []

@@ -293,6 +293,7 @@ export const LiflyMcpToolOutputSchemas = {
       storage_key: z.string().min(1),
       upload_url: z.string().min(1),
       asset: LiflyMcpAssetSchema,
+      undo_token: z.string().min(1).nullable().optional(),
     }).passthrough(),
     z.object({
       unsupported: z.literal(true),
@@ -301,6 +302,7 @@ export const LiflyMcpToolOutputSchemas = {
   ]),
   asset_register_external_url: z.object({
     asset: LiflyMcpAssetSchema,
+    undo_token: z.string().min(1).nullable().optional(),
   }).passthrough(),
 } as const satisfies Record<LiflyMcpToolName, z.ZodTypeAny>;
 

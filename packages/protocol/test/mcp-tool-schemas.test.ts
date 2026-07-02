@@ -138,9 +138,11 @@ const OUTPUT_SAMPLES: Record<(typeof FROZEN_TOOL_NAMES)[number], unknown> = {
     storage_key: "attachments/local-dev/asset_2/demo.txt",
     upload_url: "http://localhost:9000/upload/demo.txt",
     asset: { ...ASSET, id: "asset_2", kind: "internal", asset_type: "file", external_url: null, sync_status: "pending" },
+    undo_token: "undo_1",
   },
   asset_register_external_url: {
     asset: ASSET,
+    undo_token: "undo_1",
   },
 };
 

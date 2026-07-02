@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.db.models import AuditLog, LedgerTransaction, Memo, Task
+from app.db.models import Asset, AuditLog, LedgerTransaction, Memo, Task
 from app.modules.assets.service import (
     asset_to_dict,
     create_internal_asset_upload_record,
@@ -31,7 +31,7 @@ from app.modules.mcp.capture_session_service import (
     persist_capture_session,
 )
 from app.modules.mcp.parse_engine import CAPTURE_STORE, parse_mixed_input
-from app.modules.mcp.undo_service import consume_undo_entries, persist_undo_entries
+from app.modules.mcp.undo_service import consume_undo_entries, list_undo_entries, persist_undo_entries
 from app.modules.tasks.service import complete_task_record, create_task_record, task_to_dict
 from app.schemas.common import (
     AssetCreateUploadUrl,
@@ -246,6 +246,14 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
         user_id=DEFAULT_LOCAL_USER_ID,
     )
     if not entries:
+        used_entries = await list_undo_entries(
+            db,
+            undo_token=undo_token,
+            user_id=DEFAULT_LOCAL_USER_ID,
+            statuses=["used"],
+        )
+        if used_entries:
+            return {"undone": 0, "entities": [], "failed_entities": []}
         raise HTTPException(status_code=404, detail="Undo token not found or expired")
 
     undone_entities: list[dict] = []
@@ -256,6 +264,7 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
             "memo": Memo,
             "ledger_transaction": LedgerTransaction,
             "task": Task,
+            "asset": Asset,
         }.get(entry.entity_type)
 
         if not model_class:
@@ -284,7 +293,8 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
         before_snap = json_serialize(
             _memo_dict(entity) if entry.entity_type == "memo"
             else _tx_dict(entity) if entry.entity_type == "ledger_transaction"
-            else _task_dict(entity)
+            else _task_dict(entity) if entry.entity_type == "task"
+            else asset_to_dict(entity)
         )
 
         if hasattr(entity, "status"):
@@ -556,6 +566,12 @@ async def mcp_asset_create_upload_url(request: Request, db: AsyncSession = Depen
         tool_name="asset_create_upload_url",
         source_text=body.get("source_text") or body.get("filename"),
     )
+    undo_token = str(uuid.uuid4())
+    await _persist_create_undo_entries(
+        db,
+        undo_token=undo_token,
+        created_entities=[{"type": "asset", "id": asset.id}],
+    )
     await db.commit()
     await db.refresh(asset)
 
@@ -564,6 +580,7 @@ async def mcp_asset_create_upload_url(request: Request, db: AsyncSession = Depen
         "storage_key": asset.storage_key,
         "upload_url": upload_url,
         "asset": asset_to_dict(asset),
+        "undo_token": undo_token,
     }
 
 
@@ -584,7 +601,13 @@ async def mcp_asset_register_external_url(request: Request, db: AsyncSession = D
         tool_name="asset_register_external_url",
         source_text=body.get("source_text") or body.get("external_url"),
     )
+    undo_token = str(uuid.uuid4())
+    await _persist_create_undo_entries(
+        db,
+        undo_token=undo_token,
+        created_entities=[{"type": "asset", "id": asset.id}],
+    )
     await db.commit()
     await db.refresh(asset)
 
-    return {"asset": asset_to_dict(asset)}
+    return {"asset": asset_to_dict(asset), "undo_token": undo_token}

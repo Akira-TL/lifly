@@ -41,6 +41,32 @@ async def persist_undo_entries(
     return rows
 
 
+async def list_undo_entries(
+    db: AsyncSession,
+    *,
+    undo_token: str,
+    user_id: str,
+    statuses: list[str] | None = None,
+) -> list[McpUndoAction]:
+    """Return non-expired undo entries for idempotency and diagnostics."""
+
+    now = datetime.now(timezone.utc)
+    query = (
+        select(McpUndoAction)
+        .where(
+            McpUndoAction.user_id == user_id,
+            McpUndoAction.undo_token == undo_token,
+            or_(McpUndoAction.expires_at.is_(None), McpUndoAction.expires_at > now),
+        )
+        .order_by(McpUndoAction.created_at.asc())
+    )
+    if statuses:
+        query = query.where(McpUndoAction.status.in_(statuses))
+
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
 async def consume_undo_entries(
     db: AsyncSession,
     *,
@@ -50,17 +76,12 @@ async def consume_undo_entries(
     """Return pending undo entries and mark them used in the current transaction."""
 
     now = datetime.now(timezone.utc)
-    result = await db.execute(
-        select(McpUndoAction)
-        .where(
-            McpUndoAction.user_id == user_id,
-            McpUndoAction.undo_token == undo_token,
-            McpUndoAction.status == "pending",
-            or_(McpUndoAction.expires_at.is_(None), McpUndoAction.expires_at > now),
-        )
-        .order_by(McpUndoAction.created_at.asc())
+    rows = await list_undo_entries(
+        db,
+        undo_token=undo_token,
+        user_id=user_id,
+        statuses=["pending"],
     )
-    rows = list(result.scalars().all())
 
     for row in rows:
         row.status = "used"
