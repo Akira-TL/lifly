@@ -29,18 +29,18 @@ v1.0.0-personal-production.md
 
 ## 当前开发分支
 
-当前 v0.2 本地数据开发分支：
+当前 v0.3 云同步开发分支：
 
 ```text
-feat/v0.2-local-data-mvp
+feat/v0.3-cloud-sync-mvp
 ```
 
-该分支的职责是完成 `v0.2.x Local Data MVP`，让 memo / task / expense 形成本机离线写入和重启不丢的闭环；不扩大到 v0.3 的云同步、uploadData 和跨端同步。
+该分支的职责是完成 `v0.3.x Cloud Sync MVP`，让 memo / task / expense 在单用户多端之间形成最小同步闭环；不扩大到 v0.4 的 AI 写入、复杂冲突解决或生产级账号体系。
 
 ## 当前计划文件
 
 ```text
-v0.2.0-local-data-mvp.md
+v0.3.0-cloud-sync-mvp.md
 ```
 
 ## 维护规则

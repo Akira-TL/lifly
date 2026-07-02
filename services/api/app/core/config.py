@@ -29,6 +29,8 @@ class Settings(BaseSettings):
 
     # PowerSync
     powersync_url: str = "http://localhost:8380"
+    powersync_dev_user_id: str = "local-dev"
+    powersync_token_expire_minutes: int = 60
 
     # JWT
     jwt_secret: str = "dev-only-change-me"
