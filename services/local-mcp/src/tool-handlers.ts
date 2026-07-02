@@ -1,4 +1,9 @@
-import { FakeLocalCoreBridge, localMcpContext, type LocalCoreBridge } from "../../../packages/local-core/src/index.js";
+import {
+  DesktopLocalCoreBridge,
+  FakeLocalCoreBridge,
+  localMcpContext,
+  type LocalCoreBridge,
+} from "../../../packages/local-core/src/index.js";
 import type {
   AssetRegisterExternalUrlInput,
   CaptureCommitInput,
@@ -21,12 +26,23 @@ import {
 } from "../../../packages/protocol/src/index.js";
 import type { LocalMcpToolDefinition } from "./types.js";
 
+export type LocalMcpBridgeMode = "desktop" | "fake";
+
 export interface LocalMcpRuntime {
   core: LocalCoreBridge;
+  bridgeMode: LocalMcpBridgeMode;
+}
+
+export function createDesktopLocalMcpRuntime(): LocalMcpRuntime {
+  return { core: new DesktopLocalCoreBridge(), bridgeMode: "desktop" };
+}
+
+export function createTestLocalMcpRuntime(): LocalMcpRuntime {
+  return { core: new FakeLocalCoreBridge(), bridgeMode: "fake" };
 }
 
 export function createDefaultLocalMcpRuntime(): LocalMcpRuntime {
-  return { core: new FakeLocalCoreBridge() };
+  return createDesktopLocalMcpRuntime();
 }
 
 export function listLocalMcpTools(): LocalMcpToolDefinition[] {
@@ -104,7 +120,7 @@ export async function callLocalMcpTool(
       LiflyMcpToolInputSchemas.asset_create_upload_url.parse(rawInput ?? {});
       return {
         unsupported: true,
-        reason: "Local MCP fake mode does not create cloud upload URLs.",
+        reason: "Local MCP desktop mode does not create cloud upload URLs.",
       };
     }
   }

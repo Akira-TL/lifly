@@ -5,20 +5,57 @@ import {
   LiflyMcpToolNameSchema,
   parseLiflyMcpToolOutput,
 } from "../../../packages/protocol/src/index.js";
-import { LocalMcpServer } from "../src/index.js";
+import { createTestLocalMcpRuntime, LocalMcpServer } from "../src/index.js";
+
+function createFakeServer(): LocalMcpServer {
+  return new LocalMcpServer(createTestLocalMcpRuntime());
+}
 
 describe("LocalMcpServer", () => {
-  it("reports health", async () => {
+  it("reports desktop bridge health by default", async () => {
     const server = new LocalMcpServer();
     const response = await server.handle({ method: "health" });
     expect(response.ok).toBe(true);
     if (response.ok) {
-      expect(response.result).toMatchObject({ status: "ok", mode: "fake" });
+      expect(response.result).toMatchObject({
+        status: "unavailable",
+        mode: "desktop_bridge",
+        runtime: "desktop",
+      });
+    }
+  });
+
+  it("fails fast for desktop bridge tool calls when desktop host is not connected", async () => {
+    const server = new LocalMcpServer();
+    const response = await server.handle({
+      method: "tools/call",
+      params: {
+        name: "memo_create",
+        input: {
+          type: "memo",
+          content_markdown: "should not be written without desktop host",
+        },
+      },
+    });
+
+    expect(response.ok).toBe(false);
+    if (!response.ok) {
+      expect(response.error.message).toContain("desktop bridge is not connected");
+      expect(response.error.message).toContain("must not write SQLite directly");
+    }
+  });
+
+  it("reports fake health only when fake test runtime is explicit", async () => {
+    const server = createFakeServer();
+    const response = await server.handle({ method: "health" });
+    expect(response.ok).toBe(true);
+    if (response.ok) {
+      expect(response.result).toMatchObject({ status: "ok", mode: "fake", runtime: "test" });
     }
   });
 
   it("lists protocol tools with aligned descriptions", async () => {
-    const server = new LocalMcpServer();
+    const server = createFakeServer();
     const response = await server.handle({ method: "tools/list" });
     expect(response.ok).toBe(true);
     if (response.ok) {
@@ -34,7 +71,7 @@ describe("LocalMcpServer", () => {
   });
 
   it("calls memo_create and memo_search with protocol output contracts", async () => {
-    const server = new LocalMcpServer();
+    const server = createFakeServer();
     const created = await server.handle({
       method: "tools/call",
       params: {
@@ -67,7 +104,7 @@ describe("LocalMcpServer", () => {
   });
 
   it("calls expense tools with protocol output contracts", async () => {
-    const server = new LocalMcpServer();
+    const server = createFakeServer();
     const created = await server.handle({
       method: "tools/call",
       params: {
@@ -106,7 +143,7 @@ describe("LocalMcpServer", () => {
   });
 
   it("calls task tools with protocol output contracts", async () => {
-    const server = new LocalMcpServer();
+    const server = createFakeServer();
     const created = await server.handle({
       method: "tools/call",
       params: { name: "task_create", input: { title: "买猫粮", priority: "normal" } },
@@ -138,7 +175,7 @@ describe("LocalMcpServer", () => {
   });
 
   it("calls asset tools with protocol output contracts", async () => {
-    const server = new LocalMcpServer();
+    const server = createFakeServer();
     const upload = await server.handle({
       method: "tools/call",
       params: { name: "asset_create_upload_url", input: { filename: "demo.txt", asset_type: "file" } },
@@ -162,7 +199,7 @@ describe("LocalMcpServer", () => {
   });
 
   it("calls capture tools with protocol output contracts", async () => {
-    const server = new LocalMcpServer();
+    const server = createFakeServer();
     const parsed = await server.handle({
       method: "tools/call",
       params: { name: "capture_parse", input: { text: "记一下今天状态不错" } },
@@ -196,7 +233,7 @@ describe("LocalMcpServer", () => {
   });
 
   it("returns validation errors for invalid input", async () => {
-    const server = new LocalMcpServer();
+    const server = createFakeServer();
     const response = await server.handle({
       method: "tools/call",
       params: { name: "memo_create", input: { type: "invalid", content_markdown: "bad" } },

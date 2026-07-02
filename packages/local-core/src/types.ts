@@ -10,9 +10,11 @@ export interface LocalCoreContext {
 }
 
 export interface LocalCoreHealth {
-  status: "ok";
-  mode: "fake" | "powersync";
+  status: "ok" | "unavailable";
+  mode: "fake" | "desktop_bridge" | "powersync";
   version: string;
+  runtime?: "test" | "desktop";
+  detail?: string;
 }
 
 export interface LocalCoreEntityRef {

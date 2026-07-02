@@ -42,7 +42,7 @@ export class FakeLocalCoreBridge implements LocalCoreBridge {
   private readonly undoEntries = new Map<string, LocalCoreEntityRef[]>();
 
   async health(): Promise<LocalCoreHealth> {
-    return { status: "ok", mode: "fake", version: "0.1.0" };
+    return { status: "ok", mode: "fake", version: "0.1.0", runtime: "test" };
   }
 
   async createMemo(input: MemoCreateInput, context: LocalCoreContext): Promise<LocalMemo> {

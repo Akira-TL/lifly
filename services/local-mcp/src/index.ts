@@ -5,7 +5,13 @@ import { LocalMcpServer } from "./server.js";
 import type { LocalMcpRequest } from "./types.js";
 
 export { LocalMcpServer } from "./server.js";
-export { callLocalMcpTool, createDefaultLocalMcpRuntime, listLocalMcpTools } from "./tool-handlers.js";
+export {
+  callLocalMcpTool,
+  createDefaultLocalMcpRuntime,
+  createDesktopLocalMcpRuntime,
+  createTestLocalMcpRuntime,
+  listLocalMcpTools,
+} from "./tool-handlers.js";
 export type * from "./types.js";
 
 export async function runStdioServer(): Promise<void> {
