@@ -562,7 +562,7 @@ class _LocalMcpStatusCard extends StatelessWidget {
             _StatusRow(label: 'Local Core', value: localCoreStatus),
             const _StatusRow(
               label: 'Local MCP',
-              value: 'stdio skeleton，未由客户端启动',
+              value: '桌面端 host 承载，手机/Web 不内置 Server',
             ),
             _StatusRow(label: 'PowerSync', value: health?.detail ?? '未初始化'),
             const _StatusRow(label: '离线写入', value: '0.2.2+ 启用'),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:client_flutter/features/ai_capture/pages/ai_capture_page.dart';
 import 'package:client_flutter/features/home/pages/home_page.dart';
 import 'package:client_flutter/features/memo/pages/memo_list_page.dart';
 import 'package:client_flutter/features/search/pages/search_page.dart';
@@ -20,6 +21,7 @@ class _AppShellState extends State<AppShell> {
     HomePage(),
     MemoListPage(),
     SearchPage(),
+    AiCapturePage(),
     LedgerListPage(),
     TaskListPage(),
     SettingsPage(),
@@ -39,6 +41,7 @@ class _AppShellState extends State<AppShell> {
           NavigationDestination(icon: Icon(Icons.home_outlined), label: '首页'),
           NavigationDestination(icon: Icon(Icons.note_outlined), label: '备忘'),
           NavigationDestination(icon: Icon(Icons.search_outlined), label: '搜索'),
+          NavigationDestination(icon: Icon(Icons.auto_awesome_outlined), label: 'AI'),
           NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), label: '记账'),
           NavigationDestination(icon: Icon(Icons.check_circle_outline), label: '任务'),
           NavigationDestination(icon: Icon(Icons.settings_outlined), label: '设置'),

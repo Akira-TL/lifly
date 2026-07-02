@@ -2,6 +2,7 @@ import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/local_core/fake_local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
+import 'package:client_flutter/features/ai_capture/data/ai_capture_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:client_flutter/main.dart';
 import 'package:provider/provider.dart';
@@ -130,6 +131,12 @@ void main() {
         providers: [
           Provider<LiflyDataMode>.value(value: LiflyDataMode.api),
           Provider<ApiClient>(create: (_) => FakeApiClient()),
+          ProxyProvider2<ApiClient, LiflyDataMode, AiCaptureService>(
+            update: (_, api, dataMode, _) => AiCaptureService(
+              api: api,
+              dataMode: dataMode,
+            ),
+          ),
           Provider<LocalCoreBridge>(create: (_) => FakeLocalCoreBridge()),
         ],
         child: const LiflyApp(),

@@ -10,6 +10,7 @@ import 'package:client_flutter/data/local_core/powersync_local_core_bridge.dart'
 import 'package:client_flutter/data/powersync/powersync_connection_coordinator.dart';
 import 'package:client_flutter/data/powersync/powersync_credentials_service.dart';
 import 'package:client_flutter/data/powersync/sync_service.dart';
+import 'package:client_flutter/features/ai_capture/data/ai_capture_service.dart';
 
 void main() {
   runApp(
@@ -34,6 +35,12 @@ void main() {
         ProxyProvider<SyncService, LocalCoreBridge>(
           update: (_, syncService, _) =>
               PowerSyncLocalCoreBridge(syncService: syncService),
+        ),
+        ProxyProvider2<ApiClient, LiflyDataMode, AiCaptureService>(
+          update: (_, api, dataMode, _) => AiCaptureService(
+            api: api,
+            dataMode: dataMode,
+          ),
         ),
       ],
       child: const LiflyApp(),
