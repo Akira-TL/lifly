@@ -3,6 +3,7 @@ import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/api/api_diagnostics.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_models.dart';
+import 'package:client_flutter/data/powersync/powersync_connection_coordinator.dart';
 import 'package:client_flutter/data/powersync/powersync_credentials_service.dart';
 import 'package:client_flutter/data/powersync/sync_push_service.dart';
 import 'package:client_flutter/data/powersync/sync_service.dart';
@@ -23,6 +24,8 @@ class _SettingsPageState extends State<SettingsPage> {
   LiflyPowerSyncCredentials? _powerSyncCredentials;
   SyncPushUploadDiagnostics _uploadDiagnostics =
       const SyncPushUploadDiagnostics.idle();
+  PowerSyncConnectionDiagnostics _connectionDiagnostics =
+      const PowerSyncConnectionDiagnostics.idle();
   String? _diagnosticError;
   String? _localCoreError;
   String? _powerSyncCredentialsError;
@@ -30,6 +33,8 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _runningSmoke = false;
   bool _checkingLocalCore = false;
   bool _checkingPowerSyncCredentials = false;
+  bool _connectingPowerSync = false;
+  bool _disconnectingPowerSync = false;
 
   Future<void> _checkHealth() async {
     setState(() {
@@ -106,12 +111,15 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       final service = PowerSyncCredentialsService(context.read<ApiClient>());
       final syncService = context.read<SyncService>();
+      final coordinator = context.read<PowerSyncConnectionCoordinator>();
       final credentials = await service.fetchCredentials();
       final uploadDiagnostics = syncService.uploadDiagnostics;
+      final connectionDiagnostics = coordinator.refreshDiagnostics();
       if (!mounted) return;
       setState(() {
         _powerSyncCredentials = credentials;
         _uploadDiagnostics = uploadDiagnostics;
+        _connectionDiagnostics = connectionDiagnostics;
       });
     } catch (error) {
       if (!mounted) return;
@@ -119,6 +127,55 @@ class _SettingsPageState extends State<SettingsPage> {
     } finally {
       if (mounted) {
         setState(() => _checkingPowerSyncCredentials = false);
+      }
+    }
+  }
+
+  Future<void> _connectPowerSync() async {
+    setState(() {
+      _connectingPowerSync = true;
+      _powerSyncCredentialsError = null;
+    });
+
+    try {
+      final coordinator = context.read<PowerSyncConnectionCoordinator>();
+      final diagnostics = await coordinator.connect();
+      if (!mounted) return;
+      setState(() {
+        _connectionDiagnostics = diagnostics;
+        _powerSyncCredentials = diagnostics.credentials;
+        _uploadDiagnostics = diagnostics.uploadDiagnostics;
+        _powerSyncCredentialsError = diagnostics.error == null
+            ? null
+            : 'PowerSync 连接失败：${diagnostics.error}';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _connectingPowerSync = false);
+      }
+    }
+  }
+
+  Future<void> _disconnectPowerSync() async {
+    setState(() {
+      _disconnectingPowerSync = true;
+      _powerSyncCredentialsError = null;
+    });
+
+    try {
+      final coordinator = context.read<PowerSyncConnectionCoordinator>();
+      final diagnostics = await coordinator.disconnect();
+      if (!mounted) return;
+      setState(() {
+        _connectionDiagnostics = diagnostics;
+        _uploadDiagnostics = diagnostics.uploadDiagnostics;
+        _powerSyncCredentialsError = diagnostics.error == null
+            ? null
+            : 'PowerSync 断开失败：${diagnostics.error}';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _disconnectingPowerSync = false);
       }
     }
   }
@@ -155,10 +212,15 @@ class _SettingsPageState extends State<SettingsPage> {
           const SizedBox(height: 12),
           _PowerSyncCredentialsCard(
             credentials: _powerSyncCredentials,
+            connectionDiagnostics: _connectionDiagnostics,
             uploadDiagnostics: _uploadDiagnostics,
             error: _powerSyncCredentialsError,
             checking: _checkingPowerSyncCredentials,
+            connecting: _connectingPowerSync,
+            disconnecting: _disconnectingPowerSync,
             onCheck: _checkPowerSyncCredentials,
+            onConnect: _connectPowerSync,
+            onDisconnect: _disconnectPowerSync,
           ),
           const SizedBox(height: 12),
           const ListTile(
@@ -313,23 +375,39 @@ class _DataModeCard extends StatelessWidget {
 
 class _PowerSyncCredentialsCard extends StatelessWidget {
   final LiflyPowerSyncCredentials? credentials;
+  final PowerSyncConnectionDiagnostics connectionDiagnostics;
   final SyncPushUploadDiagnostics uploadDiagnostics;
   final String? error;
   final bool checking;
+  final bool connecting;
+  final bool disconnecting;
   final VoidCallback onCheck;
+  final VoidCallback onConnect;
+  final VoidCallback onDisconnect;
 
   const _PowerSyncCredentialsCard({
     required this.credentials,
+    required this.connectionDiagnostics,
     required this.uploadDiagnostics,
     required this.error,
     required this.checking,
+    required this.connecting,
+    required this.disconnecting,
     required this.onCheck,
+    required this.onConnect,
+    required this.onDisconnect,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final expiresAt = credentials?.expiresAt.toLocal().toIso8601String();
+    final connectedAt = connectionDiagnostics.connectedAt
+        ?.toLocal()
+        .toIso8601String();
+    final disconnectedAt = connectionDiagnostics.disconnectedAt
+        ?.toLocal()
+        .toIso8601String();
 
     return Card(
       child: Padding(
@@ -364,6 +442,10 @@ class _PowerSyncCredentialsCard extends StatelessWidget {
             ),
             _StatusRow(label: 'Mode', value: credentials?.mode ?? '未检查'),
             if (expiresAt != null) _StatusRow(label: '过期时间', value: expiresAt),
+            _StatusRow(label: '连接状态', value: connectionDiagnostics.statusLabel),
+            if (connectedAt != null) _StatusRow(label: '连接时间', value: connectedAt),
+            if (disconnectedAt != null)
+              _StatusRow(label: '断开时间', value: disconnectedAt),
             _StatusRow(label: '上传状态', value: uploadDiagnostics.statusLabel),
             _StatusRow(
               label: '上传变更',
@@ -383,20 +465,48 @@ class _PowerSyncCredentialsCard extends StatelessWidget {
             ],
             const SizedBox(height: 8),
             Text(
-              '0.3.3 已接入 uploadData 到 /sync/push；token 明文不会在页面展示。',
+              '0.3.4 已支持手动连接 PowerSync 并刷新 uploadData 诊断；token 明文不会在页面展示。',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: checking ? null : onCheck,
-              icon: checking
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.key_outlined),
-              label: const Text('检查同步凭据'),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: connecting ? null : onConnect,
+                  icon: connecting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.cloud_sync_outlined),
+                  label: const Text('连接 PowerSync'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: checking ? null : onCheck,
+                  icon: checking
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh_outlined),
+                  label: const Text('刷新诊断'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: disconnecting ? null : onDisconnect,
+                  icon: disconnecting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.cloud_off_outlined),
+                  label: const Text('断开同步'),
+                ),
+              ],
             ),
           ],
         ),
