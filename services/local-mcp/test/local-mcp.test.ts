@@ -208,6 +208,7 @@ describe("LocalMcpServer", () => {
     let captureId = "";
     if (parsed.ok) {
       const result = parseLiflyMcpToolOutput("capture_parse", parsed.result);
+      expect(result.actions.map((action) => action.type)).toEqual(["memo_create"]);
       captureId = result.capture_id;
     }
 
@@ -219,6 +220,9 @@ describe("LocalMcpServer", () => {
     let undoToken = "";
     if (committed.ok) {
       const result = parseLiflyMcpToolOutput("capture_commit", committed.result);
+      expect(result.committed).toBe(true);
+      expect(result.created_entities).toHaveLength(1);
+      expect(result.failed_actions).toEqual([]);
       undoToken = result.undo_token;
     }
 
@@ -228,7 +232,71 @@ describe("LocalMcpServer", () => {
     });
     expect(undone.ok).toBe(true);
     if (undone.ok) {
-      parseLiflyMcpToolOutput("capture_undo", undone.result);
+      const result = parseLiflyMcpToolOutput("capture_undo", undone.result);
+      expect(result.undone).toBe(1);
+      expect(result.entities).toHaveLength(1);
+    }
+  });
+
+  it("supports local capture partial commit, failed_actions, and idempotent undo", async () => {
+    const server = createFakeServer();
+    const parsed = await server.handle({
+      method: "tools/call",
+      params: {
+        name: "capture_parse",
+        input: { text: "在食堂花了18元，提醒我晚上复盘，记一下状态不错 https://example.com/lifly" },
+      },
+    });
+    expect(parsed.ok).toBe(true);
+    let captureId = "";
+    if (parsed.ok) {
+      const result = parseLiflyMcpToolOutput("capture_parse", parsed.result);
+      expect(result.actions.map((action) => action.type)).toEqual([
+        "expense_create",
+        "task_create",
+        "asset_register_external_url",
+        "memo_create",
+      ]);
+      captureId = result.capture_id;
+    }
+
+    const committed = await server.handle({
+      method: "tools/call",
+      params: { name: "capture_commit", input: { capture_id: captureId, selected_action_indexes: [1, 3, 3, 9] } },
+    });
+    expect(committed.ok).toBe(true);
+    let undoToken = "";
+    if (committed.ok) {
+      const result = parseLiflyMcpToolOutput("capture_commit", committed.result);
+      expect(result.created_entities.map((entity) => entity.type)).toEqual(["task", "memo"]);
+      expect(result.failed_actions.map((failure) => failure.reason)).toEqual([
+        "duplicate_action_index",
+        "action_index_out_of_range",
+      ]);
+      undoToken = result.undo_token;
+    }
+
+    const undone = await server.handle({
+      method: "tools/call",
+      params: { name: "capture_undo", input: { undo_token: undoToken } },
+    });
+    expect(undone.ok).toBe(true);
+    if (undone.ok) {
+      const result = parseLiflyMcpToolOutput("capture_undo", undone.result);
+      expect(result.undone).toBe(2);
+      expect(result.entities?.map((entity) => entity.type)).toEqual(["task", "memo"]);
+    }
+
+    const repeated = await server.handle({
+      method: "tools/call",
+      params: { name: "capture_undo", input: { undo_token: undoToken } },
+    });
+    expect(repeated.ok).toBe(true);
+    if (repeated.ok) {
+      const result = parseLiflyMcpToolOutput("capture_undo", repeated.result);
+      expect(result.undone).toBe(0);
+      expect(result.entities).toEqual([]);
+      expect(result.failed_entities).toEqual([]);
     }
   });
 

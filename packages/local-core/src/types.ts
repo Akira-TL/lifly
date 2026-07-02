@@ -76,13 +76,14 @@ export interface LocalAsset {
   title: string | null;
   external_url: string | null;
   sync_status: "synced" | "pending" | "unsupported";
+  status: "active" | "ai_trashed" | "user_trashed";
   revision: number;
   created_at: string;
   updated_at: string;
 }
 
 export interface LocalCaptureAction {
-  type: "memo_create" | "expense_create" | "task_create";
+  type: "memo_create" | "expense_create" | "task_create" | "asset_register_external_url";
   payload: Record<string, unknown>;
   confidence: number;
 }
@@ -93,14 +94,23 @@ export interface LocalCaptureSession {
   requires_confirmation: boolean;
 }
 
+export interface LocalCaptureFailedAction {
+  action_index: number;
+  action_type: string | null;
+  reason: string;
+  detail?: unknown;
+}
+
 export interface LocalCaptureCommitResult {
   committed: boolean;
   created_entities: LocalCoreEntityRef[];
+  failed_actions: LocalCaptureFailedAction[];
   undo_token: string;
 }
 
 export interface LocalCaptureUndoResult {
   undone: number;
+  entities: LocalCoreEntityRef[];
   failed_entities: LocalCoreEntityRef[];
 }
 
