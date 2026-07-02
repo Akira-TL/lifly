@@ -20,7 +20,7 @@ v<版本号>-<版本主题>.md
 v0.1.0-foundation-baseline.md
 v0.2.0-local-data-mvp.md
 v0.3.0-cloud-sync-mvp.md
-v0.4.0-ai-write-mvp.md
+v0.4.0-ai-write-full-development.md
 v0.5.0-assets-import-export-mvp.md
 v0.6.0-private-alpha.md
 v0.7.0-private-beta.md
@@ -29,18 +29,18 @@ v1.0.0-personal-production.md
 
 ## 当前开发分支
 
-当前 v0.3 云同步开发分支：
+当前 v0.4 AI 写入全量开发分支：
 
 ```text
-feat/v0.3-cloud-sync-mvp
+develop/v0.4.0
 ```
 
-该分支的职责是完成 `v0.3.x Cloud Sync MVP`，让 memo / task / expense 在单用户多端之间形成最小同步闭环；不扩大到 v0.4 的 AI 写入、复杂冲突解决或生产级账号体系。
+该分支的职责是完成 `v0.4.0` 的版本边界冻结、分支治理与全量开发计划，不进入功能代码开发；后续 v0.4.x 修订号统一使用 `develop/v0.4.x` 分支命名。
 
 ## 当前计划文件
 
 ```text
-v0.3.0-cloud-sync-mvp.md
+v0.4.0-ai-write-full-development.md
 ```
 
 ## 维护规则

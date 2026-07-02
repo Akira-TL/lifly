@@ -27,7 +27,7 @@ v0.2.x Local Data MVP
   ↓
 v0.3.0 Cloud Sync MVP
   ↓
-v0.4.0 AI Write MVP
+v0.4.x AI Write 全量开发
   ↓
 v0.5.0 Assets & Import/Export MVP
   ↓
@@ -307,24 +307,26 @@ LC-0306 Add Windows/Android sync smoke checklist
 
 ---
 
-## 6. v0.4.0 AI Write MVP
+## 6. v0.4.x AI Write 全量开发
 
 ### 6.1 版本定位
 
-`v0.4.0` 的目标是让 AI 成为 Lifly 的一等写入入口。Cloud MCP 和 Local MCP 都应该可以通过同一套 tool schema 写入 memo / expense / task。
+`v0.4.x` 的目标是让 AI 成为 Lifly 的完整一等写入入口。Cloud MCP、Local MCP 和 Flutter AI Capture 需要围绕同一套 tool schema 形成写入、确认、撤销、审计和诊断闭环。
 
 这个版本以后，Lifly 才真正接近“AI-first / Chat-first personal life data system”。
 
 ### 6.2 核心目标
 
 ```text
-Cloud MCP v0.1 稳定
-Local MCP stdio 可调用真实 Dart Local Core
 Cloud MCP / Local MCP 复用 packages/protocol
+Cloud MCP 完整写入 memo / expense / task / asset ref
+Local MCP stdio 可调用真实 Dart Local Core
 capture_parse / capture_commit / capture_undo 真实闭环
-AI 写入 audit log
+Flutter 提供 AI Capture 输入、确认和撤销入口
+AI 写入和撤销全部进入 audit logs
 AI undo 进入 ai_trashed
 AI 不直接物理删除数据
+Cloud / Local MCP parity tests 通过
 ```
 
 ### 6.3 工程内容
@@ -369,12 +371,13 @@ mcp_undo_actions 持久化
 ### 6.5 验收标准
 
 ```text
-Cloud MCP 可创建 memo / expense / task
-Local MCP 离线可创建 memo / expense / task
+Cloud MCP 可完整写入 memo / expense / task / asset ref
+Local MCP 离线可完整写入 memo / expense / task
+Flutter 可触发 AI 写入、确认和撤销
 capture mixed input 可拆成多个 action
 capture_commit 可选择部分 action
 capture_undo 可追踪并进入 AI trash
-所有 AI 写入有 audit_logs
+所有 AI 写入和撤销都有 audit_logs
 Cloud 与 Local tool schema 完全一致
 ```
 

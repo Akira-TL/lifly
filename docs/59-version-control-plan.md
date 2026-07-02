@@ -2,28 +2,28 @@
 
 ## 1. 当前版本判定
 
-当前 Lifly 已完成第一个稳定工程基线：
+当前 Lifly 已完成 Cloud Sync 版本族收口：
 
 ```text
-v0.1.0
+v0.3.6
 ```
 
-当前开发进入 v0.2 版本族：
+当前开发进入 v0.4 版本族：
 
 ```text
-v0.2.x Local Data MVP
+v0.4.x AI Write 全量开发
 ```
 
 含义：
 
 ```text
-当前稳定 tag：v0.1.0
-当前开发分支：feat/v0.2-local-data-mvp
-当前开发版本族：v0.2.x
-版本号规则：从 v0.2 开始不再使用 dev 后缀，开发轮次使用 0.2.0、0.2.1、0.2.2 这类标准三段式修订号
+当前稳定 tag：v0.3.6
+当前开发分支：develop/v0.4.0
+当前开发版本族：v0.4.x
+版本号规则：从 v0.2 开始不再使用 dev 后缀，开发轮次使用 0.4.0、0.4.1、0.4.2 这类标准三段式修订号
 ```
 
-v0.2 的目标是完成本机离线数据闭环，让 memo / task / expense 可以离线写入，并在应用重启后不丢。Cloud Sync、uploadData 和跨端同步进入 v0.3 处理。
+v0.4 的目标是让 AI 写入成为 Lifly 的完整一等入口，覆盖 Cloud MCP、Local MCP、capture_parse / capture_commit / capture_undo、audit log、AI 回收站、Flutter 入口、诊断和 release gate。
 
 ## 2. 版本号规则
 
@@ -60,28 +60,27 @@ v1.0.0
 推荐分支模型：
 
 ```text
-master：稳定主干，只合并已验证 PR
-fix/vX.Y-release-gate：版本收口分支，例如 fix/v0.1-release-gate
-feat/<issue-slug>：功能开发分支
-fix/<issue-slug>：缺陷修复分支
-release/vX.Y.Z：发布候选分支，只做修复、不加新功能
+develop/master：开发主干，只合并已验证的版本分支
+master：稳定主干，后续只保留正式稳定发布
+版本开发分支：develop/vX.Y.Z，例如 develop/v0.4.0
+临时功能分支：仅在确实需要并行实验时使用，合并前必须回到对应 develop/vX.Y.Z
 ```
 
 版本分支生命周期：
 
 ```text
-1. 每个版本单独开一个版本收口分支
-2. 当前版本分支只做当前版本 release gate 内的内容
-3. 当前版本完成后，先合并回 master
-4. 在 master 的合并点打最终 tag，例如 v0.1.0
-5. tag 完成后删除该版本收口分支
-6. 进入下一个版本前，再新开下一个版本分支
+1. 每个修订号从 develop/master 单独开 develop/vX.Y.Z
+2. 当前版本分支只做当前修订号内的内容
+3. 当前版本完成后，先合并回 develop/master
+4. 在 develop/master 的合并点打最终 tag，例如 v0.4.0
+5. tag 完成后删除当前 develop/vX.Y.Z 分支
+6. 进入下一个修订号前，再新开下一个 develop/vX.Y.Z 分支
 ```
 
-当前 v0.2 开发分支：
+当前 v0.4.0 开发分支：
 
 ```text
-feat/v0.2-local-data-mvp
+develop/v0.4.0
 ```
 
 推荐 tag 规则：
@@ -225,31 +224,34 @@ Android 离线创建，联网后 Windows 可见
 同步失败可诊断
 ```
 
-### v0.4.0：AI Write MVP
+### v0.4.x：AI Write 全量开发
 
-主题：Cloud MCP 与 Local MCP 都能写入 Lifly 数据。
+主题：AI 写入成为 Lifly 的完整一等入口。
 
 范围：
 
 ```text
-Cloud MCP v0.1 contract 稳定
-Local MCP stdio 接真实 Dart Local Core
-Local MCP bridge transport
-capture_parse / capture_commit / capture_undo 本地闭环
-memo_create / expense_create / task_create 本地闭环
-AI 写入 audit log
+Cloud MCP / Local MCP 统一 tool schema
+Cloud MCP 直接写入 memo / task / expense / asset ref
+Local MCP 通过真实 Dart Local Core 写入本地数据
+capture_parse / capture_commit / capture_undo 全量闭环
+Flutter AI Capture 输入、候选确认和撤销入口
+AI 写入和撤销全部进入 audit logs
 AI undo 进入 ai_trashed，不物理删除
-Hermes / 本地 MCP 配置文档
+Cloud / Local MCP parity tests
+AI Write smoke 与 release gate
 ```
 
 验收：
 
 ```text
-Cloud MCP 可创建 memo / expense / task
-Local MCP 离线可创建 memo / expense / task
-capture_commit 返回 undo_token
+Cloud MCP 可完整写入 memo / expense / task / asset ref
+Local MCP 离线可完整写入 memo / expense / task
+capture_commit 支持全部提交和部分提交
 capture_undo 可追踪并移动到 AI trash
+Flutter 可触发 AI 写入、确认和撤销
 Cloud 与 Local MCP 复用同一套 protocol schema
+所有 AI 写入和撤销都有 audit logs
 ```
 
 ### v0.5.0：Assets & Import MVP
