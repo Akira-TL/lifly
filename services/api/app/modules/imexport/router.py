@@ -181,7 +181,11 @@ async def import_preview(
 COMMITTABLE_IMPORT_ROW_STATUSES = ("pending", "valid")
 IGNORED_IMPORT_ROW_STATUSES = ("ignored", "error", "duplicate", "imported")
 IMPORT_COMMIT_AUDIT_ACTION = "import_commit"
+IMPORT_ROLLBACK_AUDIT_ACTION = "import_rollback"
 IMPORT_BATCH_COMMIT_AUDIT_ACTION = "commit"
+IMPORT_BATCH_ROLLBACK_AUDIT_ACTION = "rollback"
+IMPORT_ROW_IMPORTED_STATUS = "imported"
+IMPORT_ROW_ROLLED_BACK_STATUS = "rolled_back"
 
 
 def _parse_import_occurred_at(value: str | None) -> datetime | None:
@@ -226,7 +230,7 @@ def _ledger_import_snapshot(tx: LedgerTransaction, *, row: ImportRow, parsed: di
         "currency": tx.currency,
         "merchant": tx.merchant,
         "note": tx.note,
-        "occurred_at": tx.occurred_at,
+        "occurred_at": tx.occurred_at.isoformat() if tx.occurred_at else None,
         "source": tx.source,
         "import_batch_id": tx.import_batch_id,
         "import_row_id": row.id,
@@ -236,6 +240,8 @@ def _ledger_import_snapshot(tx: LedgerTransaction, *, row: ImportRow, parsed: di
         "category_hint": parsed.get("category_hint"),
         "account_hint": parsed.get("account_hint"),
         "status": tx.status,
+        "deleted_at": tx.deleted_at.isoformat() if tx.deleted_at else None,
+        "revision": tx.revision,
     })
 
 
@@ -393,7 +399,7 @@ async def import_commit(batch_id: str, db: AsyncSession = Depends(get_db)):
         db.add(tx)
         await db.flush()
 
-        row.status = "imported"
+        row.status = IMPORT_ROW_IMPORTED_STATUS
         row.transaction_id = tx.id
         row.error_message = None
         imported += 1
@@ -455,32 +461,99 @@ async def import_rollback(batch_id: str, db: AsyncSession = Depends(get_db)):
     )
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
+    if batch.status == "rolled_back":
+        raise HTTPException(status_code=400, detail="Batch has already been rolled back")
     if batch.status != "committed":
         raise HTTPException(status_code=400, detail=f"Batch status is {batch.status}, expected committed")
 
-    result = await db.execute(
-        select(LedgerTransaction).where(
-            LedgerTransaction.import_batch_id == batch_id,
-            LedgerTransaction.user_id == "local-dev",
-        )
+    rows_result = await db.execute(
+        select(ImportRow).where(
+            ImportRow.batch_id == batch_id,
+            ImportRow.status == IMPORT_ROW_IMPORTED_STATUS,
+            ImportRow.transaction_id.is_not(None),
+        ).order_by(ImportRow.row_index)
     )
-    txs = result.scalars().all()
+    rows = rows_result.scalars().all()
+
+    before_batch = json_serialize({
+        "id": batch.id,
+        "source_provider": batch.source_provider,
+        "status": batch.status,
+        "total_rows": batch.total_rows,
+        "valid_rows": batch.valid_rows,
+        "duplicate_rows": batch.duplicate_rows,
+        "committed_at": batch.committed_at,
+        "rolled_back_at": batch.rolled_back_at,
+        "imported_rows": len(rows),
+    })
 
     now = datetime.now(timezone.utc)
     rolled = 0
-    for tx in txs:
+    skipped = 0
+    for row in rows:
+        tx = await db.scalar(
+            select(LedgerTransaction).where(
+                LedgerTransaction.id == row.transaction_id,
+                LedgerTransaction.user_id == "local-dev",
+                LedgerTransaction.import_batch_id == batch_id,
+            ).limit(1)
+        )
+        if not tx or tx.status != "active":
+            row.status = "rollback_skipped"
+            row.error_message = "Transaction missing or not active"
+            skipped += 1
+            continue
+
+        parsed = row.parsed_data or {}
+        before_tx = _ledger_import_snapshot(tx, row=row, parsed=parsed)
         tx.status = "user_trashed"
         tx.deleted_at = now
         tx.revision += 1
+        row.status = IMPORT_ROW_ROLLED_BACK_STATUS
+        row.error_message = None
         rolled += 1
+        after_tx = _ledger_import_snapshot(tx, row=row, parsed=parsed)
+
+        await _write_audit(
+            db,
+            "local-dev",
+            IMPORT_ROLLBACK_AUDIT_ACTION,
+            "ledger_transaction",
+            tx.id,
+            before=before_tx,
+            after=after_tx,
+            source="import",
+        )
 
     batch.status = "rolled_back"
     batch.rolled_back_at = now
+    after_batch = json_serialize({
+        "id": batch.id,
+        "source_provider": batch.source_provider,
+        "status": batch.status,
+        "rolled_back": rolled,
+        "skipped": skipped,
+        "rolled_back_at": batch.rolled_back_at,
+    })
 
-    await _write_audit(db, "local-dev", "rollback", "import_batch", batch_id)
+    await _write_audit(
+        db,
+        "local-dev",
+        IMPORT_BATCH_ROLLBACK_AUDIT_ACTION,
+        "import_batch",
+        batch_id,
+        before=before_batch,
+        after=after_batch,
+        source="import",
+    )
 
     await db.commit()
-    return ApiResponse(data={"batch_id": batch_id, "rolled_back": rolled, "status": "rolled_back"})
+    return ApiResponse(data={
+        "batch_id": batch_id,
+        "rolled_back": rolled,
+        "skipped": skipped,
+        "status": "rolled_back",
+    })
 
 
 # ─── Import: List batches ─────────────────────────────────────────────────────
