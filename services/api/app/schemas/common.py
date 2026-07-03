@@ -86,6 +86,7 @@ class MemoResponse(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+    assets: list[dict] | None = None
 
 
 # ─── Ledger ─────────────────────────────────────────────────────────────────
@@ -229,6 +230,12 @@ class AssetUpdate(BaseModel):
     filename: str | None = None
     visibility: str | None = Field(default=None, pattern=r"^(private|shared|public)$")
     title: str | None = None
+
+
+class MemoAssetBindRequest(BaseModel):
+    asset_id: str = Field(min_length=1)
+    ref_type: str = Field(default="attachment", pattern=r"^(attachment|inline|cover|source)$")
+    position_hint: str | None = Field(default=None, max_length=64)
 
 
 class AssetResponse(BaseModel):

@@ -116,6 +116,43 @@ class MemoRepository {
     await api.delete('/memos/$id');
   }
 
+  Future<List<MemoAssetRef>> listAssets(String memoId) async {
+    if (_useLocalCore) return const [];
+
+    final res = await api.get('/memos/$memoId/assets');
+    final items = res['data']['assets'] as List? ?? const [];
+    return items
+        .map((item) => MemoAssetRef.fromJson(item as Map<String, dynamic>))
+        .toList(growable: false);
+  }
+
+  Future<List<MemoAssetRef>> bindAsset(
+    String memoId,
+    String assetId, {
+    String refType = 'attachment',
+  }) async {
+    if (_useLocalCore) {
+      throw UnsupportedError('Local Core memo asset binding is not available in v0.5.2.');
+    }
+
+    final res = await api.post('/memos/$memoId/assets', data: {
+      'asset_id': assetId,
+      'ref_type': refType,
+    });
+    final items = res['data']['assets'] as List? ?? const [];
+    return items
+        .map((item) => MemoAssetRef.fromJson(item as Map<String, dynamic>))
+        .toList(growable: false);
+  }
+
+  Future<void> unbindAsset(String memoId, String assetId) async {
+    if (_useLocalCore) {
+      throw UnsupportedError('Local Core memo asset unbinding is not available in v0.5.2.');
+    }
+
+    await api.delete('/memos/$memoId/assets/$assetId');
+  }
+
   Memo _memoFromLocal(LocalMemoRecord record) {
     return Memo(
       id: record.id,

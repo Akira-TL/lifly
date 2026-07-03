@@ -4,8 +4,9 @@ import 'package:client_flutter/domain/entities/asset.dart';
 class AssetCard extends StatelessWidget {
   final Asset asset;
   final VoidCallback? onTap;
+  final Widget? trailing;
 
-  const AssetCard({super.key, required this.asset, this.onTap});
+  const AssetCard({super.key, required this.asset, this.onTap, this.trailing});
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +44,10 @@ class AssetCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (asset.isExternal) const Icon(Icons.open_in_new, size: 16),
+              if (trailing != null)
+                trailing!
+              else if (asset.isExternal)
+                const Icon(Icons.open_in_new, size: 16),
             ],
           ),
         ),
