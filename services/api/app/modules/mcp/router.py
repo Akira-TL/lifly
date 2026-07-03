@@ -12,6 +12,8 @@ from app.core.database import get_db
 from app.db.models import Asset, AuditLog, LedgerTransaction, Memo, Task
 from app.modules.assets.service import (
     asset_to_dict,
+    build_create_upload_url_payload,
+    build_register_external_url_payload,
     create_internal_asset_upload_record,
     register_external_asset_record,
 )
@@ -613,10 +615,7 @@ async def mcp_asset_create_upload_url(request: Request, db: AsyncSession = Depen
     await db.refresh(asset)
 
     return {
-        "asset_id": asset.id,
-        "storage_key": asset.storage_key,
-        "upload_url": upload_url,
-        "asset": asset_to_dict(asset),
+        **build_create_upload_url_payload(asset, upload_url),
         "undo_token": undo_token,
     }
 
@@ -648,4 +647,7 @@ async def mcp_asset_register_external_url(request: Request, db: AsyncSession = D
     await db.commit()
     await db.refresh(asset)
 
-    return {"asset": asset_to_dict(asset), "undo_token": undo_token}
+    return {
+        **build_register_external_url_payload(asset),
+        "undo_token": undo_token,
+    }

@@ -3,6 +3,7 @@ class Asset {
   final String userId;
   final String kind;
   final String assetType;
+  final String? title;
   final String? filename;
   final String? mimeType;
   final int? sizeBytes;
@@ -22,6 +23,7 @@ class Asset {
     required this.userId,
     required this.kind,
     required this.assetType,
+    this.title,
     this.filename,
     this.mimeType,
     this.sizeBytes,
@@ -40,7 +42,7 @@ class Asset {
   bool get isInternal => kind == 'internal';
   bool get isExternal => kind == 'external';
   bool get isImage => assetType == 'image';
-  String get displayName => filename ?? externalUrl ?? id;
+  String get displayName => title ?? filename ?? externalUrl ?? id;
 
   factory Asset.fromJson(Map<String, dynamic> json) {
     return Asset(
@@ -48,6 +50,7 @@ class Asset {
       userId: json['user_id'] as String,
       kind: json['kind'] as String,
       assetType: json['asset_type'] as String,
+      title: json['title'] as String?,
       filename: json['filename'] as String?,
       mimeType: json['mime_type'] as String?,
       sizeBytes: json['size_bytes'] as int?,

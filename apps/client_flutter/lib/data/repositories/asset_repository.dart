@@ -55,7 +55,8 @@ class AssetRepository {
       'title': title,
       'preview_url': previewUrl,
     });
-    return Asset.fromJson(res['data'] as Map<String, dynamic>);
+    final data = res['data'] as Map<String, dynamic>;
+    return Asset.fromJson((data['asset'] ?? data) as Map<String, dynamic>);
   }
 
   Future<Asset> uploadComplete(String assetId, {String? sha256, int? sizeBytes}) async {
