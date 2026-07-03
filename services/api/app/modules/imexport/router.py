@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import uuid
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,12 +17,7 @@ from app.db.models import (
     AuditLog,
 )
 from app.schemas.common import ApiResponse, json_serialize
-from app.modules.imexport.csv_parser import (
-    PARSERS,
-    ParsedRow,
-    ParseResult,
-    compute_file_hash,
-)
+from app.modules.imexport.csv_parser import PARSERS, compute_file_hash
 from app.modules.imexport.exporter import export_entities
 
 router = APIRouter()
@@ -183,6 +178,142 @@ async def import_preview(
 
 # ─── Import: Commit ───────────────────────────────────────────────────────────
 
+COMMITTABLE_IMPORT_ROW_STATUSES = ("pending", "valid")
+IGNORED_IMPORT_ROW_STATUSES = ("ignored", "error", "duplicate", "imported")
+IMPORT_COMMIT_AUDIT_ACTION = "import_commit"
+IMPORT_BATCH_COMMIT_AUDIT_ACTION = "commit"
+
+
+def _parse_import_occurred_at(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_import_amount(value: object) -> Decimal | None:
+    if value is None:
+        return None
+    try:
+        amount = Decimal(str(value)).quantize(Decimal("0.01"))
+    except (InvalidOperation, ValueError):
+        return None
+    if amount <= 0:
+        return None
+    return amount
+
+
+def _build_import_note(parsed: dict) -> str | None:
+    parts = [
+        parsed.get("note"),
+        parsed.get("category_hint"),
+        parsed.get("account_hint"),
+        parsed.get("source_provider"),
+        parsed.get("external_id"),
+    ]
+    normalized = [str(part).strip() for part in parts if part]
+    return " | ".join(normalized) or None
+
+
+def _ledger_import_snapshot(tx: LedgerTransaction, *, row: ImportRow, parsed: dict) -> dict:
+    return json_serialize({
+        "id": tx.id,
+        "user_id": tx.user_id,
+        "direction": tx.direction,
+        "amount": float(tx.amount),
+        "currency": tx.currency,
+        "merchant": tx.merchant,
+        "note": tx.note,
+        "occurred_at": tx.occurred_at,
+        "source": tx.source,
+        "import_batch_id": tx.import_batch_id,
+        "import_row_id": row.id,
+        "row_index": row.row_index,
+        "source_provider": parsed.get("source_provider"),
+        "external_id": parsed.get("external_id"),
+        "category_hint": parsed.get("category_hint"),
+        "account_hint": parsed.get("account_hint"),
+        "status": tx.status,
+    })
+
+
+async def _has_external_import_duplicate(
+    db: AsyncSession,
+    *,
+    user_id: str,
+    source_provider: str | None,
+    external_id: str | None,
+) -> bool:
+    if not source_provider or not external_id:
+        return False
+    result = await db.scalar(
+        select(func.count())
+        .select_from(ImportRow)
+        .join(ImportBatch, ImportBatch.id == ImportRow.batch_id)
+        .where(
+            ImportBatch.user_id == user_id,
+            ImportBatch.status == "committed",
+            ImportBatch.source_provider == source_provider,
+            ImportRow.transaction_id.is_not(None),
+            ImportRow.parsed_data["external_id"].astext == external_id,
+        )
+    )
+    return bool(result and result > 0)
+
+
+async def _has_business_import_duplicate(
+    db: AsyncSession,
+    *,
+    user_id: str,
+    direction: str,
+    amount: Decimal,
+    occurred_at: datetime,
+    merchant: str | None,
+) -> bool:
+    result = await db.scalar(
+        select(func.count()).select_from(
+            select(LedgerTransaction)
+            .where(
+                LedgerTransaction.user_id == user_id,
+                LedgerTransaction.direction == direction,
+                LedgerTransaction.amount == amount,
+                LedgerTransaction.occurred_at == occurred_at,
+                LedgerTransaction.merchant == (merchant or "未知"),
+                LedgerTransaction.status == "active",
+            )
+            .subquery()
+        )
+    )
+    return bool(result and result > 0)
+
+
+async def _should_mark_import_duplicate(
+    db: AsyncSession,
+    *,
+    user_id: str,
+    parsed: dict,
+    amount: Decimal,
+    occurred_at: datetime,
+) -> bool:
+    if await _has_external_import_duplicate(
+        db,
+        user_id=user_id,
+        source_provider=parsed.get("source_provider"),
+        external_id=parsed.get("external_id"),
+    ):
+        return True
+    return await _has_business_import_duplicate(
+        db,
+        user_id=user_id,
+        direction=parsed.get("direction", "expense"),
+        amount=amount,
+        occurred_at=occurred_at,
+        merchant=parsed.get("merchant"),
+    )
+
+
 @router.post("/import/{batch_id}/commit", response_model=ApiResponse)
 async def import_commit(batch_id: str, db: AsyncSession = Depends(get_db)):
     batch = await db.scalar(
@@ -199,48 +330,63 @@ async def import_commit(batch_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(ImportRow).where(
             ImportRow.batch_id == batch_id,
-            ImportRow.status.in_(["pending", "valid"]),
+            ImportRow.status.in_(COMMITTABLE_IMPORT_ROW_STATUSES),
         ).order_by(ImportRow.row_index)
     )
     rows = result.scalars().all()
 
     imported = 0
+    duplicates = 0
+    errors = 0
+    skipped = 0
     for row in rows:
-        if not row.parsed_data:
+        parsed = row.parsed_data or {}
+        if not parsed:
             row.status = "error"
             row.error_message = "No parsed data"
+            errors += 1
             continue
 
-        occurred_at = None
-        if row.parsed_data.get("occurred_at"):
-            try:
-                occurred_at = datetime.fromisoformat(row.parsed_data["occurred_at"])
-            except (ValueError, TypeError):
-                occurred_at = datetime.now(timezone.utc)
+        direction = parsed.get("direction") or "expense"
+        if direction not in {"expense", "income"}:
+            row.status = "ignored"
+            row.error_message = "Ignored non-ledger direction"
+            skipped += 1
+            continue
 
-        # 去重：同商户+同金额+同时间（避免重复导入；同一天也可多次消费）
-        dup = await db.scalar(
-            select(LedgerTransaction).where(
-                LedgerTransaction.user_id == "local-dev",
-                LedgerTransaction.merchant == row.parsed_data.get("merchant", ""),
-                LedgerTransaction.amount == row.parsed_data.get("amount", 0),
-                LedgerTransaction.occurred_at == occurred_at,
-                LedgerTransaction.status == "active",
-            ).limit(1)
-        )
-        if dup:
+        amount = _parse_import_amount(parsed.get("amount"))
+        occurred_at = _parse_import_occurred_at(parsed.get("occurred_at"))
+        if amount is None:
+            row.status = "error"
+            row.error_message = "Invalid amount"
+            errors += 1
+            continue
+        if occurred_at is None:
+            row.status = "error"
+            row.error_message = "Invalid occurred_at"
+            errors += 1
+            continue
+
+        if await _should_mark_import_duplicate(
+            db,
+            user_id="local-dev",
+            parsed=parsed,
+            amount=amount,
+            occurred_at=occurred_at,
+        ):
             row.status = "duplicate"
-            batch.duplicate_rows = (batch.duplicate_rows or 0) + 1
+            row.error_message = "Duplicate transaction"
+            duplicates += 1
             continue
 
         tx = LedgerTransaction(
             user_id="local-dev",
-            direction=row.parsed_data.get("direction", "expense"),
-            amount=row.parsed_data.get("amount", 0),
-            currency=row.parsed_data.get("currency", "CNY"),
-            merchant=row.parsed_data.get("merchant"),
-            note=row.parsed_data.get("note") or row.parsed_data.get("category_hint"),
-            occurred_at=occurred_at or datetime.now(timezone.utc),
+            direction=direction,
+            amount=amount,
+            currency=parsed.get("currency") or "CNY",
+            merchant=parsed.get("merchant") or "未知",
+            note=_build_import_note(parsed),
+            occurred_at=occurred_at,
             source="import",
             import_batch_id=batch_id,
         )
@@ -249,13 +395,52 @@ async def import_commit(batch_id: str, db: AsyncSession = Depends(get_db)):
 
         row.status = "imported"
         row.transaction_id = tx.id
+        row.error_message = None
         imported += 1
+
+        await _write_audit(
+            db,
+            "local-dev",
+            IMPORT_COMMIT_AUDIT_ACTION,
+            "ledger_transaction",
+            tx.id,
+            after=_ledger_import_snapshot(tx, row=row, parsed=parsed),
+            source="import",
+        )
 
     batch.status = "committed"
     batch.committed_at = datetime.now(timezone.utc)
+    batch.duplicate_rows = duplicates
+
+    await _write_audit(
+        db,
+        "local-dev",
+        IMPORT_BATCH_COMMIT_AUDIT_ACTION,
+        "import_batch",
+        batch_id,
+        after=json_serialize({
+            "batch_id": batch_id,
+            "source_provider": batch.source_provider,
+            "status": batch.status,
+            "imported": imported,
+            "duplicates": duplicates,
+            "errors": errors,
+            "skipped": skipped,
+        }),
+        source="import",
+    )
+
     await db.commit()
     await db.refresh(batch)
-    return ApiResponse(data={"batch_id": batch_id, "imported": imported, "status": "committed"})
+    return ApiResponse(data={
+        "batch_id": batch_id,
+        "source_provider": batch.source_provider,
+        "imported": imported,
+        "duplicates": duplicates,
+        "errors": errors,
+        "skipped": skipped,
+        "status": "committed",
+    })
 
 
 # ─── Import: Rollback ─────────────────────────────────────────────────────────
