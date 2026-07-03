@@ -70,3 +70,5 @@ infra/postgres/
 infra/minio/
 infra/redis/
 infra/powersync/
+
+.codegraph/
