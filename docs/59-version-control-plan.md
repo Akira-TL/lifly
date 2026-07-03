@@ -2,28 +2,28 @@
 
 ## 1. 当前版本判定
 
-当前 Lifly 已完成 Cloud Sync 版本族收口：
+当前 Lifly 已完成 AI Write 版本族收口：
 
 ```text
-v0.3.6
+v0.4.11
 ```
 
-当前开发进入 v0.4 版本族：
+当前开发准备进入 v0.5 版本族：
 
 ```text
-v0.4.x AI Write 全量开发
+v0.5.0 Assets & Import/Export 全量开发
 ```
 
 含义：
 
 ```text
-当前稳定 tag：v0.3.6
-当前开发分支：develop/v0.4.0
-当前开发版本族：v0.4.x
-版本号规则：从 v0.2 开始不再使用 dev 后缀，开发轮次使用 0.4.0、0.4.1、0.4.2 这类标准三段式修订号
+当前稳定 tag：v0.4.11
+当前开发分支：develop/v0.5.0（待创建）
+当前开发版本族：v0.5.x
+版本号规则：从 v0.2 开始不再使用 dev 后缀，开发轮次使用 0.5.0、0.5.1、0.5.2 这类标准三段式修订号
 ```
 
-v0.4 的目标是让 AI 写入成为 Lifly 的完整一等入口，覆盖 Cloud MCP、Local MCP、capture_parse / capture_commit / capture_undo、audit log、AI 回收站、Flutter 入口、诊断和 release gate。
+v0.5 的目标是让附件 metadata、内部文件上传体验、外部链接引用、CSV 导入预览/提交/回滚和基础导出形成完整闭环。
 
 ## 2. 版本号规则
 
@@ -77,10 +77,10 @@ master：稳定主干，后续只保留正式稳定发布
 6. 进入下一个修订号前，再新开下一个 develop/vX.Y.Z 分支
 ```
 
-当前 v0.4.0 开发分支：
+当前 v0.5.0 计划开发分支：
 
 ```text
-develop/v0.4.0
+develop/v0.5.0
 ```
 
 推荐 tag 规则：
@@ -226,6 +226,8 @@ Android 离线创建，联网后 Windows 可见
 
 ### v0.4.x：AI Write 全量开发
 
+状态：已完成，最终 tag 为 `v0.4.11`。
+
 主题：AI 写入成为 Lifly 的完整一等入口。
 
 范围：
@@ -254,7 +256,9 @@ Cloud 与 Local MCP 复用同一套 protocol schema
 所有 AI 写入和撤销都有 audit logs
 ```
 
-### v0.5.0：Assets & Import MVP
+### v0.5.0：Assets & Import/Export 全量开发
+
+状态：下一阶段入口。
 
 主题：附件与导入导出形成可用闭环。
 

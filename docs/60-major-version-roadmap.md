@@ -9,9 +9,9 @@
 当前判断：
 
 ```text
-当前稳定版本：v0.1.0
-当前开发分支：feat/v0.2-local-data-mvp
-近期重点：按 0.2.0、0.2.1、0.2.2 这类标准修订号推进 v0.2.x Local Data MVP
+当前稳定版本：v0.4.11
+当前开发入口：v0.5.0 Assets & Import/Export 全量开发
+近期重点：完成附件 metadata / 上传体验 / CSV 导入预览提交回滚 / 导出闭环
 ```
 
 ## 2. 总体路线
@@ -317,10 +317,12 @@ LC-0306 Add Windows/Android sync smoke checklist
 
 ### 6.2 核心目标
 
+状态：已在 `v0.4.11` 收口。
+
 ```text
 Cloud MCP / Local MCP 复用 packages/protocol
 Cloud MCP 完整写入 memo / expense / task / asset ref
-Local MCP stdio 可调用真实 Dart Local Core
+Local MCP 桌面 bridge contract 与测试 runtime 已建立
 capture_parse / capture_commit / capture_undo 真实闭环
 Flutter 提供 AI Capture 输入、确认和撤销入口
 AI 写入和撤销全部进入 audit logs
@@ -370,9 +372,11 @@ mcp_undo_actions 持久化
 
 ### 6.5 验收标准
 
+状态：已通过 `bash scripts/check-v0.4-ai-write.sh` 和用户手动 UI 基本验证。
+
 ```text
 Cloud MCP 可完整写入 memo / expense / task / asset ref
-Local MCP 离线可完整写入 memo / expense / task
+Local MCP 测试 runtime 可完整写入 memo / expense / task；真实桌面 host transport 留到后续桌面专项
 Flutter 可触发 AI 写入、确认和撤销
 capture mixed input 可拆成多个 action
 capture_commit 可选择部分 action

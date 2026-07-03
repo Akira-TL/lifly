@@ -29,15 +29,25 @@ v1.0.0-personal-production.md
 
 ## 当前开发分支
 
-当前 v0.4 AI 写入全量开发分支：
+v0.4 AI 写入全量开发已收口，最终 tag 为：
 
 ```text
-develop/v0.4.0
+v0.4.11
 ```
 
-该分支的职责是完成 `v0.4.0` 的版本边界冻结、分支治理与全量开发计划，不进入功能代码开发；后续 v0.4.x 修订号统一使用 `develop/v0.4.x` 分支命名。
+下一阶段进入 v0.5.0 Assets & Import/Export，版本分支将使用：
+
+```text
+develop/v0.5.0
+```
 
 ## 当前计划文件
+
+```text
+v0.5.0-assets-import-export-mvp.md
+```
+
+v0.4 收口记录保留在：
 
 ```text
 v0.4.0-ai-write-full-development.md

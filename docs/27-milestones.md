@@ -2,6 +2,8 @@
 
 ## M0：Repo Bootstrap & Governance Alignment
 
+状态：已完成。
+
 目标：完成仓库命名、文档入仓、AI 执行规范、基础工程结构和本地开发设施对齐。
 
 验收：
@@ -13,6 +15,8 @@
 - FastAPI health check 可访问
 
 ## M1：Local Data MVP
+
+状态：已完成。
 
 目标：客户端本地手动记录闭环。
 
@@ -31,6 +35,8 @@
 
 ## M2：Cloud Sync MVP
 
+状态：已完成。
+
 目标：云同步闭环。
 
 范围：
@@ -48,29 +54,43 @@
 - Android 离线创建，联网后 Windows 可见
 - 删除状态跨端一致
 
-## M3：Cloud MCP MVP
+## M3：AI Write / MCP 全量闭环
 
-目标：AI/MCP 写入闭环。
+状态：已完成，最终 tag：`v0.4.11`。
+
+目标：AI/MCP 写入、确认、撤销、审计和诊断形成完整闭环。
 
 范围：
 
-- Cloud MCP
-- memo_create
-- expense_create
-- task_create
-- capture_parse
-- capture_commit
-- capture_undo
+- Cloud MCP / Local MCP 共用 packages/protocol tool schema
+- Cloud MCP 直接写入 memo / expense / task / asset ref
+- capture_parse / capture_commit / capture_undo
+- AI undo 进入 ai_trashed，不物理删除
+- Flutter AI 写入入口
+- AI 写入审计摘要
+- Cloud / Local MCP parity tests
+- v0.4 AI Write release gate
 
 验收：
 
-- MCP Client 可创建 memo / expense / task
+- MCP Client 可创建 memo / expense / task / asset ref
 - 混合输入可拆成多个 action
-- 所有写入有 audit_log
+- 可选择部分 action 提交
+- 所有 AI 写入和撤销有 audit_log
+- Flutter 可进行 AI parse / commit / undo
+- `bash scripts/check-v0.4-ai-write.sh` 通过
 
-## M4：Assets & Import MVP
+已知边界：
 
-目标：附件与 CSV 导入闭环。
+- Local MCP 属于桌面端 / 本机运行时，移动端和 Flutter Web 不内置 MCP Server
+- 真实桌面 host transport 尚未完成，当前完成 bridge contract / fail-fast / 测试 runtime
+- 附件二进制上传体验进入后续 v0.5
+
+## M4：Assets & Import/Export
+
+状态：下一阶段。
+
+目标：附件与 CSV 导入导出闭环。
 
 范围：
 
@@ -80,15 +100,26 @@
 - Markdown asset 引用
 - 通用 CSV / 支付宝 CSV / 微信 CSV
 - 导入预览与批次回滚
+- Markdown / CSV / JSON export
+
+验收：
+
+- 图片或文件可注册为 asset metadata
+- 外链可保存并在 UI 展示
+- CSV 不直接写正式账单表，导入前可预览
+- 导入后可按 batch 回滚
+- 核心数据可导出
 
 ## M5：Windows Local MCP
+
+状态：待规划。
 
 目标：支持本地模型、离线 AI、私有部署。
 
 范围：
 
 - Local MCP stdio
-- Local Core Bridge
+- Desktop Local Core host transport
 - 与 Cloud MCP 共用 schema
-- 写本地 SQLite
+- 写本地 PowerSync / SQLite
 - 联网后同步

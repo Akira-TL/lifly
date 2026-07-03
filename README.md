@@ -2,6 +2,10 @@
 
 AI-first / Chat-first personal life data system.
 
+Current stable development tag: `v0.4.11`.
+
+Next development entry: `v0.5.0` Assets & Import/Export.
+
 ## Docs
 
 Start here:
@@ -18,6 +22,8 @@ docs/33-github-gitlab-project-setup.md
 docs/34-architecture-decision-record-template.md
 docs/59-version-control-plan.md
 docs/60-major-version-roadmap.md
+docs/development-plans/v0.4.0-ai-write-full-development.md
+docs/development-plans/v0.5.0-assets-import-export-mvp.md
 ```
 
 ## Quick Start
