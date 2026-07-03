@@ -124,7 +124,7 @@ async def expense_create(
         "direction": direction,
         "currency": currency,
         "merchant": merchant,
-        "category_id": category_hint,
+        "category_hint": category_hint,
         "note": note,
         "occurred_at": occurred_at,
     })
@@ -218,7 +218,7 @@ async def asset_create_upload_url(
     size_bytes: int | None = None,
     asset_type: str = "file",
 ) -> str:
-    resp = await _call_internal("/api/v1/assets/create-upload-url", body={
+    resp = await _call_internal("/api/v1/mcp/asset/create-upload-url", body={
         "filename": filename,
         "mime_type": mime_type,
         "size_bytes": size_bytes,
@@ -238,7 +238,7 @@ async def asset_register_external_url(
     title: str | None = None,
     asset_type: str = "link",
 ) -> str:
-    resp = await _call_internal("/api/v1/assets/register-external-url", body={
+    resp = await _call_internal("/api/v1/mcp/asset/register-external-url", body={
         "external_url": external_url,
         "title": title,
         "asset_type": asset_type,
