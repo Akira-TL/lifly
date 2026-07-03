@@ -18,7 +18,7 @@ from app.db.models import (
 )
 from app.schemas.common import ApiResponse, json_serialize
 from app.modules.imexport.csv_parser import PARSERS, compute_file_hash
-from app.modules.imexport.exporter import export_entities
+from app.modules.imexport.exporter import build_export_result
 
 router = APIRouter()
 
@@ -629,15 +629,15 @@ async def get_batch(batch_id: str, db: AsyncSession = Depends(get_db)):
 async def export_data(request: Request, db: AsyncSession = Depends(get_db)):
     body = await request.json()
     entity_type = body.get("entity_type", "all")
-    format = body.get("format", "csv")
 
-    content = await export_entities(db, entity_type)
+    try:
+        result = await build_export_result(db, entity_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return ApiResponse(data={
-        "entity_type": entity_type,
-        "format": "csv" if entity_type == "ledger_transactions" else "json",
-        "size_bytes": len(content),
-        "preview": content.decode("utf-8", errors="replace")[:500],
+        **result.metadata(),
+        "preview": result.preview_text(),
     })
 
 
@@ -646,26 +646,18 @@ async def export_stream(
     entity_type: str = Query(default="all"),
     db: AsyncSession = Depends(get_db),
 ):
-    content = await export_entities(db, entity_type)
-
-    media_type_map = {
-        "ledger_transactions": "text/csv",
-        "memos": "text/markdown",
-        "tasks": "application/json",
-        "all": "application/json",
-    }
-
-    ext_map = {
-        "ledger_transactions": "csv",
-        "memos": "md",
-        "tasks": "json",
-        "all": "json",
-    }
+    try:
+        result = await build_export_result(db, entity_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return StreamingResponse(
-        io.BytesIO(content),
-        media_type=media_type_map.get(entity_type, "application/octet-stream"),
+        io.BytesIO(result.content),
+        media_type=result.media_type,
         headers={
-            "Content-Disposition": f'attachment; filename="lifly-export-{entity_type}.{ext_map.get(entity_type, "data")}"',
+            "Content-Disposition": f'attachment; filename="{result.filename}"',
+            "X-Lifly-Export-Contract": result.contract_version,
+            "X-Lifly-Export-Checksum-SHA256": result.checksum_sha256,
+            "X-Lifly-Export-Size-Bytes": str(result.size_bytes),
         },
     )
