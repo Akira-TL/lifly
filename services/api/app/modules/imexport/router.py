@@ -56,7 +56,7 @@ async def _write_audit(
 @router.post("/import/upload", response_model=ApiResponse)
 async def import_upload(
     file: UploadFile,
-    provider: str = Query(default="generic", pattern=r"^(generic|alipay|wechat)$"),
+    provider: str = Query(default="auto", pattern=r"^(auto|generic|alipay|wechat)$"),
     db: AsyncSession = Depends(get_db),
 ):
     content = await file.read()
@@ -66,6 +66,7 @@ async def import_upload(
         raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
 
     parse_result = parser(content, "local-dev")
+    detected_provider = parse_result.provider or provider
     file_hash = compute_file_hash(content)
 
     # 去重检测：相同文件 hash 是否已存在
@@ -83,7 +84,7 @@ async def import_upload(
 
     batch = ImportBatch(
         user_id="local-dev",
-        source_provider=provider,
+        source_provider=detected_provider,
         filename=file.filename,
         file_hash=file_hash,
         status="preview",
@@ -99,7 +100,7 @@ async def import_upload(
             batch_id=batch.id,
             row_index=pr.row_index,
             raw_data=pr.raw_data,
-            parsed_data=pr.parsed if pr.status == "valid" else None,
+            parsed_data=pr.parsed if pr.status in {"valid", "ignored"} else None,
             status=pr.status if pr.status != "valid" else "pending",
             error_message=pr.error,
         )
@@ -110,9 +111,12 @@ async def import_upload(
 
     return ApiResponse(data={
         "batch_id": batch.id,
+        "source_provider": detected_provider,
         "total_rows": batch.total_rows,
         "valid_rows": batch.valid_rows,
         "duplicate_rows": batch.duplicate_rows,
+        "error_rows": parse_result.error_rows,
+        "ignored_rows": parse_result.ignored_rows,
         "preview": [
             {
                 "row_index": pr.row_index,
