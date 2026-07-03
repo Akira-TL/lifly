@@ -11,9 +11,18 @@ from app.core.storage import (
 )
 from app.db.models import Asset, MemoAssetRef
 from app.modules.assets.service import (
+    ASSET_STATUS_DELETED,
+    ASSET_SYNC_SYNCED,
+    ASSET_TRASH_AUDIT_ACTION,
+    ASSET_UPDATE_METADATA_AUDIT_ACTION,
+    ASSET_UPLOAD_COMPLETE_AUDIT_ACTION,
+    asset_metadata,
     asset_to_response,
+    build_create_upload_url_payload,
+    build_register_external_url_payload,
     create_internal_asset_upload_record,
     register_external_asset_record,
+    write_asset_audit,
 )
 from app.schemas.common import (
     AssetCreateUploadUrl,
@@ -38,12 +47,7 @@ async def create_upload_url(data: AssetCreateUploadUrl, db: AsyncSession = Depen
     )
     await db.commit()
     await db.refresh(asset)
-    return ApiResponse(data={
-        "asset_id": asset.id,
-        "storage_key": asset.storage_key,
-        "upload_url": upload_url,
-        "asset": asset_to_response(asset).model_dump(mode="json"),
-    })
+    return ApiResponse(data=build_create_upload_url_payload(asset, upload_url))
 
 
 @router.post("/register-external-url", response_model=ApiResponse)
@@ -57,7 +61,7 @@ async def register_external_url(data: AssetRegisterExternalUrl, db: AsyncSession
     )
     await db.commit()
     await db.refresh(asset)
-    return ApiResponse(data=asset_to_response(asset).model_dump(mode="json"))
+    return ApiResponse(data=build_register_external_url_payload(asset))
 
 
 @router.post("/{asset_id}/upload-complete", response_model=ApiResponse)
@@ -78,11 +82,24 @@ async def upload_complete(
     if not check_object_exists(asset.storage_key):
         raise HTTPException(status_code=400, detail="File not found in storage — upload may not be complete")
 
+    before = asset_metadata(asset)
     if data.sha256:
         asset.sha256 = data.sha256
     if data.size_bytes is not None:
         asset.size_bytes = data.size_bytes
-    asset.sync_status = "synced"
+    asset.sync_status = ASSET_SYNC_SYNCED
+    after = asset_metadata(asset)
+    await write_asset_audit(
+        db,
+        user_id="local-dev",
+        action=ASSET_UPLOAD_COMPLETE_AUDIT_ACTION,
+        asset=asset,
+        before=before,
+        after=after,
+        actor_type="user",
+        source_channel="api",
+        source_text=asset_id,
+    )
 
     await db.commit()
     await db.refresh(asset)
@@ -154,9 +171,25 @@ async def update_asset(asset_id: str, data: AssetUpdate, db: AsyncSession = Depe
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
 
+    before = asset_metadata(asset)
     update_data = data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
-        setattr(asset, key, value)
+        if key == "title":
+            asset.filename = value
+        else:
+            setattr(asset, key, value)
+    after = asset_metadata(asset)
+    await write_asset_audit(
+        db,
+        user_id="local-dev",
+        action=ASSET_UPDATE_METADATA_AUDIT_ACTION,
+        asset=asset,
+        before=before,
+        after=after,
+        actor_type="user",
+        source_channel="api",
+        source_text=asset_id,
+    )
 
     await db.commit()
     await db.refresh(asset)
@@ -183,6 +216,20 @@ async def delete_asset(asset_id: str, db: AsyncSession = Depends(get_db)):
             detail=f"Asset is referenced by {ref_count} memos — remove references first",
         )
 
-    asset.status = "deleted"
+    before = asset_metadata(asset)
+    asset.status = ASSET_STATUS_DELETED
+    after = asset_metadata(asset)
+    await write_asset_audit(
+        db,
+        user_id="local-dev",
+        action=ASSET_TRASH_AUDIT_ACTION,
+        asset=asset,
+        before=before,
+        after=after,
+        actor_type="user",
+        source_channel="api",
+        source_text=asset_id,
+    )
+
     await db.commit()
-    return ApiResponse(data={"id": asset_id, "status": "deleted"})
+    return ApiResponse(data={"id": asset_id, "status": ASSET_STATUS_DELETED})

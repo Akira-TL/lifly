@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ─── Common ─────────────────────────────────────────────────────────────────
@@ -173,18 +173,51 @@ class TaskResponse(BaseModel):
 # ─── Asset ───────────────────────────────────────────────────────────────────
 
 class AssetCreateUploadUrl(BaseModel):
-    filename: str
-    mime_type: str | None = None
-    size_bytes: int | None = None
+    filename: str = Field(min_length=1, max_length=512)
+    mime_type: str | None = Field(default=None, max_length=128)
+    size_bytes: int | None = Field(default=None, ge=0)
     asset_type: str = Field(default="file", pattern=r"^(image|pdf|ppt|mindmap|file|audio|video)$")
+
+    @field_validator("filename")
+    @classmethod
+    def validate_filename(cls, value: str) -> str:
+        filename = value.strip()
+        if not filename:
+            raise ValueError("filename is required")
+        if any(token in filename for token in ("/", "\\", "\x00")) or filename in {".", ".."}:
+            raise ValueError("filename must be a plain file name without path segments")
+        return filename
+
+    @field_validator("mime_type")
+    @classmethod
+    def normalize_mime_type(cls, value: str | None) -> str | None:
+        return value.strip() if value else value
 
 
 class AssetRegisterExternalUrl(BaseModel):
-    external_url: str
-    external_provider: str | None = None
+    external_url: str = Field(min_length=1, max_length=2048)
+    external_provider: str | None = Field(default=None, max_length=32)
     asset_type: str = Field(default="link", pattern=r"^(image|pdf|ppt|mindmap|file|audio|video|link|embed)$")
-    title: str | None = None
-    preview_url: str | None = None
+    title: str | None = Field(default=None, max_length=512)
+    preview_url: str | None = Field(default=None, max_length=2048)
+
+    @field_validator("external_url", "preview_url")
+    @classmethod
+    def validate_http_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        url = value.strip()
+        if not url.startswith(("http://", "https://")):
+            raise ValueError("url must start with http:// or https://")
+        return url
+
+    @field_validator("external_provider", "title")
+    @classmethod
+    def normalize_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
 
 
 class AssetUploadCompleteRequest(BaseModel):
@@ -203,6 +236,7 @@ class AssetResponse(BaseModel):
     user_id: str
     kind: str
     asset_type: str
+    title: str | None
     filename: str | None
     mime_type: str | None
     size_bytes: int | None
