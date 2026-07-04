@@ -8,6 +8,7 @@ import 'package:client_flutter/data/powersync/powersync_credentials_service.dart
 import 'package:client_flutter/data/powersync/sync_push_service.dart';
 import 'package:client_flutter/data/powersync/sync_service.dart';
 import 'package:client_flutter/features/import_export/pages/bill_import_page.dart';
+import 'package:client_flutter/features/import_export/pages/import_batches_page.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -271,6 +272,18 @@ class _SettingsPageState extends State<SettingsPage> {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const BillImportPage()),
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.history_outlined),
+                  title: const Text('导入批次'),
+                  subtitle: const Text('查看历史导入、继续检查预览或追踪提交结果'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const ImportBatchesPage(),
+                    ),
                   ),
                 ),
               ],
