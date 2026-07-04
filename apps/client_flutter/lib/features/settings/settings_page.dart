@@ -7,6 +7,7 @@ import 'package:client_flutter/data/powersync/powersync_connection_coordinator.d
 import 'package:client_flutter/data/powersync/powersync_credentials_service.dart';
 import 'package:client_flutter/data/powersync/sync_push_service.dart';
 import 'package:client_flutter/data/powersync/sync_service.dart';
+import 'package:client_flutter/features/import_export/pages/bill_import_page.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -254,10 +255,28 @@ class _SettingsPageState extends State<SettingsPage> {
             onDisconnect: _disconnectPowerSync,
           ),
           const SizedBox(height: 12),
-          const ListTile(
-            leading: Icon(Icons.storage_outlined),
-            title: Text('数据管理'),
+          Card(
+            child: Column(
+              children: [
+                const ListTile(
+                  leading: Icon(Icons.storage_outlined),
+                  title: Text('数据管理'),
+                  subtitle: Text('导入、导出与附件数据工具'),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.upload_file_outlined),
+                  title: const Text('账单导入'),
+                  subtitle: const Text('上传微信 / 支付宝流水并生成预览'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const BillImportPage()),
+                  ),
+                ),
+              ],
+            ),
           ),
+          const SizedBox(height: 12),
           const ListTile(
             leading: Icon(Icons.info_outline),
             title: Text('关于 Lifly'),
@@ -428,7 +447,10 @@ class _AiAuditSummaryCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.verified_user_outlined, color: theme.colorScheme.primary),
+                Icon(
+                  Icons.verified_user_outlined,
+                  color: theme.colorScheme.primary,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'AI 写入审计',
@@ -545,7 +567,8 @@ class _PowerSyncCredentialsCard extends StatelessWidget {
             _StatusRow(label: 'Mode', value: credentials?.mode ?? '未检查'),
             if (expiresAt != null) _StatusRow(label: '过期时间', value: expiresAt),
             _StatusRow(label: '连接状态', value: connectionDiagnostics.statusLabel),
-            if (connectedAt != null) _StatusRow(label: '连接时间', value: connectedAt),
+            if (connectedAt != null)
+              _StatusRow(label: '连接时间', value: connectedAt),
             if (disconnectedAt != null)
               _StatusRow(label: '断开时间', value: disconnectedAt),
             _StatusRow(label: '上传状态', value: uploadDiagnostics.statusLabel),
