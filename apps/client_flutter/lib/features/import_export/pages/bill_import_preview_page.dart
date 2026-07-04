@@ -42,7 +42,10 @@ class _BillImportPreviewPageState extends State<BillImportPreviewPage> {
   int _offset = 0;
   bool _loading = false;
   bool _loadingMore = false;
+  bool _committing = false;
+  ImportCommitResult? _commitResult;
   String? _error;
+  String? _commitError;
 
   ImportExportRepository get _repository =>
       widget.repository ?? ImportExportRepository(context.read<ApiClient>());
@@ -54,6 +57,11 @@ class _BillImportPreviewPageState extends State<BillImportPreviewPage> {
   }
 
   bool get _hasMore => _offset < _total;
+
+  bool get _canCommit {
+    final status = _batch?.status ?? 'preview';
+    return !_committing && _commitResult == null && status == 'preview';
+  }
 
   @override
   void initState() {
@@ -119,6 +127,43 @@ class _BillImportPreviewPageState extends State<BillImportPreviewPage> {
     }
   }
 
+  Future<void> _confirmAndCommit() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('确认提交导入？'),
+        content: const Text('提交后会写入记账流水。重复行、错误行和忽略行会按服务端规则跳过。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('确认提交'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _committing = true;
+      _commitError = null;
+    });
+
+    try {
+      final result = await _repository.commit(widget.batchId);
+      if (!mounted) return;
+      setState(() => _commitResult = result);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _commitError = '提交导入失败：$error');
+    } finally {
+      if (mounted) setState(() => _committing = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -133,6 +178,15 @@ class _BillImportPreviewPageState extends State<BillImportPreviewPage> {
               batch: _batch,
               loadedRows: _rows.length,
               totalRows: _total,
+            ),
+            const SizedBox(height: 12),
+            _CommitCard(
+              batch: _batch,
+              result: _commitResult,
+              error: _commitError,
+              committing: _committing,
+              canCommit: _canCommit,
+              onCommit: _confirmAndCommit,
             ),
             const SizedBox(height: 12),
             _FilterCard(
@@ -223,6 +277,105 @@ class _BatchSummaryCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _CommitCard extends StatelessWidget {
+  final ImportBatch? batch;
+  final ImportCommitResult? result;
+  final String? error;
+  final bool committing;
+  final bool canCommit;
+  final VoidCallback onCommit;
+
+  const _CommitCard({
+    required this.batch,
+    required this.result,
+    required this.error,
+    required this.committing,
+    required this.canCommit,
+    required this.onCommit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final currentResult = result;
+    final currentError = error;
+    final status = batch?.status ?? 'preview';
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.playlist_add_check,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '提交导入',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text('当前批次状态：${_statusLabel(status)}'),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: canCommit ? onCommit : null,
+              icon: committing
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.done_all_outlined),
+              label: Text(committing ? '提交中...' : '提交导入'),
+            ),
+            if (currentError != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                currentError,
+                style: TextStyle(color: theme.colorScheme.error),
+              ),
+            ],
+            if (currentResult != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                '提交结果：${_statusLabel(currentResult.status)}',
+                style: theme.textTheme.titleSmall,
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _StatChip(label: '已导入', value: currentResult.imported),
+                  _StatChip(label: '重复', value: currentResult.duplicates),
+                  _StatChip(label: '错误', value: currentResult.errors),
+                  _StatChip(label: '跳过', value: currentResult.skipped),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _statusLabel(String status) {
+    return switch (status) {
+      'preview' => '预览中',
+      'committed' => '已提交',
+      'rolled_back' => '已回滚',
+      _ => status,
+    };
   }
 }
 

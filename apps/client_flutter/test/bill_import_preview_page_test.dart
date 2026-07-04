@@ -38,13 +38,25 @@ void main() {
 
       expect(find.text('导入预览'), findsOneWidget);
       expect(find.text('Batch ID：batch-001'), findsOneWidget);
-      expect(find.text('咖啡店 · 18.50'), findsOneWidget);
-      expect(find.text('未解析商户 · -'), findsOneWidget);
       expect(find.text('待导入（1）'), findsOneWidget);
       expect(find.text('错误（1）'), findsOneWidget);
 
+      await tester.scrollUntilVisible(
+        find.text('咖啡店 · 18.50'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('咖啡店 · 18.50'), findsOneWidget);
+
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, 600));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('错误（1）'));
       await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('未解析商户 · -'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
 
       expect(find.text('咖啡店 · 18.50'), findsNothing);
       expect(find.text('未解析商户 · -'), findsOneWidget);
@@ -87,6 +99,11 @@ void main() {
     await tester.pumpWidget(_buildPage(api));
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.text('第一行 · 1.00'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('第一行 · 1.00'), findsOneWidget);
     expect(find.text('第二行 · 2.00'), findsNothing);
 
@@ -112,6 +129,71 @@ void main() {
 
     expect(find.textContaining('加载预览失败'), findsOneWidget);
     expect(find.text('重试'), findsOneWidget);
+  });
+
+  testWidgets('BillImportPreviewPage confirms commit and renders result', (
+    tester,
+  ) async {
+    final api = _FakeApiClient()
+      ..pageResponses[0] = _previewPage(
+        total: 1,
+        offset: 0,
+        items: [
+          _row(
+            id: 'row-1',
+            rowIndex: 1,
+            status: 'pending',
+            merchant: '咖啡店',
+            amount: '18.50',
+            occurredAt: '2026-07-04T10:00:00+08:00',
+          ),
+        ],
+      )
+      ..commitResponse = {
+        'data': {
+          'batch_id': 'batch-001',
+          'source_provider': 'wechat',
+          'imported': 1,
+          'duplicates': 0,
+          'errors': 0,
+          'skipped': 0,
+          'status': 'committed',
+        },
+      };
+
+    await tester.pumpWidget(_buildPage(api));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, '提交导入'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('确认提交导入？'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, '确认提交'));
+    await tester.pumpAndSettle();
+
+    expect(api.postPaths, ['/import/batch-001/commit']);
+    expect(find.text('提交结果：已提交'), findsOneWidget);
+    expect(find.text('已导入：1'), findsOneWidget);
+  });
+
+  testWidgets('BillImportPreviewPage renders duplicate commit errors', (
+    tester,
+  ) async {
+    final api = _FakeApiClient()
+      ..pageResponses[0] = _previewPage(total: 0, offset: 0, items: const [])
+      ..commitError = StateError('already committed');
+
+    await tester.pumpWidget(_buildPage(api));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, '提交导入'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '确认提交'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('提交导入失败'), findsOneWidget);
+    expect(find.textContaining('already committed'), findsOneWidget);
   });
 }
 
@@ -177,7 +259,20 @@ class _FakeApiClient extends ApiClient {
 
   final Map<int, Map<String, dynamic>> pageResponses = {};
   final List<_ApiCall> calls = [];
+  final List<String> postPaths = [];
+  Map<String, dynamic> commitResponse = const {
+    'data': {
+      'batch_id': 'batch-001',
+      'source_provider': 'wechat',
+      'imported': 0,
+      'duplicates': 0,
+      'errors': 0,
+      'skipped': 0,
+      'status': 'committed',
+    },
+  };
   Object? error;
+  Object? commitError;
 
   @override
   Future<Map<String, dynamic>> get(
@@ -190,6 +285,17 @@ class _FakeApiClient extends ApiClient {
     if (error != null) throw error;
     return pageResponses[offset] ??
         _previewPage(total: 0, offset: offset, items: const []);
+  }
+
+  @override
+  Future<Map<String, dynamic>> post(
+    String path, {
+    Map<String, dynamic>? data,
+  }) async {
+    postPaths.add(path);
+    final error = commitError;
+    if (error != null) throw error;
+    return commitResponse;
   }
 }
 
