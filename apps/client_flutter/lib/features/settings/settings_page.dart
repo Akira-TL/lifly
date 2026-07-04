@@ -8,6 +8,7 @@ import 'package:client_flutter/data/powersync/powersync_credentials_service.dart
 import 'package:client_flutter/data/powersync/sync_push_service.dart';
 import 'package:client_flutter/data/powersync/sync_service.dart';
 import 'package:client_flutter/features/import_export/pages/bill_import_page.dart';
+import 'package:client_flutter/features/import_export/pages/export_page.dart';
 import 'package:client_flutter/features/import_export/pages/import_batches_page.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -285,6 +286,16 @@ class _SettingsPageState extends State<SettingsPage> {
                       builder: (_) => const ImportBatchesPage(),
                     ),
                   ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.download_outlined),
+                  title: const Text('数据导出'),
+                  subtitle: const Text('生成导出预览并下载导出文件'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(
+                    context,
+                  ).push(MaterialPageRoute(builder: (_) => const ExportPage())),
                 ),
               ],
             ),
