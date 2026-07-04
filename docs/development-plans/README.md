@@ -27,19 +27,27 @@ v0.7.0-private-beta.md
 v1.0.0-personal-production.md
 ```
 
-## 当前开发分支
+## 当前开发状态
 
-v0.4 AI 写入全量开发已收口，最终 tag 为：
-
-```text
-v0.4.11
-```
-
-下一阶段进入 v0.5.0 Assets & Import/Export，版本分支将使用：
+v0.5 Assets & Import/Export 已完成发布门禁，最终开发分支为：
 
 ```text
-develop/v0.5.0
+develop/v0.5.7
 ```
+
+当前最新已合入开发主线的 tag：
+
+```text
+v0.5.6
+```
+
+v0.5 发布门禁文档：
+
+```text
+docs/64-v0.5-release-gate.md
+```
+
+下一阶段建议进入 v0.6 UI/体验层开发，先规划后执行。
 
 ## 当前计划文件
 

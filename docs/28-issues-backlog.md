@@ -35,7 +35,9 @@
 - LC-0406 Add AI audit diagnostics and safety boundaries
 - LC-0407 Add Cloud / Local MCP parity tests and v0.4 release gate
 
-## 下一阶段：v0.5 Assets & Import/Export
+### v0.5 Assets & Import/Export
+
+状态：已完成，发布门禁记录见 `docs/64-v0.5-release-gate.md`。
 
 ### LC-0501 Asset metadata and upload intent hardening
 
@@ -109,3 +111,21 @@
 - Flutter analyze/test 通过
 - import/export smoke 通过
 - 文档、roadmap、milestones、backlog 同步更新
+
+## 下一阶段：v0.6 UI / Experience
+
+### LC-0601 Flutter import preview UI
+
+目标：提供微信 / 支付宝账单上传、预览、错误行展示和提交确认 UI。
+
+### LC-0602 Flutter import rollback UI
+
+目标：提供导入批次列表、批次详情和一键回滚确认 UI。
+
+### LC-0603 Flutter export UI
+
+目标：提供 memo Markdown、ledger CSV、all JSON 的导出入口和结果诊断。
+
+### LC-0604 Flutter asset library polish
+
+目标：补齐附件库检索、状态展示、外链复制和 memo 引用体验。
