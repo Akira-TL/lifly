@@ -112,20 +112,38 @@
 - import/export smoke 通过
 - 文档、roadmap、milestones、backlog 同步更新
 
-## 下一阶段：v0.6 UI / Experience
+## 下一阶段：v0.6 Import / Export / Asset Experience
 
-### LC-0601 Flutter import preview UI
+状态：规划中，计划文件见 `docs/development-plans/v0.6.0-import-export-experience.md`。
 
-目标：提供微信 / 支付宝账单上传、预览、错误行展示和提交确认 UI。
+### LC-0601 Flutter import/export repository
 
-### LC-0602 Flutter import rollback UI
+目标：封装导入预览、提交、回滚、批次查询和导出 API，提供稳定 DTO 与 repository tests。
 
-目标：提供导入批次列表、批次详情和一键回滚确认 UI。
+### LC-0602 Flutter import entry and file picker
 
-### LC-0603 Flutter export UI
+目标：提供微信 / 支付宝账单选择、上传、provider=auto 和上传失败诊断。
 
-目标：提供 memo Markdown、ledger CSV、all JSON 的导出入口和结果诊断。
+### LC-0603 Flutter import preview UI
 
-### LC-0604 Flutter asset library polish
+目标：提供预览表格、状态筛选、错误行 / 忽略行展示和分页读取。
+
+### LC-0604 Flutter import commit and batch list
+
+目标：提供提交二次确认、提交结果展示、导入批次列表和批次详情。
+
+### LC-0605 Flutter import rollback UI
+
+目标：提供批次回滚二次确认、回滚结果展示和重复回滚错误展示。
+
+### LC-0606 Flutter export UI
+
+目标：提供 memo Markdown、ledger CSV、tasks/assets/all JSON 的导出入口和诊断信息。
+
+### LC-0607 Flutter asset library polish
 
 目标：补齐附件库检索、状态展示、外链复制和 memo 引用体验。
+
+### LC-0608 v0.6 release gate
+
+目标：完成 v0.6 UI 体验层自动回归、手动 smoke 和文档收口。

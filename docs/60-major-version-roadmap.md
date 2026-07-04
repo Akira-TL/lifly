@@ -9,9 +9,9 @@
 当前判断：
 
 ```text
-当前稳定版本：v0.5.6
-当前开发入口：v0.5.7 release gate / v0.6.0 UI 体验层规划
-近期重点：完成 v0.5 发布门禁收口，并规划 Flutter 导入导出 UI
+当前稳定版本：v0.5.7
+当前开发入口：v0.6.0 Import / Export / Asset Experience 规划
+近期重点：把 v0.5 的 API 闭环做成 Flutter 可用体验层
 ```
 
 ## 2. 总体路线
@@ -489,67 +489,81 @@ LC-0506 Implement Markdown/CSV/JSON export flows
 
 ---
 
-## 8. v0.6.0 Private Alpha
+## 8. v0.6.0 Import / Export / Asset Experience
 
 ### 8.1 版本定位
 
-`v0.6.0` 是个人长期试用版本。目标不是功能数量，而是稳定性和日常可用性。
+`v0.6.0` 是 v0.5 数据闭环的 Flutter 体验层版本。目标不是新增更多后端能力，而是让用户可以在客户端完成账单导入、预览、提交、回滚、导出和附件管理。
 
 ### 8.2 核心目标
 
 ```text
-首页体验整理
-全局搜索增强
-账单基础统计
-错误提示和空状态完善
-设置页诊断完善
-数据备份/恢复初版
-日志与崩溃诊断
-基础安全加固
+Flutter 导入入口
+微信 / 支付宝账单上传预览
+错误行 / 忽略行 / 重复行展示
+导入提交与二次确认
+导入批次列表与回滚
+导出入口与导出诊断
+附件库基础管理体验
 ```
 
 ### 8.3 工程内容
 
 ```text
-Home dashboard
-Recent captures
-Today tasks
-Monthly expense summary
-Global search filters
-Diagnostics center
-Backup export/import
-Error boundary
-Structured logging
+ImportExportRepository
+Import batch DTO / preview row DTO
+File picker / upload preview
+Import preview table
+Commit / rollback confirmation
+Export metadata and stream entry
+Asset library polish
+Widget tests and release gate
 ```
 
 ### 8.4 明确不做
 
 ```text
-不做公开注册
-不做付费系统
-不做复杂团队功能
-不做插件市场
+不做复杂 OCR
+不做后台自动导入账单
+不做完整字段映射编辑器
+不做商业级文件管理器
+不做公开分享附件
+不做小程序端
 ```
 
 ### 8.5 验收标准
 
 ```text
-可连续使用一周不丢数据
-核心错误能定位
-用户可手动备份数据
-首页能看见近期记录和待办
-搜索能覆盖 memo / task / expense
+用户可从 Flutter 选择微信 / 支付宝账单并预览
+用户可看到导入行状态和错误原因
+用户可确认提交并查看导入结果
+用户可按批次回滚导入
+用户可导出 ledger CSV / memo Markdown / all JSON
+用户可查看附件库基础列表和状态
+Flutter analyze/test 通过
+服务端非 integration 回归通过
 ```
 
-### 8.6 推荐 Issue
+### 8.6 修订号规划
+
+详细计划见：
 
 ```text
-LC-0601 Build home dashboard v1
-LC-0602 Add global search filters
-LC-0603 Add monthly expense statistics
-LC-0604 Add backup and restore flow
-LC-0605 Add diagnostics center
-LC-0606 Add structured app/backend logging
+docs/development-plans/v0.6.0-import-export-experience.md
+```
+
+当前 v0.6.x 修订号拆分：
+
+```text
+0.6.0 导入导出体验层范围冻结
+0.6.1 Flutter 导入导出数据层与 API repository
+0.6.2 Flutter 导入入口与文件选择
+0.6.3 Flutter 导入预览表格
+0.6.4 Flutter 导入提交与批次列表
+0.6.5 Flutter 导入回滚体验
+0.6.6 Flutter 导出入口
+0.6.7 Flutter 附件库体验优化
+0.6.8 v0.6 release gate 与手动体验测试
 ```
 
 ---

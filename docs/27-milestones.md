@@ -112,7 +112,32 @@
 - 核心数据可导出
 - 服务端非 integration 回归与 Flutter analyze/test 通过
 
-## M5：Windows Local MCP
+## M5：Import / Export / Asset Experience
+
+状态：规划中，当前分支：`develop/v0.6.0`。
+
+目标：把 v0.5 的附件、导入、回滚和导出 API 闭环做成 Flutter 客户端可用体验。
+
+范围：
+
+- Flutter 导入入口与文件选择
+- 微信 / 支付宝账单预览表格
+- 导入提交与二次确认
+- 导入批次列表与回滚
+- 导出入口与诊断信息
+- 附件库基础管理体验
+
+验收：
+
+- 用户可从 Flutter 上传账单并预览
+- 用户可查看错误行 / 忽略行 / 重复行
+- 用户可确认提交并按 batch 回滚
+- 用户可导出 ledger CSV / memo Markdown / all JSON
+- 用户可查看附件库基础状态
+- Flutter analyze/test 通过
+- 服务端非 integration 回归通过
+
+## M6：Windows Local MCP
 
 状态：待规划。
 
