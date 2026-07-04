@@ -22,43 +22,38 @@ v0.2.0-local-data-mvp.md
 v0.3.0-cloud-sync-mvp.md
 v0.4.0-ai-write-full-development.md
 v0.5.0-assets-import-export-mvp.md
-v0.6.0-private-alpha.md
+v0.6.0-import-export-experience.md
 v0.7.0-private-beta.md
 v1.0.0-personal-production.md
 ```
 
 ## 当前开发状态
 
-v0.5 Assets & Import/Export 已完成发布门禁，最终开发分支为：
+v0.5 Assets & Import/Export 已完成发布门禁，最终 tag 为：
 
 ```text
-develop/v0.5.7
+v0.5.7
 ```
 
-当前最新已合入开发主线的 tag：
+当前开发分支：
 
 ```text
-v0.5.6
+develop/v0.6.0
 ```
 
-v0.5 发布门禁文档：
-
-```text
-docs/64-v0.5-release-gate.md
-```
-
-下一阶段建议进入 v0.6 UI/体验层开发，先规划后执行。
+当前阶段：v0.6 Import / Export / Asset Experience 规划。
 
 ## 当前计划文件
 
 ```text
-v0.5.0-assets-import-export-mvp.md
+v0.6.0-import-export-experience.md
 ```
 
-v0.4 收口记录保留在：
+历史收口记录保留在：
 
 ```text
 v0.4.0-ai-write-full-development.md
+v0.5.0-assets-import-export-mvp.md
 ```
 
 ## 维护规则
