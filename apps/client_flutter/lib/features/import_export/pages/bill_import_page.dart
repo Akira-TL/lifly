@@ -3,6 +3,7 @@ import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/repositories/import_export_models.dart';
 import 'package:client_flutter/data/repositories/import_export_repository.dart';
 import 'package:client_flutter/features/import_export/data/bill_import_file_picker.dart';
+import 'package:client_flutter/features/import_export/pages/bill_import_preview_page.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -105,7 +106,17 @@ class _BillImportPageState extends State<BillImportPage> {
           ],
           if (_preview != null) ...[
             const SizedBox(height: 12),
-            _PreviewSummaryCard(preview: _preview!),
+            _PreviewSummaryCard(
+              preview: _preview!,
+              onOpenDetail: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => BillImportPreviewPage(
+                    batchId: _preview!.batchId,
+                    repository: widget.repository,
+                  ),
+                ),
+              ),
+            ),
           ],
         ],
       ),
@@ -263,8 +274,12 @@ class _FileUploadCard extends StatelessWidget {
 
 class _PreviewSummaryCard extends StatelessWidget {
   final ImportUploadPreview preview;
+  final VoidCallback onOpenDetail;
 
-  const _PreviewSummaryCard({required this.preview});
+  const _PreviewSummaryCard({
+    required this.preview,
+    required this.onOpenDetail,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -315,7 +330,11 @@ class _PreviewSummaryCard extends StatelessWidget {
               ...preview.preview.take(5).map(_PreviewRowTile.new),
             ],
             const SizedBox(height: 12),
-            const Text('下一步将在 0.6.3 补齐完整预览表格和筛选。'),
+            FilledButton.icon(
+              onPressed: onOpenDetail,
+              icon: const Icon(Icons.table_chart_outlined),
+              label: const Text('查看完整预览'),
+            ),
           ],
         ),
       ),
