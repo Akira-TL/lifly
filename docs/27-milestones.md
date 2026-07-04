@@ -88,7 +88,7 @@
 
 ## M4：Assets & Import/Export
 
-状态：下一阶段。
+状态：已完成，最终 release gate 分支：`develop/v0.5.7`。
 
 目标：附件与 CSV 导入导出闭环。
 
@@ -96,19 +96,21 @@
 
 - asset_create_upload_url
 - asset_register_external_url
-- 对象存储适配
-- Markdown asset 引用
-- 通用 CSV / 支付宝 CSV / 微信 CSV
-- 导入预览与批次回滚
+- memo asset 引用
+- 微信 / 支付宝账单导入预览
+- 导入提交与批次回滚
 - Markdown / CSV / JSON export
+- release gate 文档与 smoke 路径
 
 验收：
 
 - 图片或文件可注册为 asset metadata
 - 外链可保存并在 UI 展示
 - CSV 不直接写正式账单表，导入前可预览
+- 微信 / 支付宝账单可解析到 preview rows
 - 导入后可按 batch 回滚
 - 核心数据可导出
+- 服务端非 integration 回归与 Flutter analyze/test 通过
 
 ## M5：Windows Local MCP
 
