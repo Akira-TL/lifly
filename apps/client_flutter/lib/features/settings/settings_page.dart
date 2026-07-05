@@ -7,9 +7,7 @@ import 'package:client_flutter/data/powersync/powersync_connection_coordinator.d
 import 'package:client_flutter/data/powersync/powersync_credentials_service.dart';
 import 'package:client_flutter/data/powersync/sync_push_service.dart';
 import 'package:client_flutter/data/powersync/sync_service.dart';
-import 'package:client_flutter/features/import_export/pages/bill_import_page.dart';
-import 'package:client_flutter/features/import_export/pages/export_page.dart';
-import 'package:client_flutter/features/import_export/pages/import_batches_page.dart';
+import 'package:client_flutter/features/import_export/widgets/import_export_settings_section.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -257,49 +255,7 @@ class _SettingsPageState extends State<SettingsPage> {
             onDisconnect: _disconnectPowerSync,
           ),
           const SizedBox(height: 12),
-          Card(
-            child: Column(
-              children: [
-                const ListTile(
-                  leading: Icon(Icons.storage_outlined),
-                  title: Text('数据管理'),
-                  subtitle: Text('导入、导出与附件数据工具'),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.upload_file_outlined),
-                  title: const Text('账单导入'),
-                  subtitle: const Text('上传微信 / 支付宝流水并生成预览'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const BillImportPage()),
-                  ),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.history_outlined),
-                  title: const Text('导入批次'),
-                  subtitle: const Text('查看历史导入、继续检查预览或追踪提交结果'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const ImportBatchesPage(),
-                    ),
-                  ),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.download_outlined),
-                  title: const Text('数据导出'),
-                  subtitle: const Text('生成导出预览并下载导出文件'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(
-                    context,
-                  ).push(MaterialPageRoute(builder: (_) => const ExportPage())),
-                ),
-              ],
-            ),
-          ),
+          ImportExportSettingsSection(dataMode: dataMode),
           const SizedBox(height: 12),
           const ListTile(
             leading: Icon(Icons.info_outline),
