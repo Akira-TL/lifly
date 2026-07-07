@@ -126,3 +126,57 @@ MVP 关注：
 - 附件上传失败率；
 - CSV 导入失败率；
 - Worker 队列积压。
+
+## 11. 分支、Tag 与提交规则
+
+长期开发分支：
+
+```text
+develop/master
+```
+
+版本开发分支格式：
+
+```text
+develop/vx.x.x
+```
+
+示例：
+
+```text
+develop/v0.7.0
+develop/v0.7.1
+```
+
+版本完成后：
+
+```text
+合并到 develop/master
+打 tag：vx.x.x
+保留必要分支用于追溯，后续可清理旧开发分支
+```
+
+提交信息格式：
+
+```text
+feat(module): 中文描述
+fix(module): 中文描述
+```
+
+示例：
+
+```text
+feat(home): 实现首页概览聚合接口
+fix(ledger): 修复导入批次回滚状态
+feat(docs): 整理正式文档结构
+```
+
+每轮交付必须说明：
+
+```text
+改了哪个平台：服务端 / Flutter 客户端 / 手机端 / Web / 桌面端 / 文档
+做了什么
+如何检查
+当前分支结构
+可选手动验证命令
+```

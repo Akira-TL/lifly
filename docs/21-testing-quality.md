@@ -120,4 +120,31 @@ security tests
 - AI 删除进入 AI 回收站；
 - 用户删除进入普通回收站；
 - 附件上传失败不导致 memo 丢失；
-- Windows 和 Android 同步一致。
+- 多端同步一致。
+
+## 11. 当前常用检查入口
+
+测试和检查入口以 `scripts/` 下脚本为准，不再用独立 release gate 文档记录流水。
+
+常用入口：
+
+```text
+scripts/check-client-flutter.sh
+scripts/check-v0.4-ai-write.sh
+scripts/smoke-mcp-v0.1.sh
+```
+
+服务端、Flutter、MCP、导入导出和同步相关检查应该沉淀到脚本、CI 和本文件，而不是继续新增一次性的发布门禁文档。
+
+## 12. 产品地基质量门槛
+
+涉及首页、预算、分类、任务预警和 AI Capture 的版本，额外检查：
+
+```text
+客户端不伪造预算金额
+客户端不伪造分类占比
+客户端不伪造消费洞察
+客户端不根据字符串猜测 AI 已分类状态
+客户端不写死任务提前提醒策略
+API / repository / UI 的字段边界清楚
+```

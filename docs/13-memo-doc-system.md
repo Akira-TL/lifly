@@ -113,6 +113,45 @@ MVP 搜索：
 - 总结某天记录；
 - 混合输入中拆分备忘。
 
+长期 AI 分类能力：
+
+```text
+AI 自动标签
+AI 分类置信度
+AI 待分类 / AI 建议 / AI 已确认
+用户确认 / 拒绝分类
+按标签和分类状态筛选
+标签统计
+```
+
+`Memo.tags` 只能作为轻量展示字段，不能承担完整分类系统。结构化分类应使用：
+
+```text
+memo_classifications
+  label
+  label_type
+  source
+  confidence
+  status
+
+tag_metadata
+  name
+  kind
+  color_token
+  icon_token
+  sort_order
+```
+
+UI 可以展示：
+
+```text
+[清单] [生活] [AI 已分类]
+[读书] [知识] [AI 建议]
+[待整理]
+```
+
+但这些状态必须来自接口字段，不能由客户端根据 tag 文本猜测。
+
 不做：
 
 - 自动改写用户正文；

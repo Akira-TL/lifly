@@ -131,7 +131,69 @@ CSV 导入必须经过 import_batches 和 import_rows，不允许直接写正式
 4. AI 分类；
 5. 低置信度进入未分类。
 
-## 11. 暂不做功能
+## 11. 预算、分类统计与消费洞察
+
+记账页的预算进度、分类占比、饼图、月环比和消费洞察必须来自账本聚合能力，不能由 Flutter 页面写死。
+
+长期需要：
+
+```text
+ledger_budgets
+ledger overview
+ledger categories summary
+ledger insights
+month-over-month comparison
+```
+
+预算模型：
+
+```text
+period_type: month / week / year
+period_key
+category_id：为空表示总预算，不为空表示分类预算
+amount
+currency
+alert_threshold
+```
+
+聚合 read model 应输出：
+
+```text
+income_total
+expense_total
+budget_total
+budget_used_ratio
+budget_remaining
+transaction_count
+category_breakdown[]
+month_over_month
+warnings[]
+```
+
+分类占比项：
+
+```text
+category_id
+category_name
+amount
+percentage
+transaction_count
+color_token
+icon_token
+```
+
+消费洞察可以包括：
+
+```text
+预算阈值提醒
+分类支出异常
+月环比变化
+异常大额交易
+```
+
+没有预算时，应返回明确的 `not_configured` 状态，客户端展示“未设置预算”，不能伪造默认预算。
+
+## 12. 暂不做功能
 
 MVP 不做：
 

@@ -166,3 +166,63 @@ AI 每次操作必须记录：
 - after snapshot；
 - request_id；
 - actor_type = ai。
+
+## 12. 聊天式 AI Capture
+
+当前核心能力是：
+
+```text
+capture_parse → capture_commit → capture_undo
+```
+
+客户端体验应从“调试式表单”升级为聊天式捕获，但底层边界不变：
+
+```text
+用户输入一轮内容
+    ↓
+服务端解析候选动作
+    ↓
+客户端展示确认卡片
+    ↓
+用户选择提交
+    ↓
+写入业务表、audit_logs、undo token
+```
+
+长期会话模型：
+
+```text
+CaptureSession
+  id
+  user_id
+  status: active / committed / cancelled
+  created_at
+  updated_at
+
+CaptureTurn
+  id
+  session_id
+  role: user / assistant / system
+  input_text
+  asset_ids[]
+  parsed_actions[]
+  created_at
+```
+
+## 13. 附件和语音输入边界
+
+附件参与解析时只传资产引用，不把附件内容塞进用户文本：
+
+```text
+asset_ids[]
+asset_context[]
+```
+
+语音输入拆成两层：
+
+```text
+录音或上传音频 Asset
+STT 转文本后进入 CaptureTurn
+```
+
+没有 STT 能力前，客户端可以展示语音入口占位，但不能伪装成已完成语音识别。

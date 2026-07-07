@@ -187,3 +187,184 @@ user_trashed 超过 30 天 → purged
 ## 11. 权限隔离
 
 所有查询必须按 user_id 过滤。任何 API 不得允许客户端传入并访问其他用户数据。
+
+## 12. 当前已实现 API 清单
+
+服务端当前统一挂载在 `/api/v1` 下。
+
+### 12.1 Auth
+
+```text
+POST /api/v1/auth/register
+POST /api/v1/auth/login
+POST /api/v1/auth/refresh
+POST /api/v1/auth/api-tokens
+GET  /api/v1/auth/api-tokens
+POST /api/v1/auth/api-tokens/{token_id}/revoke
+```
+
+### 12.2 Memos
+
+```text
+POST   /api/v1/memos
+GET    /api/v1/memos
+GET    /api/v1/memos/{memo_id}
+PUT    /api/v1/memos/{memo_id}
+DELETE /api/v1/memos/{memo_id}
+GET    /api/v1/memos/{memo_id}/assets
+POST   /api/v1/memos/{memo_id}/assets
+DELETE /api/v1/memos/{memo_id}/assets/{asset_id}
+```
+
+### 12.3 Ledger
+
+```text
+POST   /api/v1/ledger/transactions
+GET    /api/v1/ledger/transactions
+GET    /api/v1/ledger/transactions/{tx_id}
+PUT    /api/v1/ledger/transactions/{tx_id}
+DELETE /api/v1/ledger/transactions/{tx_id}
+GET    /api/v1/ledger/summary
+GET    /api/v1/ledger/categories
+```
+
+### 12.4 Tasks
+
+```text
+POST   /api/v1/tasks
+GET    /api/v1/tasks
+GET    /api/v1/tasks/{task_id}
+PUT    /api/v1/tasks/{task_id}
+POST   /api/v1/tasks/{task_id}/complete
+DELETE /api/v1/tasks/{task_id}
+```
+
+### 12.5 Assets
+
+```text
+POST   /api/v1/assets/create-upload-url
+POST   /api/v1/assets/register-external-url
+POST   /api/v1/assets/{asset_id}/upload-complete
+GET    /api/v1/assets/{asset_id}/download-url
+GET    /api/v1/assets
+GET    /api/v1/assets/{asset_id}
+PUT    /api/v1/assets/{asset_id}
+DELETE /api/v1/assets/{asset_id}
+```
+
+### 12.6 Import / Export
+
+```text
+POST /api/v1/imexport/import/upload
+GET  /api/v1/imexport/import/{batch_id}/preview
+POST /api/v1/imexport/import/{batch_id}/commit
+POST /api/v1/imexport/import/{batch_id}/rollback
+GET  /api/v1/imexport/import/batches
+GET  /api/v1/imexport/import/{batch_id}
+POST /api/v1/imexport/export
+GET  /api/v1/imexport/export/stream
+```
+
+### 12.7 MCP
+
+```text
+POST /api/v1/mcp/capture/parse
+POST /api/v1/mcp/capture/commit
+POST /api/v1/mcp/capture/undo
+POST /api/v1/mcp/memo/create
+POST /api/v1/mcp/memo/search
+POST /api/v1/mcp/expense/create
+POST /api/v1/mcp/expense/search
+POST /api/v1/mcp/expense/summary
+POST /api/v1/mcp/task/create
+POST /api/v1/mcp/task/list
+POST /api/v1/mcp/task/complete
+POST /api/v1/mcp/asset/create-upload-url
+POST /api/v1/mcp/asset/register-external-url
+```
+
+### 12.8 Search / Dashboard / Sync / Audit / Plugins
+
+```text
+GET  /api/v1/search
+GET  /api/v1/dashboard
+GET  /api/v1/sync/credentials
+POST /api/v1/sync/push
+GET  /api/v1/audit
+GET  /api/v1/audit/ai-summary
+GET  /api/v1/trash
+POST /api/v1/trash/{entity_type}/{entity_id}/restore
+POST /api/v1/trash/purge
+GET  /api/v1/plugins
+GET  /api/v1/robots
+GET  /api/v1/robots/{robot_id}
+GET  /api/v1/robots/{robot_id}/system-prompt
+```
+
+## 13. 下一阶段正式 API 契约
+
+以下接口属于长期产品地基，未实现前客户端不能写假数据。
+
+### 13.1 Home Overview
+
+```text
+GET /api/v1/home/overview
+```
+
+返回结构方向：
+
+```text
+schema_version
+generated_at
+user_timezone
+attention_items[]
+today_metrics
+finance_overview
+finance_insights[]
+recent_activity[]
+sync_summary
+import_summary
+settings_summary
+```
+
+`/dashboard` 保留为轻量统计兼容接口，产品化首页走 `/home/overview`。
+
+### 13.2 Ledger Overview
+
+```text
+GET /api/v1/ledger/overview?period=YYYY-MM
+GET /api/v1/ledger/categories/summary?period=YYYY-MM&direction=expense
+GET /api/v1/ledger/insights?period=YYYY-MM
+```
+
+服务端负责预算进度、分类占比、月环比和消费洞察。客户端只渲染返回结果。
+
+### 13.3 Memo Classifications
+
+```text
+GET  /api/v1/memos?tag=&classification_status=&type=&limit=&cursor=
+GET  /api/v1/memos/{memo_id}/classifications
+POST /api/v1/memos/{memo_id}/classifications/confirm
+POST /api/v1/memos/{memo_id}/classifications/reject
+GET  /api/v1/tags/summary?kind=memo
+```
+
+### 13.4 Task Reminder Strategies
+
+```text
+GET  /api/v1/tasks?group=today|urgent|warning|all
+GET  /api/v1/tasks/{task_id}/reminder-strategy
+POST /api/v1/tasks/{task_id}/reminder-strategy/confirm
+POST /api/v1/tasks/{task_id}/reminder-strategy/dismiss
+```
+
+### 13.5 Capture Sessions
+
+```text
+POST /api/v1/capture/sessions
+POST /api/v1/capture/sessions/{session_id}/turns
+POST /api/v1/capture/sessions/{session_id}/commit
+POST /api/v1/capture/sessions/{session_id}/undo
+```
+
+这些接口应复用当前 capture parse / commit / undo 的业务能力，不绕过审计和撤销边界。

@@ -106,7 +106,53 @@ done
 cancelled
 ```
 
-## 9. 日历预留
+## 9. AI 预警策略
+
+普通提醒字段和 AI 预警策略必须分离。
+
+当前字段职责：
+
+```text
+Task.due_at：任务截止时间
+Task.remind_at：当前生效提醒时间
+Reminder：提醒派发队列/记录
+```
+
+长期策略模型职责：
+
+```text
+TaskReminderStrategy：AI/规则生成的提醒建议、预警原因、提前准备窗口和用户确认状态
+```
+
+策略字段：
+
+```text
+warning_level: critical / warning / normal
+warning_reason
+preparation_window_days
+suggested_start_at
+ai_suggested_remind_at
+confidence
+status: suggested / confirmed / dismissed / expired
+created_by: ai / user / rule
+```
+
+策略确认后，才写入或更新 `Task.remind_at` 和 `Reminder`。
+
+任务列表 read model 可以按以下分组输出：
+
+```text
+today
+urgent
+warning
+overdue
+done
+all
+```
+
+客户端不能仅根据标题、颜色或固定天数伪造“AI 建议提前准备”。
+
+## 10. 日历预留
 
 calendar_events 表从第一版保留，用于后续：
 
@@ -116,7 +162,7 @@ calendar_events 表从第一版保留，用于后续：
 - 重复日程；
 - 日历视图。
 
-## 10. 不做功能
+## 11. 不做功能
 
 MVP 不做：
 
