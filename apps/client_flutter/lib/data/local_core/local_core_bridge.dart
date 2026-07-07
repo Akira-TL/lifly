@@ -37,6 +37,18 @@ abstract class LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   );
+  Future<LocalLedgerOverview> getLedgerOverview(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
+  Future<List<LocalLedgerCategorySummary>> getLedgerCategorySummary(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
+  Future<List<LocalLedgerInsight>> getLedgerInsights(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
   Future<LocalLedgerTransactionRecord> deleteExpense(
     Map<String, Object?> input,
     LocalCoreContext context,

@@ -367,7 +367,7 @@ GET /api/v1/ledger/categories/summary?period=YYYY-MM&direction=expense
 GET /api/v1/ledger/insights?period=YYYY-MM
 ```
 
-预算进度、分类占比、月环比和消费洞察优先在本地计算。客户端只渲染 repository 返回的同构 DTO，不关心数据来自 local 还是 api。
+预算进度、分类占比和基础消费洞察正常由云端接口拉取；同步后本地也可计算，并在云端失败时由 repository fallback。客户端只渲染 repository 返回的同构 DTO，不关心数据来自 api 还是 fallback。
 
 ### 13.3 Memo Classifications
 

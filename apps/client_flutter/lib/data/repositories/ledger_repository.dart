@@ -20,6 +20,8 @@ class LedgerRepository {
   bool get _useLocalCore =>
       dataMode == LiflyDataMode.local && localCore != null;
 
+  bool get _hasLocalCore => localCore != null;
+
   Future<PagedResult<LedgerTransaction>> listPage({
     int limit = 20,
     int offset = 0,
@@ -128,6 +130,96 @@ class LedgerRepository {
     await api.delete('/ledger/transactions/$id');
   }
 
+  Future<Map<String, dynamic>> overview({
+    String period = 'current_month',
+  }) async {
+    if (dataMode == LiflyDataMode.local) {
+      return _ledgerOverviewToMap(
+        await localCore!.getLedgerOverview({
+          'period': period,
+          'source_mode': 'local',
+        }, LocalCoreContext.flutterUser()),
+      );
+    }
+
+    try {
+      final res = await api.get('/ledger/overview', params: {'period': period});
+      return Map<String, dynamic>.from(res['data'] as Map);
+    } catch (error) {
+      if (_hasLocalCore) {
+        return _ledgerOverviewToMap(
+          await localCore!.getLedgerOverview({
+            'period': period,
+            'source_mode': 'fallback',
+          }, LocalCoreContext.flutterUser()),
+        );
+      }
+      throw StateError('Ledger overview unavailable: $error');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> categorySummary({
+    String period = 'current_month',
+    String direction = 'expense',
+  }) async {
+    if (dataMode == LiflyDataMode.local) {
+      final items = await localCore!.getLedgerCategorySummary({
+        'period': period,
+        'direction': direction,
+      }, LocalCoreContext.flutterUser());
+      return items.map(_categorySummaryToMap).toList(growable: false);
+    }
+
+    try {
+      final res = await api.get(
+        '/ledger/categories/summary',
+        params: {'period': period, 'direction': direction},
+      );
+      final items = res['data'] as List? ?? const [];
+      return items
+          .whereType<Map>()
+          .map((item) => item.cast<String, dynamic>())
+          .toList(growable: false);
+    } catch (error) {
+      if (_hasLocalCore) {
+        final items = await localCore!.getLedgerCategorySummary({
+          'period': period,
+          'direction': direction,
+        }, LocalCoreContext.flutterUser());
+        return items.map(_categorySummaryToMap).toList(growable: false);
+      }
+      throw StateError('Ledger category summary unavailable: $error');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> insights({
+    String period = 'current_month',
+  }) async {
+    if (dataMode == LiflyDataMode.local) {
+      final items = await localCore!.getLedgerInsights({
+        'period': period,
+      }, LocalCoreContext.flutterUser());
+      return items.map(_insightToMap).toList(growable: false);
+    }
+
+    try {
+      final res = await api.get('/ledger/insights', params: {'period': period});
+      final items = res['data'] as List? ?? const [];
+      return items
+          .whereType<Map>()
+          .map((item) => item.cast<String, dynamic>())
+          .toList(growable: false);
+    } catch (error) {
+      if (_hasLocalCore) {
+        final items = await localCore!.getLedgerInsights({
+          'period': period,
+        }, LocalCoreContext.flutterUser());
+        return items.map(_insightToMap).toList(growable: false);
+      }
+      throw StateError('Ledger insights unavailable: $error');
+    }
+  }
+
   Future<Map<String, dynamic>> summary({
     String? startDate,
     String? endDate,
@@ -159,10 +251,48 @@ class LedgerRepository {
       currency: record.currency,
       merchant: record.merchant,
       note: record.note,
-      categoryId: null,
+      categoryId: record.categoryId,
       occurredAt: record.occurredAt,
       source: 'local',
       createdAt: record.createdAt,
     );
+  }
+
+  Map<String, dynamic> _ledgerOverviewToMap(LocalLedgerOverview overview) {
+    return {
+      'schema_version': overview.schemaVersion,
+      'generated_at': overview.generatedAt.toIso8601String(),
+      'period': overview.period,
+      'source_mode': overview.sourceMode,
+      'month_income': overview.monthIncome,
+      'month_expense': overview.monthExpense,
+      'transaction_count': overview.transactionCount,
+      'budget_state': overview.budgetState,
+      'budget_amount': overview.budgetAmount,
+      'budget_used': overview.budgetUsed,
+      'budget_progress': overview.budgetProgress,
+      'currency': overview.currency,
+    };
+  }
+
+  Map<String, dynamic> _categorySummaryToMap(LocalLedgerCategorySummary item) {
+    return {
+      'category_id': item.categoryId,
+      'category_name': item.categoryName,
+      'direction': item.direction,
+      'amount': item.amount,
+      'ratio': item.ratio,
+      'transaction_count': item.transactionCount,
+    };
+  }
+
+  Map<String, dynamic> _insightToMap(LocalLedgerInsight item) {
+    return {
+      'id': item.id,
+      'type': item.type,
+      'level': item.level,
+      'title': item.title,
+      'description': item.description,
+    };
   }
 }

@@ -155,6 +155,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
       currency: input['currency'] as String? ?? 'CNY',
       merchant: input['merchant'] as String?,
       note: input['note'] as String?,
+      categoryId: input['category_id'] as String?,
       occurredAt:
           DateTime.tryParse(input['occurred_at'] as String? ?? '') ?? now,
       status: 'active',
@@ -205,6 +206,75 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
+  Future<LocalLedgerOverview> getLedgerOverview(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final summary = await summarizeExpenses(input, context);
+    return LocalLedgerOverview(
+      schemaVersion: 'ledger_overview.v1',
+      generatedAt: context.effectiveNow.toUtc(),
+      period: summary.period,
+      sourceMode: input['source_mode'] as String? ?? 'local',
+      monthIncome: summary.totalIncome,
+      monthExpense: summary.totalExpense,
+      transactionCount: summary.count,
+      budgetState: 'not_configured',
+      budgetAmount: null,
+      budgetUsed: null,
+      budgetProgress: null,
+      currency: 'CNY',
+    );
+  }
+
+  @override
+  Future<List<LocalLedgerCategorySummary>> getLedgerCategorySummary(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final direction = input['direction'] as String? ?? 'expense';
+    final active = _expenses
+        .where((tx) => tx.status == 'active' && tx.direction == direction)
+        .toList();
+    final total = active.fold<double>(0, (sum, tx) => sum + tx.amount);
+    final grouped = <String, List<LocalLedgerTransactionRecord>>{};
+    for (final tx in active) {
+      grouped.putIfAbsent(tx.categoryId ?? 'uncategorized', () => []).add(tx);
+    }
+    return grouped.entries.map((entry) {
+      final amount = entry.value.fold<double>(0, (sum, tx) => sum + tx.amount);
+      return LocalLedgerCategorySummary(
+        categoryId: entry.key,
+        categoryName: entry.key == 'uncategorized' ? '未分类' : entry.key,
+        direction: direction,
+        amount: amount,
+        ratio: total > 0 ? amount / total : 0,
+        transactionCount: entry.value.length,
+      );
+    }).toList()..sort((a, b) => b.amount.compareTo(a.amount));
+  }
+
+  @override
+  Future<List<LocalLedgerInsight>> getLedgerInsights(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final overview = await getLedgerOverview(input, context);
+    if (overview.budgetState == 'not_configured') {
+      return const [
+        LocalLedgerInsight(
+          id: 'budget_not_configured',
+          type: 'budget',
+          level: 'info',
+          title: '未设置预算',
+          description: '设置月度预算后，可在首页看到预算进度和提醒。',
+        ),
+      ];
+    }
+    return const [];
+  }
+
+  @override
   Future<LocalLedgerTransactionRecord> deleteExpense(
     Map<String, Object?> input,
     LocalCoreContext context,
@@ -226,6 +296,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
       currency: old.currency,
       merchant: old.merchant,
       note: old.note,
+      categoryId: old.categoryId,
       occurredAt: old.occurredAt,
       status: input['status'] as String? ?? 'deleted',
       revision: old.revision + 1,

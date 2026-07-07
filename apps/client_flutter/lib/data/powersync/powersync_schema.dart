@@ -143,4 +143,17 @@ const liflyPowerSyncSchema = Schema([
     Column.text('created_at'),
     Column.text('updated_at'),
   ]),
+  Table('ledger_budgets', [
+    Column.text('id'),
+    Column.text('user_id'),
+    Column.text('period_type'),
+    Column.text('period_key'),
+    Column.text('category_id'),
+    Column.real('amount'),
+    Column.text('currency'),
+    Column.real('alert_threshold'),
+    Column.text('status'),
+    Column.text('created_at'),
+    Column.text('updated_at'),
+  ]),
 ]);

@@ -51,14 +51,18 @@ Flutter repository/entity 可消费同构真实字段
 
 ### LC-0702 Ledger budgets and category aggregation
 
+状态：基础链路已完成，预算 CRUD、分类预算、月环比和更细洞察待补。
+
 目标：补齐预算、分类占比、月环比和消费洞察地基。
 
 验收：
 
 ```text
 ledger_budgets 模型明确
+PowerSync ledger_budgets schema 已接入
 Local Core ledger overview/category summary/insights 可本地计算
-云端 ledger overview/category summary/insights 接口提供同构兜底
+云端 ledger overview/category summary/insights 接口已提供正常读取入口
+LedgerRepository 支持云端优先、失败后本地 fallback
 没有预算时返回 not_configured，而不是客户端假造默认预算
 ```
 

@@ -132,6 +132,30 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
+  Future<LocalLedgerOverview> getLedgerOverview(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _expenseStore.getLedgerOverview(input, context);
+  }
+
+  @override
+  Future<List<LocalLedgerCategorySummary>> getLedgerCategorySummary(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _expenseStore.getLedgerCategorySummary(input, context);
+  }
+
+  @override
+  Future<List<LocalLedgerInsight>> getLedgerInsights(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _expenseStore.getLedgerInsights(input, context);
+  }
+
+  @override
   Future<LocalLedgerTransactionRecord> deleteExpense(
     Map<String, Object?> input,
     LocalCoreContext context,

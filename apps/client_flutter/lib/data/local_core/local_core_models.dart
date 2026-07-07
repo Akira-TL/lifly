@@ -54,6 +54,7 @@ class LocalLedgerTransactionRecord {
   final String currency;
   final String? merchant;
   final String? note;
+  final String? categoryId;
   final DateTime occurredAt;
   final String status;
   final int revision;
@@ -67,6 +68,7 @@ class LocalLedgerTransactionRecord {
     required this.currency,
     required this.merchant,
     required this.note,
+    required this.categoryId,
     required this.occurredAt,
     required this.status,
     required this.revision,
@@ -186,6 +188,70 @@ class LocalExpenseSummary {
     required this.totalExpense,
     required this.totalIncome,
     required this.count,
+  });
+}
+
+class LocalLedgerOverview {
+  final String schemaVersion;
+  final DateTime generatedAt;
+  final String period;
+  final String sourceMode;
+  final double monthIncome;
+  final double monthExpense;
+  final int transactionCount;
+  final String budgetState;
+  final double? budgetAmount;
+  final double? budgetUsed;
+  final double? budgetProgress;
+  final String currency;
+
+  const LocalLedgerOverview({
+    required this.schemaVersion,
+    required this.generatedAt,
+    required this.period,
+    required this.sourceMode,
+    required this.monthIncome,
+    required this.monthExpense,
+    required this.transactionCount,
+    required this.budgetState,
+    required this.budgetAmount,
+    required this.budgetUsed,
+    required this.budgetProgress,
+    required this.currency,
+  });
+}
+
+class LocalLedgerCategorySummary {
+  final String categoryId;
+  final String categoryName;
+  final String direction;
+  final double amount;
+  final double ratio;
+  final int transactionCount;
+
+  const LocalLedgerCategorySummary({
+    required this.categoryId,
+    required this.categoryName,
+    required this.direction,
+    required this.amount,
+    required this.ratio,
+    required this.transactionCount,
+  });
+}
+
+class LocalLedgerInsight {
+  final String id;
+  final String type;
+  final String level;
+  final String title;
+  final String description;
+
+  const LocalLedgerInsight({
+    required this.id,
+    required this.type,
+    required this.level,
+    required this.title,
+    required this.description,
   });
 }
 

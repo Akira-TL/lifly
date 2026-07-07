@@ -113,6 +113,7 @@ Local Chat-style AI Capture
 
 ```text
 Home Overview 基础链路已落地：服务端 /api/v1/home/overview、LocalCoreBridge.getHomeOverview、LocalHomeOverviewBuilder、HomeOverviewRepository 云端优先/失败 fallback、HomePage repository 消费、云端/本地混合最近活动流
+Ledger budgets 与分类聚合基础链路已落地：LedgerBudget、PowerSync ledger_budgets schema、/ledger/overview、/ledger/categories/summary、/ledger/insights、LedgerRepository 云端优先/失败 fallback
 ```
 
 验收：

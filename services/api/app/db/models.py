@@ -151,6 +151,20 @@ class LedgerTransaction(Base, TimestampMixin, SoftDeleteMixin, RevisionMixin):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
 
 
+class LedgerBudget(Base, TimestampMixin):
+    __tablename__ = "ledger_budgets"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    period_type: Mapped[str] = mapped_column(String(16), nullable=False, default="month")
+    period_key: Mapped[str] = mapped_column(String(16), nullable=False)
+    category_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    amount: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(8), nullable=False, default="CNY")
+    alert_threshold: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+
+
 class LedgerEntry(Base):
     __tablename__ = "ledger_entries"
 

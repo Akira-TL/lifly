@@ -104,6 +104,7 @@ void main() {
         'direction': 'expense',
         'amount': 18.0,
         'merchant': '食堂',
+        'category_id': 'food',
       });
       await taskRepo.create({
         'title': '今天要做',
@@ -131,6 +132,83 @@ void main() {
         overview.recentActivity.map((item) => item.entityType),
         contains('ledger_transaction'),
       );
+    },
+  );
+
+  test(
+    'LedgerRepository computes local overview and category summary',
+    () async {
+      final ledgerRepo = LedgerRepository(
+        api,
+        localCore: localCore,
+        dataMode: LiflyDataMode.local,
+      );
+
+      await ledgerRepo.create({
+        'direction': 'expense',
+        'amount': 40.0,
+        'merchant': '餐厅',
+        'category_id': 'food',
+      });
+      await ledgerRepo.create({
+        'direction': 'expense',
+        'amount': 10.0,
+        'merchant': '公交',
+        'category_id': 'transport',
+      });
+
+      final overview = await ledgerRepo.overview();
+      final categories = await ledgerRepo.categorySummary();
+      final insights = await ledgerRepo.insights();
+
+      expect(overview['source_mode'], 'local');
+      expect(overview['month_expense'], 50.0);
+      expect(overview['budget_state'], 'not_configured');
+      expect(categories.first['category_id'], 'food');
+      expect(categories.first['amount'], 40.0);
+      expect(categories.first['ratio'], 0.8);
+      expect(insights.first['id'], 'budget_not_configured');
+    },
+  );
+
+  test(
+    'LedgerRepository falls back to Local Core when cloud overview fails',
+    () async {
+      final failingDio = Dio(BaseOptions(baseUrl: 'http://localhost/api/v1'));
+      failingDio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            handler.reject(
+              DioException(
+                requestOptions: options,
+                type: DioExceptionType.connectionError,
+                error: 'offline',
+              ),
+            );
+          },
+        ),
+      );
+      final repo = LedgerRepository(
+        ApiClient(baseUrl: 'http://localhost/api/v1', dio: failingDio),
+        localCore: localCore,
+        dataMode: LiflyDataMode.api,
+      );
+      final localLedgerRepo = LedgerRepository(
+        api,
+        localCore: localCore,
+        dataMode: LiflyDataMode.local,
+      );
+
+      await localLedgerRepo.create({
+        'direction': 'expense',
+        'amount': 12.0,
+        'merchant': '本地账单',
+      });
+
+      final overview = await repo.overview();
+
+      expect(overview['source_mode'], 'fallback');
+      expect(overview['month_expense'], 12.0);
     },
   );
 

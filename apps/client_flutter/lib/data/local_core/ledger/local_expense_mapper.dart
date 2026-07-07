@@ -6,6 +6,7 @@ class LocalExpenseCreateInput {
   final String currency;
   final String? merchant;
   final String? note;
+  final String? categoryId;
   final DateTime? occurredAt;
 
   const LocalExpenseCreateInput({
@@ -14,6 +15,7 @@ class LocalExpenseCreateInput {
     required this.currency,
     required this.merchant,
     required this.note,
+    required this.categoryId,
     required this.occurredAt,
   });
 
@@ -25,6 +27,7 @@ class LocalExpenseCreateInput {
       currency: _readOptionalString(input, 'currency') ?? 'CNY',
       merchant: _readOptionalString(input, 'merchant'),
       note: _readOptionalString(input, 'note'),
+      categoryId: _readOptionalString(input, 'category_id'),
       occurredAt: _readOptionalDateTime(input, 'occurred_at'),
     );
   }
@@ -84,6 +87,7 @@ class LocalExpenseMapper {
       currency: row['currency'] as String? ?? 'CNY',
       merchant: row['merchant'] as String?,
       note: row['note'] as String?,
+      categoryId: row['category_id'] as String?,
       occurredAt: _readDateTime(row['occurred_at']),
       status: row['status'] as String? ?? 'active',
       revision: row['revision'] as int? ?? 1,
@@ -100,6 +104,7 @@ class LocalExpenseMapper {
       'currency': tx.currency,
       'merchant': tx.merchant,
       'note': tx.note,
+      'category_id': tx.categoryId,
       'occurred_at': tx.occurredAt.toIso8601String(),
       'status': tx.status,
       'revision': tx.revision,

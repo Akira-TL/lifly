@@ -281,11 +281,37 @@ doc/design/ui-information-architecture.md
 doc/guide/testing-quality.md
 ```
 
-### 阶段二：本地 Ledger budgets 与分类聚合
+### 阶段二：Ledger budgets 与分类聚合
+
+状态：基础链路已落地。
+
+已完成：
+
+```text
+服务端 LedgerBudget 模型
+PowerSync ledger_budgets schema
+GET /api/v1/ledger/overview
+GET /api/v1/ledger/categories/summary
+GET /api/v1/ledger/insights
+LocalCoreBridge ledger overview / category summary / insights
+LedgerRepository 云端优先读取，失败后本地 fallback
+category_id 在本地账单记录中保留
+没有预算时返回 not_configured，不伪造默认预算
+```
+
+仍待补齐：
+
+```text
+预算创建 / 更新 / 删除 API
+分类预算
+月环比
+更细消费洞察
+首页 finance_overview 接入预算进度
+```
 
 平台重点：本地数据模型 / PowerSync schema / Local Core query service / repository / 服务端同构 API。
 
-目标：预算、分类占比、月环比和消费洞察优先在本地计算。
+目标：预算、分类占比、月环比和消费洞察云端可拉取，同步后本地可计算，并在云端失败时本地兜底。
 
 能力：
 

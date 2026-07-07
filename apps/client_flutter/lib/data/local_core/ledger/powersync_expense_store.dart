@@ -44,6 +44,7 @@ class PowerSyncExpenseStore {
       currency: createInput.currency,
       merchant: createInput.merchant,
       note: createInput.note,
+      categoryId: createInput.categoryId,
       occurredAt: createInput.occurredAt ?? context.effectiveNow,
       status: 'active',
       revision: metadata.revision,
@@ -80,6 +81,107 @@ class PowerSyncExpenseStore {
     return rows.map(LocalExpenseMapper.fromRow).toList(growable: false);
   }
 
+  Future<LocalLedgerOverview> getLedgerOverview(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final period = input['period'] as String? ?? 'current_month';
+    final sourceMode = input['source_mode'] as String? ?? 'local';
+    final summary = await summarizeExpenses({'period': period}, context);
+    await syncService.ensureInitialized();
+    final budget = await syncService.db.getOptional(
+      'SELECT amount, currency FROM ledger_budgets '
+      'WHERE status = ? AND category_id IS NULL AND (? = ? OR period_key = ?) '
+      'ORDER BY updated_at DESC LIMIT 1',
+      ['active', period, 'current_month', period],
+    );
+    final budgetAmount = (budget?['amount'] as num?)?.toDouble();
+    final budgetUsed = budgetAmount == null ? null : summary.totalExpense;
+    return LocalLedgerOverview(
+      schemaVersion: 'ledger_overview.v1',
+      generatedAt: context.effectiveNow.toUtc(),
+      period: period,
+      sourceMode: sourceMode,
+      monthIncome: summary.totalIncome,
+      monthExpense: summary.totalExpense,
+      transactionCount: summary.count,
+      budgetState: budgetAmount == null ? 'not_configured' : 'configured',
+      budgetAmount: budgetAmount,
+      budgetUsed: budgetUsed,
+      budgetProgress: budgetAmount == null || budgetAmount <= 0
+          ? null
+          : summary.totalExpense / budgetAmount,
+      currency: budget?['currency'] as String? ?? 'CNY',
+    );
+  }
+
+  Future<List<LocalLedgerCategorySummary>> getLedgerCategorySummary(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final direction = input['direction'] as String? ?? 'expense';
+    await syncService.ensureInitialized();
+    final rows = await syncService.db.getAll(
+      'SELECT coalesce(t.category_id, ?) AS category_id, '
+      'coalesce(c.name, ?) AS category_name, '
+      'sum(t.amount) AS amount, count(*) AS transaction_count '
+      'FROM ledger_transactions t '
+      'LEFT JOIN ledger_categories c ON c.id = t.category_id '
+      'WHERE t.status = ? AND t.direction = ? '
+      'GROUP BY coalesce(t.category_id, ?), coalesce(c.name, ?) '
+      'ORDER BY amount DESC',
+      ['uncategorized', '未分类', 'active', direction, 'uncategorized', '未分类'],
+    );
+    final total = rows.fold<double>(
+      0,
+      (sum, row) => sum + ((row['amount'] as num?)?.toDouble() ?? 0),
+    );
+    return rows
+        .map((row) {
+          final amount = (row['amount'] as num?)?.toDouble() ?? 0;
+          return LocalLedgerCategorySummary(
+            categoryId: row['category_id'] as String? ?? 'uncategorized',
+            categoryName: row['category_name'] as String? ?? '未分类',
+            direction: direction,
+            amount: amount,
+            ratio: total > 0 ? amount / total : 0,
+            transactionCount: row['transaction_count'] as int? ?? 0,
+          );
+        })
+        .toList(growable: false);
+  }
+
+  Future<List<LocalLedgerInsight>> getLedgerInsights(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final overview = await getLedgerOverview(input, context);
+    if (overview.budgetState == 'not_configured') {
+      return const [
+        LocalLedgerInsight(
+          id: 'budget_not_configured',
+          type: 'budget',
+          level: 'info',
+          title: '未设置预算',
+          description: '设置月度预算后，可在首页看到预算进度和提醒。',
+        ),
+      ];
+    }
+    final progress = overview.budgetProgress ?? 0;
+    if (progress >= 0.8) {
+      return [
+        LocalLedgerInsight(
+          id: 'budget_progress_warning',
+          type: 'budget',
+          level: progress >= 1 ? 'critical' : 'warning',
+          title: progress >= 1 ? '预算已超出' : '预算接近上限',
+          description: '本月支出已达到预算的 ${(progress * 100).toStringAsFixed(0)}%。',
+        ),
+      ];
+    }
+    return const [];
+  }
+
   Future<LocalLedgerTransactionRecord> deleteExpense(
     Map<String, Object?> input,
     LocalCoreContext context,
@@ -105,6 +207,7 @@ class PowerSyncExpenseStore {
         currency: oldTx.currency,
         merchant: oldTx.merchant,
         note: oldTx.note,
+        categoryId: oldTx.categoryId,
         occurredAt: oldTx.occurredAt,
         status: deleteInput.status,
         revision: metadata.revision,
@@ -159,7 +262,7 @@ class PowerSyncExpenseStore {
     await syncService.ensureInitialized();
     final likeQuery = '%$query%';
     final rows = await syncService.db.getAll(
-      'SELECT id, direction, amount, currency, merchant, note, occurred_at, status, revision, created_at, updated_at '
+      'SELECT id, direction, amount, currency, merchant, note, category_id, occurred_at, status, revision, created_at, updated_at '
       'FROM ledger_transactions '
       'WHERE status = ? AND (? = ? OR lower(coalesce(merchant, ?) || ? || coalesce(note, ?)) LIKE ?) '
       'ORDER BY occurred_at DESC, updated_at DESC '
@@ -176,7 +279,7 @@ class PowerSyncExpenseStore {
     String transactionId,
   ) async {
     final row = await handle.getOptional(
-      'SELECT id, direction, amount, currency, merchant, note, occurred_at, status, revision, created_at, updated_at '
+      'SELECT id, direction, amount, currency, merchant, note, category_id, occurred_at, status, revision, created_at, updated_at '
       'FROM ledger_transactions WHERE id = ? AND status = ?',
       [transactionId, 'active'],
     );
@@ -190,9 +293,9 @@ class PowerSyncExpenseStore {
   ) async {
     await handle.execute(
       'INSERT INTO ledger_transactions('
-      'id, user_id, direction, amount, currency, merchant, note, occurred_at, '
+      'id, user_id, direction, amount, currency, merchant, note, category_id, occurred_at, '
       'source, status, created_at, updated_at, revision'
-      ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         tx.id,
         metadata.userId,
@@ -201,6 +304,7 @@ class PowerSyncExpenseStore {
         tx.currency,
         tx.merchant,
         tx.note,
+        tx.categoryId,
         tx.occurredAt.toIso8601String(),
         metadata.source,
         tx.status,
