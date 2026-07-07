@@ -367,8 +367,27 @@ class McpCaptureSession(Base, TimestampMixin):
     actions: Mapped[list] = mapped_column(JSONB, nullable=False)
     requires_confirmation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     committed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    session_status: Mapped[str] = mapped_column(String(20), nullable=False, default="parsed")
     source_channel: Mapped[str] = mapped_column(String(32), nullable=False, default="cloud_mcp")
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class McpCaptureTurn(Base, TimestampMixin):
+    __tablename__ = "mcp_capture_turns"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    capture_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    turn_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    role: Mapped[str] = mapped_column(String(16), nullable=False, default="assistant")
+    text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    actions: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    selected_action_indexes: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    result_entities: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    turn_status: Mapped[str] = mapped_column(String(20), nullable=False, default="parsed")
+    source_channel: Mapped[str] = mapped_column(String(32), nullable=False, default="cloud_mcp")
 
 
 # ─── Tombstone ──────────────────────────────────────────────────────────────

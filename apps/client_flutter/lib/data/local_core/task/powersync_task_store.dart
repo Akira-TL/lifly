@@ -53,7 +53,12 @@ class PowerSyncTaskStore {
     );
 
     await LocalCoreWriteExecutor(syncService: syncService).run((handle) async {
-      await _insertTask(handle, task, metadata);
+      await _insertTask(
+        handle,
+        task,
+        metadata,
+        sourceCaptureId: createInput.sourceCaptureId,
+      );
       await auditLogWriter.write(
         handle,
         LocalCoreAuditLogInput(
@@ -458,13 +463,14 @@ class PowerSyncTaskStore {
   Future<void> _insertTask(
     LocalCoreWriteHandle handle,
     LocalTaskRecord task,
-    LocalCoreWriteMetadata metadata,
-  ) async {
+    LocalCoreWriteMetadata metadata, {
+    String? sourceCaptureId,
+  }) async {
     await handle.execute(
       'INSERT INTO tasks('
       'id, user_id, title, description, due_at, remind_at, priority, task_status, '
-      'source, status, created_at, updated_at, revision'
-      ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'source_capture_id, source, status, created_at, updated_at, revision'
+      ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         task.id,
         metadata.userId,
@@ -474,6 +480,7 @@ class PowerSyncTaskStore {
         task.remindAt?.toIso8601String(),
         task.priority,
         task.taskStatus,
+        sourceCaptureId,
         metadata.source,
         task.status,
         metadata.timestamps.createdAtIso,

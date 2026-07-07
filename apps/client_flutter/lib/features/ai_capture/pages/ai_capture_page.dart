@@ -63,7 +63,7 @@ class _AiCapturePageState extends State<AiCapturePage> {
           ),
           const SizedBox(height: 12),
           FilledButton.icon(
-            onPressed: _loading || !service.supportsCloudCapture ? null : _parse,
+            onPressed: _loading || !service.supportsCapture ? null : _parse,
             icon: const Icon(Icons.auto_awesome_outlined),
             label: const Text('解析候选动作'),
           ),
@@ -96,7 +96,9 @@ class _AiCapturePageState extends State<AiCapturePage> {
             const SizedBox(height: 16),
             _CommitResultCard(
               result: _commitResult!,
-              onUndo: _commitResult!.undoToken.isEmpty || _loading ? null : _undo,
+              onUndo: _commitResult!.undoToken.isEmpty || _loading
+                  ? null
+                  : _undo,
             ),
           ],
           if (_undoResult != null) ...[
@@ -181,14 +183,18 @@ class _ModeNotice extends StatelessWidget {
   Widget build(BuildContext context) {
     final message = service.supportsCloudCapture
         ? '当前使用 Cloud MCP。提交前请确认候选动作，写入后可通过 undo_token 撤销。'
-        : '当前是 Local Core 模式。Local MCP 属于桌面端 host，本客户端暂不直接启动 MCP Server。';
+        : '当前使用 Local Core 本地捕获。候选动作、确认结果和撤销链路会先落本地。';
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(service.supportsCloudCapture ? Icons.cloud_done_outlined : Icons.desktop_windows_outlined),
+            Icon(
+              service.supportsCloudCapture
+                  ? Icons.cloud_done_outlined
+                  : Icons.desktop_windows_outlined,
+            ),
             const SizedBox(width: 12),
             Expanded(child: Text(message)),
           ],
@@ -227,8 +233,12 @@ class _CandidateActionsCard extends StatelessWidget {
               CheckboxListTile(
                 value: selectedIndexes.contains(i),
                 onChanged: (value) => onChanged(i, value ?? false),
-                title: Text('${result.actions[i].label} · ${result.actions[i].summary}'),
-                subtitle: Text('confidence: ${result.actions[i].confidence.toStringAsFixed(2)}'),
+                title: Text(
+                  '${result.actions[i].label} · ${result.actions[i].summary}',
+                ),
+                subtitle: Text(
+                  'confidence: ${result.actions[i].confidence.toStringAsFixed(2)}',
+                ),
                 controlAffinity: ListTileControlAffinity.leading,
                 contentPadding: EdgeInsets.zero,
               ),
@@ -267,12 +277,15 @@ class _CommitResultCard extends StatelessWidget {
             Text('undo_token: ${result.undoToken}'),
             if (result.createdEntities.isNotEmpty) ...[
               const SizedBox(height: 8),
-              for (final entity in result.createdEntities) Text('${entity.type}: ${entity.id}'),
+              for (final entity in result.createdEntities)
+                Text('${entity.type}: ${entity.id}'),
             ],
             if (result.failedActions.isNotEmpty) ...[
               const SizedBox(height: 8),
               for (final failure in result.failedActions)
-                Text('#${failure.actionIndex} ${failure.actionType ?? '-'} · ${failure.reason}'),
+                Text(
+                  '#${failure.actionIndex} ${failure.actionType ?? '-'} · ${failure.reason}',
+                ),
             ],
             const SizedBox(height: 8),
             OutlinedButton.icon(
@@ -304,7 +317,8 @@ class _UndoResultCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text('undone: ${result.undone}'),
             Text('failed: ${result.failedEntities.length}'),
-            for (final entity in result.entities) Text('${entity.type}: ${entity.id}'),
+            for (final entity in result.entities)
+              Text('${entity.type}: ${entity.id}'),
           ],
         ),
       ),
@@ -325,7 +339,9 @@ class _ErrorCard extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         child: Text(
           message,
-          style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onErrorContainer,
+          ),
         ),
       ),
     );

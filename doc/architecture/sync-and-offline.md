@@ -53,8 +53,8 @@ UI
 - tag_metadata；
 - ledger_budgets；
 - task_reminder_strategies；
-- capture_sessions；
-- capture_turns。
+- mcp_capture_sessions；
+- mcp_capture_turns。
 
 不直接同步：
 

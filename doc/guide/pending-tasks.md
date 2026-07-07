@@ -121,7 +121,22 @@ widget test 已覆盖核心入口切换和底部入口收敛
 
 ### LC-0706 Chat-style AI Capture
 
+状态：基础链路已完成，聊天式多轮 UI、asset_ids 真实解析、STT 和会话恢复体验待补。
+
 目标：在现有 parse / commit / undo 基础上升级聊天式捕获体验，并保证 capture session、turns、确认结果和撤销链路可本地持久化。
+
+验收：
+
+```text
+服务端 McpCaptureSession 已增强 session_status / committed_at / dismissed_at
+服务端 McpCaptureTurn 已落地，parse / commit / undo 会写入 turn
+PowerSync mcp_capture_sessions / mcp_capture_turns schema 已接入
+PowerSyncCaptureStore 可本地持久化 captureParse / captureCommit / captureUndo
+本地 commit 创建实体时写入 source_capture_id
+本地 undo 使用 mcp_undo_actions 并将实体转为 ai_trashed
+AiCaptureService local mode 可走 Local Core
+PowerSync capture store test 覆盖 session / turn / commit / undo 链路
+```
 
 ### LC-0707 Product foundation release gate
 

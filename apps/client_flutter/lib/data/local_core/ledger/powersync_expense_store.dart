@@ -53,7 +53,12 @@ class PowerSyncExpenseStore {
     );
 
     await LocalCoreWriteExecutor(syncService: syncService).run((handle) async {
-      await _insertExpense(handle, tx, metadata);
+      await _insertExpense(
+        handle,
+        tx,
+        metadata,
+        sourceCaptureId: createInput.sourceCaptureId,
+      );
       await auditLogWriter.write(
         handle,
         LocalCoreAuditLogInput(
@@ -289,13 +294,14 @@ class PowerSyncExpenseStore {
   Future<void> _insertExpense(
     LocalCoreWriteHandle handle,
     LocalLedgerTransactionRecord tx,
-    LocalCoreWriteMetadata metadata,
-  ) async {
+    LocalCoreWriteMetadata metadata, {
+    String? sourceCaptureId,
+  }) async {
     await handle.execute(
       'INSERT INTO ledger_transactions('
       'id, user_id, direction, amount, currency, merchant, note, category_id, occurred_at, '
-      'source, status, created_at, updated_at, revision'
-      ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'source_capture_id, source, status, created_at, updated_at, revision'
+      ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         tx.id,
         metadata.userId,
@@ -306,6 +312,7 @@ class PowerSyncExpenseStore {
         tx.note,
         tx.categoryId,
         tx.occurredAt.toIso8601String(),
+        sourceCaptureId,
         metadata.source,
         tx.status,
         metadata.timestamps.createdAtIso,

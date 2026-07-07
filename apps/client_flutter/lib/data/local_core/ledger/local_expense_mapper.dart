@@ -8,6 +8,7 @@ class LocalExpenseCreateInput {
   final String? note;
   final String? categoryId;
   final DateTime? occurredAt;
+  final String? sourceCaptureId;
 
   const LocalExpenseCreateInput({
     required this.direction,
@@ -17,6 +18,7 @@ class LocalExpenseCreateInput {
     required this.note,
     required this.categoryId,
     required this.occurredAt,
+    required this.sourceCaptureId,
   });
 
   factory LocalExpenseCreateInput.fromMap(Map<String, Object?> input) {
@@ -29,6 +31,7 @@ class LocalExpenseCreateInput {
       note: _readOptionalString(input, 'note'),
       categoryId: _readOptionalString(input, 'category_id'),
       occurredAt: _readOptionalDateTime(input, 'occurred_at'),
+      sourceCaptureId: _readOptionalString(input, 'source_capture_id'),
     );
   }
 }

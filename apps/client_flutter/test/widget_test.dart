@@ -146,11 +146,19 @@ void main() {
         providers: [
           Provider<LiflyDataMode>.value(value: LiflyDataMode.api),
           Provider<ApiClient>(create: (_) => FakeApiClient()),
-          ProxyProvider2<ApiClient, LiflyDataMode, AiCaptureService>(
-            update: (_, api, dataMode, _) =>
-                AiCaptureService(api: api, dataMode: dataMode),
-          ),
           Provider<LocalCoreBridge>(create: (_) => FakeLocalCoreBridge()),
+          ProxyProvider3<
+            ApiClient,
+            LiflyDataMode,
+            LocalCoreBridge,
+            AiCaptureService
+          >(
+            update: (_, api, dataMode, localCore, _) => AiCaptureService(
+              api: api,
+              dataMode: dataMode,
+              localCore: localCore,
+            ),
+          ),
         ],
         child: const LiflyApp(),
       ),

@@ -152,4 +152,5 @@ LedgerRepository 覆盖云端优先读取和失败后本地 fallback
 repository 支持 cloudPreferred，云端失败或断网时才降级 Local Core
 断网手动验收首页、记账统计、任务预警、备忘分类状态
 API / repository / UI 的字段边界清楚
+AI Capture 本地模式必须覆盖 mcp_capture_sessions、mcp_capture_turns、mcp_undo_actions、source_capture_id、ai_trashed undo 链路
 ```

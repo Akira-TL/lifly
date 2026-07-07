@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import McpCaptureSession
+from app.db.models import McpCaptureSession, McpCaptureTurn
 from app.modules.mcp.parse_engine import CandidateAction, ParseResult
 
 CAPTURE_SESSION_TTL = timedelta(hours=1)
@@ -58,6 +58,7 @@ async def persist_capture_session(
         actions=serialize_capture_actions(result.actions),
         requires_confirmation=result.requires_confirmation,
         committed=False,
+        session_status="parsed",
         source_channel=source_channel,
         expires_at=_now() + CAPTURE_SESSION_TTL,
     )
@@ -82,6 +83,39 @@ async def get_active_capture_session(
     return result.scalar_one_or_none()
 
 
+async def persist_capture_turn(
+    db: AsyncSession,
+    *,
+    capture_id: str,
+    user_id: str,
+    turn_index: int,
+    role: str,
+    text: str | None = None,
+    actions: list[CandidateAction] | None = None,
+    selected_action_indexes: list[int] | None = None,
+    result_entities: list[dict] | None = None,
+    turn_status: str = "parsed",
+    source_channel: str,
+) -> McpCaptureTurn:
+    turn = McpCaptureTurn(
+        user_id=user_id,
+        capture_id=capture_id,
+        turn_index=turn_index,
+        role=role,
+        text=text,
+        actions=serialize_capture_actions(actions or []),
+        selected_action_indexes=selected_action_indexes or [],
+        result_entities=result_entities or [],
+        turn_status=turn_status,
+        source_channel=source_channel,
+    )
+    db.add(turn)
+    await db.flush()
+    return turn
+
+
 async def mark_capture_session_committed(db: AsyncSession, session: McpCaptureSession) -> None:
     session.committed = True
+    session.session_status = "committed"
+    session.committed_at = _now()
     await db.flush()

@@ -404,31 +404,49 @@ CREATE TABLE task_reminder_strategies (
 
 策略不是提醒派发本身。策略确认后才写入或更新 `Task.remind_at` 和 `Reminder`。
 
-## 22. capture_sessions / capture_turns
+## 22. mcp_capture_sessions / mcp_capture_turns
 
-用于把当前 parse / commit / undo 能力封装成聊天式 AI Capture 体验。
+用于把当前 parse / commit / undo 能力封装成聊天式 AI Capture 体验。当前命名沿用 MCP capture 链路，后续如果抽成非 MCP Capture API，可以在兼容层上再提供 `capture_sessions` 视图或别名。
 
 ```sql
-CREATE TABLE capture_sessions (
-  id UUID PRIMARY KEY,
+CREATE TABLE mcp_capture_sessions (
+  capture_id UUID PRIMARY KEY,
   user_id UUID NOT NULL,
-  status TEXT NOT NULL, -- active / committed / cancelled
+  original_text TEXT NOT NULL,
+  timezone TEXT NOT NULL,
+  locale TEXT NOT NULL,
+  actions JSONB NOT NULL,
+  requires_confirmation BOOLEAN NOT NULL,
+  committed BOOLEAN NOT NULL,
+  session_status TEXT NOT NULL, -- parsed / committed / failed / dismissed / expired
+  source_channel TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  committed_at TIMESTAMPTZ,
+  dismissed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
 
-CREATE TABLE capture_turns (
+CREATE TABLE mcp_capture_turns (
   id UUID PRIMARY KEY,
-  session_id UUID NOT NULL,
+  user_id UUID NOT NULL,
+  capture_id UUID NOT NULL,
+  turn_index INTEGER NOT NULL,
   role TEXT NOT NULL, -- user / assistant / system
-  input_text TEXT,
-  asset_ids JSONB,
-  parsed_actions JSONB,
-  created_at TIMESTAMPTZ NOT NULL
+  text TEXT,
+  actions JSONB,
+  selected_action_indexes JSONB,
+  result_entities JSONB,
+  turn_status TEXT NOT NULL, -- parsed / committed / failed / undone / partial
+  source_channel TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
 );
 ```
 
-附件和语音不直接塞进文本字段。语音应先形成音频 Asset，经 STT 生成文本后进入 capture turn。
+本地 PowerSync 也保存 `mcp_capture_sessions` 和 `mcp_capture_turns`。本地 commit 创建 memo / task / ledger_transaction 时写入 `source_capture_id`，undo 通过 `mcp_undo_actions` 将创建实体转为 `ai_trashed` 并追加 undo turn。
+
+附件和语音不直接塞进文本字段。附件只传 `asset_ids` 引用边界；语音应先形成音频 Asset，经 STT 生成文本后进入 capture turn。
 
 ## 23. 本地 read model 边界
 

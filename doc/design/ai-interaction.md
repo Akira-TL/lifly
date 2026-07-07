@@ -189,25 +189,37 @@ capture_parse → capture_commit → capture_undo
 写入业务表、audit_logs、undo token
 ```
 
-长期会话模型：
+当前基础会话模型：
 
 ```text
-CaptureSession
-  id
+McpCaptureSession
+  capture_id
   user_id
-  status: active / committed / cancelled
-  created_at
-  updated_at
+  original_text
+  timezone / locale
+  actions[]
+  requires_confirmation
+  session_status: parsed / committed / failed / dismissed / expired
+  source_channel
+  expires_at
+  committed_at / dismissed_at
+  created_at / updated_at
 
-CaptureTurn
+McpCaptureTurn
   id
-  session_id
+  capture_id
+  turn_index
   role: user / assistant / system
-  input_text
-  asset_ids[]
-  parsed_actions[]
-  created_at
+  text
+  actions[]
+  selected_action_indexes[]
+  result_entities[]
+  turn_status: parsed / committed / failed / undone / partial
+  source_channel
+  created_at / updated_at
 ```
+
+本地 Local Core 已接入 `captureParse` / `captureCommit` / `captureUndo`。本地模式下候选动作、确认结果、undo token 与 undo 结果会写入 PowerSync 本地表；commit 创建的业务实体会写入 `source_capture_id`，便于会话恢复和撤销追踪。
 
 ## 13. 附件和语音输入边界
 

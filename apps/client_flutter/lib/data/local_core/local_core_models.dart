@@ -213,23 +213,71 @@ class LocalCaptureAction {
   final String type;
   final Map<String, Object?> payload;
   final double confidence;
+  final String? rawText;
 
   const LocalCaptureAction({
     required this.type,
     required this.payload,
     required this.confidence,
+    this.rawText,
+  });
+}
+
+class LocalCaptureTurn {
+  final String id;
+  final String captureId;
+  final int turnIndex;
+  final String role;
+  final String? text;
+  final List<LocalCaptureAction> actions;
+  final List<int> selectedActionIndexes;
+  final List<LocalCoreEntityRef> resultEntities;
+  final String turnStatus;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const LocalCaptureTurn({
+    required this.id,
+    required this.captureId,
+    required this.turnIndex,
+    required this.role,
+    required this.text,
+    required this.actions,
+    required this.selectedActionIndexes,
+    required this.resultEntities,
+    required this.turnStatus,
+    required this.createdAt,
+    required this.updatedAt,
   });
 }
 
 class LocalCaptureSession {
   final String captureId;
+  final String originalText;
+  final String timezone;
+  final String locale;
   final List<LocalCaptureAction> actions;
   final bool requiresConfirmation;
+  final String sessionStatus;
+  final String sourceChannel;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  final DateTime? expiresAt;
+  final List<LocalCaptureTurn> turns;
 
   const LocalCaptureSession({
     required this.captureId,
+    this.originalText = '',
+    this.timezone = 'Asia/Shanghai',
+    this.locale = 'zh-CN',
     required this.actions,
     required this.requiresConfirmation,
+    this.sessionStatus = 'parsed',
+    this.sourceChannel = 'local',
+    this.createdAt,
+    this.updatedAt,
+    this.expiresAt,
+    this.turns = const [],
   });
 }
 
@@ -237,20 +285,24 @@ class LocalCaptureCommitResult {
   final bool committed;
   final List<LocalCoreEntityRef> createdEntities;
   final String undoToken;
+  final List<LocalCoreEntityRef> failedEntities;
 
   const LocalCaptureCommitResult({
     required this.committed,
     required this.createdEntities,
     required this.undoToken,
+    this.failedEntities = const [],
   });
 }
 
 class LocalCaptureUndoResult {
   final int undone;
+  final List<LocalCoreEntityRef> entities;
   final List<LocalCoreEntityRef> failedEntities;
 
   const LocalCaptureUndoResult({
     required this.undone,
+    this.entities = const [],
     required this.failedEntities,
   });
 }

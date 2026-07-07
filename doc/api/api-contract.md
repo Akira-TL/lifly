@@ -415,16 +415,33 @@ POST /api/v1/tasks/{task_id}/reminder-strategy/dismiss
 
 ### 13.5 Capture Sessions
 
-本地主路径：
+当前本地主路径复用现有 Capture tool 语义，并已具备本地持久化：
 
 ```text
-LocalCoreBridge.createCaptureSession()
-LocalCoreBridge.appendCaptureTurn(sessionId, input)
-LocalCoreBridge.commitCaptureSession(sessionId)
-LocalCoreBridge.undoCaptureSession(sessionId)
+LocalCoreBridge.captureParse(input, context)
+LocalCoreBridge.captureCommit(input, context)
+LocalCoreBridge.captureUndo(input, context)
 ```
 
-云端同构兜底：
+本地持久化表：
+
+```text
+mcp_capture_sessions
+mcp_capture_turns
+mcp_undo_actions
+```
+
+当前云端入口：
+
+```text
+POST /api/v1/mcp/capture/parse
+POST /api/v1/mcp/capture/commit
+POST /api/v1/mcp/capture/undo
+```
+
+云端 parse 会写入 `McpCaptureSession` 与首个 `McpCaptureTurn`；commit 会写入业务实体、audit_logs、mcp_undo_actions，并追加 commit turn；undo 会消费 undo token，将实体转为 ai_trashed，并在能解析 source_capture_id 时追加 undo turn。
+
+后续可选兼容 API：
 
 ```text
 POST /api/v1/capture/sessions

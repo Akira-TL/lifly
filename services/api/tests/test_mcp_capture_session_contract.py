@@ -5,7 +5,7 @@ import inspect
 import pytest
 from fastapi import HTTPException
 
-from app.db.models import McpCaptureSession
+from app.db.models import McpCaptureSession, McpCaptureTurn
 from app.modules.mcp import router as mcp_router
 from app.modules.mcp.capture_session_service import (
     CAPTURE_SESSION_TTL,
@@ -55,9 +55,10 @@ async def test_capture_parse_persists_session_metadata() -> None:
     assert response["actions"]
     assert db.flushed is True
     assert db.committed is True
-    assert len(db.added) == 1
+    assert len(db.added) == 2
 
     session = db.added[0]
+    turn = db.added[1]
     assert isinstance(session, McpCaptureSession)
     assert session.capture_id == response["capture_id"]
     assert session.user_id == mcp_router.DEFAULT_LOCAL_USER_ID
@@ -68,6 +69,15 @@ async def test_capture_parse_persists_session_metadata() -> None:
     assert session.committed is False
     assert session.expires_at is not None
     assert len(session.actions) == len(response["actions"])
+    assert session.session_status == "parsed"
+
+    assert isinstance(turn, McpCaptureTurn)
+    assert turn.capture_id == response["capture_id"]
+    assert turn.turn_index == 0
+    assert turn.role == "assistant"
+    assert turn.turn_status == "parsed"
+    assert turn.text.startswith("记一下今天状态不错")
+    assert len(turn.actions) == len(response["actions"])
 
 
 @pytest.mark.anyio
@@ -109,5 +119,6 @@ def test_capture_commit_uses_persistent_session_before_memory_fallback() -> None
     assert "get_active_capture_session" in source
     assert "deserialize_capture_actions" in source
     assert "mark_capture_session_committed" in source
+    assert "persist_capture_turn" in source
     assert "memory_session = CAPTURE_STORE.get(capture_id)" in source
     assert source.index("get_active_capture_session") < source.index("memory_session")

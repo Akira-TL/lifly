@@ -31,6 +31,7 @@ from app.modules.mcp.capture_session_service import (
     get_active_capture_session,
     mark_capture_session_committed,
     persist_capture_session,
+    persist_capture_turn,
 )
 from app.modules.mcp.parse_engine import CAPTURE_STORE, parse_mixed_input
 from app.modules.mcp.undo_service import consume_undo_entries, list_undo_entries, persist_undo_entries
@@ -175,6 +176,17 @@ async def capture_parse(request: Request, db: AsyncSession = Depends(get_db)):
         user_id=DEFAULT_LOCAL_USER_ID,
         source_channel=CLOUD_MCP_SOURCE_CHANNEL,
     )
+    await persist_capture_turn(
+        db,
+        capture_id=result.capture_id,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        turn_index=0,
+        role="assistant",
+        text=text,
+        actions=result.actions,
+        turn_status="parsed",
+        source_channel=CLOUD_MCP_SOURCE_CHANNEL,
+    )
     await db.commit()
 
     actions_out = []
@@ -250,6 +262,18 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
 
     if db_session:
         await mark_capture_session_committed(db, db_session)
+        await persist_capture_turn(
+            db,
+            capture_id=capture_id,
+            user_id=DEFAULT_LOCAL_USER_ID,
+            turn_index=1,
+            role="system",
+            text="commit",
+            selected_action_indexes=selected_indexes,
+            result_entities=commit_result.created_entities,
+            turn_status="committed" if commit_result.created_entities else "failed",
+            source_channel=CLOUD_MCP_SOURCE_CHANNEL,
+        )
     if memory_session:
         memory_session.committed = True
     await db.commit()
@@ -349,6 +373,32 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
             request_id=request_id,
         )
         undone_entities.append({"type": entry.entity_type, "id": entry.entity_id})
+
+    capture_id = None
+    if undone_entities:
+        entity = undone_entities[0]
+        model_class = {
+            "memo": Memo,
+            "ledger_transaction": LedgerTransaction,
+            "task": Task,
+            "asset": Asset,
+        }.get(entity["type"])
+        if model_class is not None:
+            result = await db.execute(select(model_class).where(getattr(model_class, "id") == entity["id"]))
+            source_entity = result.scalar_one_or_none()
+            capture_id = getattr(source_entity, "source_capture_id", None)
+    if capture_id:
+        await persist_capture_turn(
+            db,
+            capture_id=capture_id,
+            user_id=DEFAULT_LOCAL_USER_ID,
+            turn_index=2,
+            role="system",
+            text="undo",
+            result_entities=undone_entities,
+            turn_status="undone" if not failed_entities else "partial_undo",
+            source_channel=CLOUD_MCP_SOURCE_CHANNEL,
+        )
 
     await db.commit()
     return {

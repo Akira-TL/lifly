@@ -6,7 +6,7 @@
 状态：执行中
 当前分支：develop/v0.7.0
 平台范围：Flutter Local Core / 本地 SQLite / PowerSync schema / repository / 服务端同构 API / 手机端 UI / Web 与桌面端适配原则
-当前动作：阶段五已完成手机端 5 底部导航基础 Shell，后续进入聊天式 AI Capture 地基
+当前动作：阶段六已完成聊天式 AI Capture 数据地基，后续进入产品地基 release gate
 完成规则：计划内能力实现并回写固定正式文档后，删除本文档
 ```
 
@@ -541,6 +541,8 @@ doc/guide/current-status.md
 
 ### 阶段六：聊天式 AI Capture
 
+状态：基础数据链路已落地。
+
 平台重点：Flutter AI 页面 / Local Capture Session / 附件输入边界 / 云端 AI 解析可选兜底。
 
 目标：把当前工程化 AI Capture 调试页升级为聊天式捕获体验。
@@ -556,22 +558,42 @@ CaptureTurn
 本地保存 capture turns
 ```
 
-本地主入口建议：
+已完成：
 
 ```text
-LocalCoreBridge.createCaptureSession()
-LocalCoreBridge.appendCaptureTurn(sessionId, input)
-LocalCoreBridge.commitCaptureSession(sessionId)
-LocalCoreBridge.undoCaptureSession(sessionId)
+服务端 McpCaptureSession 增强 session_status / committed_at / dismissed_at
+服务端新增 McpCaptureTurn，parse / commit / undo 会写入 turn 记录
+PowerSync schema 新增 mcp_capture_sessions / mcp_capture_turns
+PowerSyncCaptureStore 新增本地 captureParse / captureCommit / captureUndo
+PowerSyncLocalCoreBridge.captureParse / captureCommit / captureUndo 已接入本地持久化
+AiCaptureService 本地模式可走 Local Core，不再只能依赖 Cloud MCP
+本地 commit 创建的 memo / task / ledger_transaction 会写入 source_capture_id
+本地 undo 通过 mcp_undo_actions 转为 ai_trashed，并写入 undo turn
 ```
 
-云端正常读取入口：
+当前本地主入口：
 
 ```text
-POST /api/v1/capture/sessions
-POST /api/v1/capture/sessions/{session_id}/turns
-POST /api/v1/capture/sessions/{session_id}/commit
-POST /api/v1/capture/sessions/{session_id}/undo
+LocalCoreBridge.captureParse(input, context)
+LocalCoreBridge.captureCommit(input, context)
+LocalCoreBridge.captureUndo(input, context)
+```
+
+当前云端入口：
+
+```text
+POST /api/v1/mcp/capture/parse
+POST /api/v1/mcp/capture/commit
+POST /api/v1/mcp/capture/undo
+```
+
+仍待补齐：
+
+```text
+真正聊天式多轮 append turn UI 与体验
+asset_ids 参与云端/本地解析规则，而不是只作为 payload 引用边界
+语音输入与 STT
+更完整的 capture session 列表、恢复和取消接口
 ```
 
 边界：

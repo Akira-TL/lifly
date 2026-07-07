@@ -1,3 +1,4 @@
+import 'package:client_flutter/data/local_core/capture/powersync_capture_store.dart';
 import 'package:client_flutter/data/local_core/ledger/powersync_expense_store.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_context.dart';
@@ -18,6 +19,12 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
   );
   late final PowerSyncTaskStore _taskStore = PowerSyncTaskStore(
     syncService: syncService,
+  );
+  late final PowerSyncCaptureStore _captureStore = PowerSyncCaptureStore(
+    syncService: syncService,
+    memoStore: _memoStore,
+    taskStore: _taskStore,
+    expenseStore: _expenseStore,
   );
 
   PowerSyncLocalCoreBridge({required this.syncService, this.version = '0.2.5'});
@@ -272,7 +279,7 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   ) {
-    return _unsupported('capture parse');
+    return _captureStore.captureParse(input, context);
   }
 
   @override
@@ -280,7 +287,7 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   ) {
-    return _unsupported('capture commit');
+    return _captureStore.captureCommit(input, context);
   }
 
   @override
@@ -288,7 +295,7 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   ) {
-    return _unsupported('capture undo');
+    return _captureStore.captureUndo(input, context);
   }
 
   Future<T> _unsupported<T>(String capability) {

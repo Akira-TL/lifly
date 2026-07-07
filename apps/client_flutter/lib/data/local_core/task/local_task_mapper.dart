@@ -6,6 +6,7 @@ class LocalTaskCreateInput {
   final DateTime? dueAt;
   final DateTime? remindAt;
   final String priority;
+  final String? sourceCaptureId;
 
   const LocalTaskCreateInput({
     required this.title,
@@ -13,6 +14,7 @@ class LocalTaskCreateInput {
     required this.dueAt,
     required this.remindAt,
     required this.priority,
+    required this.sourceCaptureId,
   });
 
   factory LocalTaskCreateInput.fromMap(Map<String, Object?> input) {
@@ -27,6 +29,7 @@ class LocalTaskCreateInput {
       dueAt: _readOptionalDateTime(input, 'due_at'),
       remindAt: _readOptionalDateTime(input, 'remind_at'),
       priority: _readOptionalString(input, 'priority') ?? 'normal',
+      sourceCaptureId: _readOptionalString(input, 'source_capture_id'),
     );
   }
 }

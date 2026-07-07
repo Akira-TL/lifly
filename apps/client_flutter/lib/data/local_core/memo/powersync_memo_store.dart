@@ -50,7 +50,12 @@ class PowerSyncMemoStore {
     );
 
     await LocalCoreWriteExecutor(syncService: syncService).run((handle) async {
-      await _insertMemo(handle, memo, metadata);
+      await _insertMemo(
+        handle,
+        memo,
+        metadata,
+        sourceCaptureId: createInput.sourceCaptureId,
+      );
       await auditLogWriter.write(
         handle,
         LocalCoreAuditLogInput(
@@ -345,12 +350,13 @@ class PowerSyncMemoStore {
   Future<void> _insertMemo(
     LocalCoreWriteHandle handle,
     LocalMemoRecord memo,
-    LocalCoreWriteMetadata metadata,
-  ) async {
+    LocalCoreWriteMetadata metadata, {
+    String? sourceCaptureId,
+  }) async {
     await handle.execute(
       'INSERT INTO memos('
-      'id, user_id, type, title, content_markdown, tags, source, status, created_at, updated_at, revision'
-      ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'id, user_id, type, title, content_markdown, tags, source_capture_id, source, status, created_at, updated_at, revision'
+      ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         memo.id,
         metadata.userId,
@@ -358,6 +364,7 @@ class PowerSyncMemoStore {
         memo.title,
         memo.contentMarkdown,
         LocalMemoMapper.encodeTags(memo.tags),
+        sourceCaptureId,
         metadata.source,
         memo.status,
         metadata.timestamps.createdAtIso,
