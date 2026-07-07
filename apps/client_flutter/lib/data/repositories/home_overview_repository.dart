@@ -16,17 +16,26 @@ class HomeOverviewRepository {
     this.dataMode = LiflyDataMode.api,
   });
 
-  bool get _useLocalCore =>
-      dataMode == LiflyDataMode.local && localCore != null;
+  bool get _hasLocalCore => localCore != null;
 
   Future<HomeOverview> load({String period = 'current_month'}) async {
-    if (_useLocalCore) {
-      final overview = await localCore!.getHomeOverview({
-        'period': period,
-      }, LocalCoreContext.flutterUser());
-      return _fromLocal(overview);
+    if (dataMode == LiflyDataMode.local) {
+      return _loadLocal(period: period, sourceMode: 'local');
     }
 
+    try {
+      return await _loadCloud();
+    } catch (cloudError) {
+      if (_hasLocalCore) {
+        return _loadLocal(period: period, sourceMode: 'fallback');
+      }
+      throw StateError(
+        'Dashboard cloud load failed and local fallback is unavailable: $cloudError',
+      );
+    }
+  }
+
+  Future<HomeOverview> _loadCloud() async {
     final response = await api.get('/dashboard');
     if (response['success'] == true) {
       return HomeOverview.fromDashboardJson(
@@ -35,6 +44,22 @@ class HomeOverviewRepository {
     }
 
     throw StateError(response['error'] as String? ?? 'Dashboard load failed');
+  }
+
+  Future<HomeOverview> _loadLocal({
+    required String period,
+    required String sourceMode,
+  }) async {
+    final bridge = localCore;
+    if (bridge == null) {
+      throw StateError('Local Core is unavailable');
+    }
+
+    final overview = await bridge.getHomeOverview({
+      'period': period,
+      'source_mode': sourceMode,
+    }, LocalCoreContext.flutterUser());
+    return _fromLocal(overview);
   }
 
   HomeOverview _fromLocal(LocalHomeOverview local) {

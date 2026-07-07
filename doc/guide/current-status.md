@@ -96,7 +96,7 @@ Flutter 导入入口与文件选择
 
 状态：当前阶段。
 
-目标：补齐手机端真实产品页面需要的本地优先数据地基，再做真实 UI 消费。
+目标：补齐手机端真实产品页面需要的云端同步优先、本地可兜底的数据地基，再做真实 UI 消费。
 
 范围：
 
@@ -112,14 +112,14 @@ Local Chat-style AI Capture
 当前进展：
 
 ```text
-本地 Home Overview 基础链路已落地：LocalCoreBridge.getHomeOverview、LocalHomeOverviewBuilder、HomeOverviewRepository、HomePage repository 消费、本地混合最近活动流
+Home Overview 基础兜底链路已落地：LocalCoreBridge.getHomeOverview、LocalHomeOverviewBuilder、HomeOverviewRepository 云端优先/失败 fallback、HomePage repository 消费、本地混合最近活动流
 ```
 
 验收：
 
 ```text
-首页、预算、分类、洞察、AI 分类、任务预警均优先来自 Local Core / PowerSync 本地 read model
-云端 API 与本地 read model 字段同构，只做兜底和一致性校验
+首页、预算、分类、洞察、AI 分类、任务预警正常优先来自云端拉取和同步，云端失败或断网时来自 Local Core / PowerSync 本地 read model
+云端 API 与本地 read model 字段同构，云端负责正常拉取和同步，本地负责失败兜底和离线可用
 客户端不写假数据、不硬编码长期产品规则
 手机端、Web、桌面端共享业务语义但可以使用不同布局
 ```

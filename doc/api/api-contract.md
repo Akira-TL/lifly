@@ -305,7 +305,7 @@ GET  /api/v1/robots/{robot_id}/system-prompt
 
 以下接口属于长期产品地基，未实现前客户端不能写假数据。
 
-这些 API 不是手机端的唯一计算来源。Lifly 的主路径是本地优先：手机端优先通过 Local Core / PowerSync 本地数据计算 read model，云端 API 提供同构兜底、远程访问、调试和跨端一致性校验。
+这些 API 是正常联网状态下的云端读取入口，但不是手机端的唯一计算来源。Lifly 的运行策略是云端拉取和同步优先；云端失败、断网或弱网时，手机端通过 Local Core / PowerSync 本地数据计算同构 read model 兜底。
 
 同构 read model 必须包含：
 

@@ -42,7 +42,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
       transactions: _expenses,
       summary: summary,
       now: context.effectiveNow,
-      sourceMode: 'local',
+      sourceMode: input['source_mode'] as String? ?? 'local',
     );
   }
 

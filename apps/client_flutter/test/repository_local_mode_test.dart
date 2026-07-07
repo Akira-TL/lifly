@@ -5,6 +5,7 @@ import 'package:client_flutter/data/repositories/home_overview_repository.dart';
 import 'package:client_flutter/data/repositories/ledger_repository.dart';
 import 'package:client_flutter/data/repositories/memo_repository.dart';
 import 'package:client_flutter/data/repositories/task_repository.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -128,6 +129,55 @@ void main() {
       expect(
         overview.recentActivity.map((item) => item.entityType),
         contains('ledger_transaction'),
+      );
+    },
+  );
+
+  test(
+    'HomeOverviewRepository falls back to Local Core when cloud load fails',
+    () async {
+      final failingDio = Dio(BaseOptions(baseUrl: 'http://localhost/api/v1'));
+      failingDio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            handler.reject(
+              DioException(
+                requestOptions: options,
+                type: DioExceptionType.connectionError,
+                error: 'offline',
+              ),
+            );
+          },
+        ),
+      );
+      final failingApi = ApiClient(
+        baseUrl: 'http://localhost/api/v1',
+        dio: failingDio,
+      );
+      final memoRepo = MemoRepository(
+        api,
+        localCore: localCore,
+        dataMode: LiflyDataMode.local,
+      );
+      final homeRepo = HomeOverviewRepository(
+        failingApi,
+        localCore: localCore,
+        dataMode: LiflyDataMode.api,
+      );
+
+      await memoRepo.create({
+        'type': 'memo',
+        'title': '离线可见备忘',
+        'content_markdown': 'cloud failed local fallback',
+      });
+
+      final overview = await homeRepo.load();
+
+      expect(overview.sourceMode, 'fallback');
+      expect(overview.todayMetrics.memoTotal, 1);
+      expect(
+        overview.recentActivity.map((item) => item.entityType),
+        contains('memo'),
       );
     },
   );

@@ -34,19 +34,19 @@ Flutter 真实 API 接入和导入导出体验层
 
 状态：基础本地链路已完成，服务端同构 API 和完整状态摘要待补。
 
-目标：新增本地优先的产品化首页 read model，支撑今日关注、紧急事项、混合最近内容流和数据状态摘要。
+目标：新增云端同步优先、本地失败兜底的产品化首页 read model，支撑今日关注、紧急事项、混合最近内容流和数据状态摘要。
 
 验收：
 
 ```text
 LocalCoreBridge.getHomeOverview 可基于本地 PowerSync 数据返回 schema_version、source_mode、attention_items、today_metrics、finance_overview、recent_activity 等结构
-HomeOverviewRepository localFirst 已接入
+HomeOverviewRepository 已接入云端优先读取，失败后 Local Core fallback
 HomePage 已改为消费 HomeOverview repository
 /api/v1/home/overview 提供同构兜底
 /dashboard 保留兼容
 Local Core tests 覆盖主要聚合规则
 Flutter repository/entity 可消费同构真实字段
-断网时首页仍可展示已有本地概览
+云端失败或断网时首页仍可展示已有本地概览
 ```
 
 ### LC-0702 Ledger budgets and category aggregation

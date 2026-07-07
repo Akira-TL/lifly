@@ -33,8 +33,8 @@ AI Capture 聊天式体验
 
 ```text
 客户端不写死预算、分类占比、消费洞察、AI 分类状态、任务预警策略
-页面优先消费 Local Core / PowerSync 本地 read model 的正式字段
-云端 API 只作为同构兜底、远程访问和一致性校验
+页面正常优先消费云端拉取和同步后的正式字段，云端失败或断网时消费 Local Core / PowerSync 本地 read model
+云端 API 是正常读取和同步入口，本地 read model 是失败兜底和离线可用保障
 手机端、Web、桌面端共享业务契约，但布局可以不同
 ```
 

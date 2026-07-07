@@ -1,4 +1,4 @@
-# 手机端产品地基本地优先开发计划
+# 手机端产品地基云端同步优先与本地兜底开发计划
 
 ## 计划状态
 
@@ -6,7 +6,7 @@
 状态：执行中
 当前分支：develop/v0.7.0
 平台范围：Flutter Local Core / 本地 SQLite / PowerSync schema / repository / 服务端同构 API / 手机端 UI / Web 与桌面端适配原则
-当前动作：阶段一已完成基础本地 Home Overview read model，后续继续补服务端同构 API 和更完整的产品字段
+当前动作：阶段一已完成基础本地 Home Overview fallback read model，后续继续补服务端同构 API、同步状态和更完整的产品字段
 完成规则：计划内能力实现并回写固定正式文档后，删除本文档
 ```
 
@@ -43,7 +43,7 @@ AI 提醒策略
 数据与设置摘要
 ```
 
-这些能力不能靠 Flutter 页面临时拼接，也不能依赖云端实时计算后返回。Lifly 的长期方向是本地优先，所以这些能力必须能在本地数据上计算：
+这些能力不能靠 Flutter 页面临时拼接。正常联网状态下，Lifly 应从云端拉取和同步最新数据；但云端拉取失败、断网或弱网时，这些能力必须能基于本地数据计算：
 
 ```text
 本地 SQLite / PowerSync 数据
@@ -55,7 +55,7 @@ Flutter repository DTO / entity
 手机端页面展示
 ```
 
-云端 API 只做同构兜底、跨设备同步、备份、远程访问和服务器侧校验，不作为手机端日常首页与统计能力的唯一依赖。
+云端 API 是正常在线读取和跨设备同步入口；Local Core 是断网、弱网、云端失败时的同构兜底，避免手机端首页与统计能力被网络卡死。
 
 ## 固定文档复查结论
 
@@ -78,7 +78,7 @@ UI 信息架构：doc/design/ui-information-architecture.md
 本计划新增一条更高优先级原则：
 
 ```text
-所有概览、预算、分类、预警、最近内容流等产品化 read model，必须本地可计算。
+所有概览、预算、分类、预警、最近内容流等产品化 read model，必须云端可拉取、同步后本地可计算，并支持云端失败时本地兜底。
 ```
 
 ## 核心原则
@@ -210,7 +210,7 @@ Web / 桌面端：允许侧边导航、更多入口、更高信息密度
 ```text
 LocalCoreBridge.getHomeOverview
 LocalHomeOverviewBuilder
-HomeOverviewRepository localFirst 读取
+HomeOverviewRepository 云端优先读取，失败后本地 fallback
 HomePage 消费 HomeOverview repository，不再直接写死调用 /dashboard
 本地 recent_activity 支持 memo / task / ledger_transaction 混合流
 本地 attention_items 支持逾期任务和今天截止任务
@@ -236,10 +236,10 @@ sync_summary / import_summary / settings_summary 的真实本地状态
 
 ```text
 LocalCoreBridge.getHomeOverview(params, context)
-HomeOverviewRepository.load(sourcePreference: localFirst)
+HomeOverviewRepository.load(sourcePreference: cloudPreferred)
 ```
 
-云端同构兜底：
+云端正常读取入口：
 
 ```text
 GET /api/v1/home/overview
@@ -306,7 +306,7 @@ LocalCoreBridge.getLedgerCategorySummary(period, direction)
 LocalCoreBridge.getLedgerInsights(period)
 ```
 
-云端同构兜底：
+云端正常读取入口：
 
 ```text
 GET /api/v1/ledger/overview?period=YYYY-MM
@@ -349,7 +349,7 @@ LocalCoreBridge.getMemoClassifications(memoId)
 LocalCoreBridge.getTagSummary(kind)
 ```
 
-云端同构兜底：
+云端正常读取入口：
 
 ```text
 GET /api/v1/memos?tag=&classification_status=&type=&limit=&cursor=
@@ -396,7 +396,7 @@ LocalCoreBridge.confirmTaskReminderStrategy(taskId)
 LocalCoreBridge.dismissTaskReminderStrategy(taskId)
 ```
 
-云端同构兜底：
+云端正常读取入口：
 
 ```text
 GET /api/v1/tasks?group=today|urgent|warning|all
@@ -469,7 +469,7 @@ LocalCoreBridge.commitCaptureSession(sessionId)
 LocalCoreBridge.undoCaptureSession(sessionId)
 ```
 
-云端同构兜底：
+云端正常读取入口：
 
 ```text
 POST /api/v1/capture/sessions
@@ -509,7 +509,7 @@ Flutter analyze/test 通过
 服务端同构 API 测试通过
 新增 read model 有本地 DTO / repository 测试
 手机端主要路径可离线手动验收
-断网后首页仍可展示本地概览
+云端失败或断网后首页仍可展示本地概览
 没有假预算
 没有假分类占比
 没有假消费洞察
@@ -547,4 +547,4 @@ Flutter analyze/test 通过
 本地 Home Overview read model
 ```
 
-原因：首页是手机端第一入口，也是最容易诱发 Flutter 客户端临时拼接和假数据的地方。先把 Home Overview 设计成 Local Core 本地 read model，再提供 `/api/v1/home/overview` 同构兜底，后面的备忘、记账、任务、AI Capture UI 才能在离线和弱网下消费真实数据。
+原因：首页是手机端第一入口，也是最容易诱发 Flutter 客户端临时拼接和假数据的地方。先保证 Home Overview 在云端失败或断网时可以由 Local Core 本地 read model 兜底，再补 `/api/v1/home/overview` 正常云端入口，后面的备忘、记账、任务、AI Capture UI 才能同时满足在线新鲜度和离线可用。

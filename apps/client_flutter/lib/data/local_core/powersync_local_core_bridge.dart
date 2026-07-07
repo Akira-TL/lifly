@@ -71,7 +71,7 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
       transactions: transactions,
       summary: summary,
       now: context.effectiveNow,
-      sourceMode: 'local',
+      sourceMode: input['source_mode'] as String? ?? 'local',
     );
   }
 
