@@ -104,7 +104,20 @@ Reminder 表落地写入待补
 
 ### LC-0705 Mobile five-tab shell
 
+状态：基础链路已完成，首页数据状态卡片跳转和桌面端更多管理入口待补。
+
 目标：手机端底部导航收敛为：首页 / 备忘 / AI / 记账 / 任务。
+
+验收：
+
+```text
+AppShell 手机端底部入口已固定为：首页 / 备忘 / AI / 记账 / 任务
+AI 已作为居中主按钮入口
+搜索和设置已退出手机端底部一级入口
+首页顶部已提供全局搜索和设置入口
+宽屏 Flutter 已使用 NavigationRail 作为非手机布局基础
+widget test 已覆盖核心入口切换和底部入口收敛
+```
 
 ### LC-0706 Chat-style AI Capture
 

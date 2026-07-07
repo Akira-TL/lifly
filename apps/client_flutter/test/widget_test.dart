@@ -147,10 +147,8 @@ void main() {
           Provider<LiflyDataMode>.value(value: LiflyDataMode.api),
           Provider<ApiClient>(create: (_) => FakeApiClient()),
           ProxyProvider2<ApiClient, LiflyDataMode, AiCaptureService>(
-            update: (_, api, dataMode, _) => AiCaptureService(
-              api: api,
-              dataMode: dataMode,
-            ),
+            update: (_, api, dataMode, _) =>
+                AiCaptureService(api: api, dataMode: dataMode),
           ),
           Provider<LocalCoreBridge>(create: (_) => FakeLocalCoreBridge()),
         ],
@@ -160,7 +158,15 @@ void main() {
 
     await tester.pump();
 
+    expect(find.text('首页'), findsWidgets);
     expect(find.text('备忘'), findsWidgets);
+    expect(find.text('AI'), findsOneWidget);
+    expect(find.text('记账'), findsWidgets);
+    expect(find.text('任务'), findsWidgets);
+    expect(find.text('搜索'), findsNothing);
+    expect(find.text('设置'), findsNothing);
+    expect(find.byTooltip('全局搜索'), findsOneWidget);
+    expect(find.byTooltip('设置'), findsOneWidget);
     expect(find.text('测试备忘'), findsNothing);
 
     await tester.tap(find.text('备忘').last);
@@ -184,6 +190,10 @@ void main() {
     expect(find.text('测试账单'), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
+
+    await tester.tap(find.text('AI'));
+    await tester.pump();
+    expect(find.text('AI 写入'), findsOneWidget);
 
     await tester.tap(find.text('任务'));
     await tester.pump();

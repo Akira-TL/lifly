@@ -116,6 +116,7 @@ Home Overview 基础链路已落地：服务端 /api/v1/home/overview、LocalCor
 Ledger budgets 与分类聚合基础链路已落地：LedgerBudget、PowerSync ledger_budgets schema、/ledger/overview、/ledger/categories/summary、/ledger/insights、LedgerRepository 云端优先/失败 fallback
 Memo AI 分类与标签元数据基础链路已落地：MemoClassification、TagMetadata、PowerSync memo_classifications/tag_metadata schema、备忘分类确认/拒绝接口、/tags/summary、MemoRepository 分类与标签统计
 Task reminder strategies 基础链路已落地：TaskReminderStrategy、PowerSync task_reminder_strategies schema、任务分组 group、策略读取/确认/dismiss 接口、TaskRepository 策略读写
+手机端 5 底部导航 Shell 基础链路已落地：AppShell 收敛为首页 / 备忘 / AI / 记账 / 任务，AI 为居中主按钮，搜索/设置降级到首页入口，宽屏 Flutter 使用 NavigationRail
 ```
 
 验收：

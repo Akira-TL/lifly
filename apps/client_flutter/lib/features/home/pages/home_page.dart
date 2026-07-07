@@ -3,6 +3,8 @@ import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/repositories/home_overview_repository.dart';
 import 'package:client_flutter/domain/entities/home_overview.dart';
+import 'package:client_flutter/features/search/pages/search_page.dart';
+import 'package:client_flutter/features/settings/settings_page.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -51,7 +53,25 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('首页')),
+      appBar: AppBar(
+        title: const Text('首页'),
+        actions: [
+          IconButton(
+            tooltip: '全局搜索',
+            icon: const Icon(Icons.search_outlined),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const SearchPage())),
+          ),
+          IconButton(
+            tooltip: '设置',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const SettingsPage())),
+          ),
+        ],
+      ),
       body: _buildBody(),
     );
   }
