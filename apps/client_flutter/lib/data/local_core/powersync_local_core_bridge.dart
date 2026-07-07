@@ -2,6 +2,7 @@ import 'package:client_flutter/data/local_core/ledger/powersync_expense_store.da
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_context.dart';
 import 'package:client_flutter/data/local_core/local_core_models.dart';
+import 'package:client_flutter/data/local_core/local_home_overview_builder.dart';
 import 'package:client_flutter/data/local_core/memo/powersync_memo_store.dart';
 import 'package:client_flutter/data/local_core/task/powersync_task_store.dart';
 import 'package:client_flutter/data/powersync/sync_service.dart';
@@ -48,6 +49,30 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
         checkedAt: checkedAt,
       );
     }
+  }
+
+  @override
+  Future<LocalHomeOverview> getHomeOverview(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final limit = input['limit'] as int? ?? 100;
+    final memos = await _memoStore.searchMemos({'limit': limit}, context);
+    final tasks = await _taskStore.listTasks({'limit': limit}, context);
+    final transactions = await _expenseStore.searchExpenses({
+      'limit': limit,
+    }, context);
+    final summary = await _expenseStore.summarizeExpenses({
+      'period': input['period'] as String? ?? 'current_month',
+    }, context);
+    return const LocalHomeOverviewBuilder().build(
+      memos: memos,
+      tasks: tasks,
+      transactions: transactions,
+      summary: summary,
+      now: context.effectiveNow,
+      sourceMode: 'local',
+    );
   }
 
   @override

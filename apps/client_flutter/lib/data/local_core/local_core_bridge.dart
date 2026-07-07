@@ -3,6 +3,10 @@ import 'package:client_flutter/data/local_core/local_core_models.dart';
 
 abstract class LocalCoreBridge {
   Future<LocalCoreHealth> health();
+  Future<LocalHomeOverview> getHomeOverview(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
 
   Future<LocalMemoRecord> createMemo(
     Map<String, Object?> input,

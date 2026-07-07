@@ -2,6 +2,7 @@ import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_context.dart';
 import 'package:client_flutter/data/local_core/local_core_ids.dart';
 import 'package:client_flutter/data/local_core/local_core_models.dart';
+import 'package:client_flutter/data/local_core/local_home_overview_builder.dart';
 
 class FakeLocalCoreBridge implements LocalCoreBridge {
   final LocalCoreIdGenerator _idGenerator;
@@ -24,6 +25,24 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
       version: '0.2.1',
       detail: 'in-memory fallback bridge',
       checkedAt: DateTime.now().toUtc(),
+    );
+  }
+
+  @override
+  Future<LocalHomeOverview> getHomeOverview(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final summary = await summarizeExpenses({
+      'period': input['period'] as String? ?? 'current_month',
+    }, context);
+    return const LocalHomeOverviewBuilder().build(
+      memos: _memos,
+      tasks: _tasks,
+      transactions: _expenses,
+      summary: summary,
+      now: context.effectiveNow,
+      sourceMode: 'local',
     );
   }
 

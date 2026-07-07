@@ -1,6 +1,7 @@
 import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/local_core/fake_local_core_bridge.dart';
+import 'package:client_flutter/data/repositories/home_overview_repository.dart';
 import 'package:client_flutter/data/repositories/ledger_repository.dart';
 import 'package:client_flutter/data/repositories/memo_repository.dart';
 import 'package:client_flutter/data/repositories/task_repository.dart';
@@ -67,4 +68,67 @@ void main() {
     expect(summary['expense_total'], 12.5);
     expect(summary['transaction_count'], 1);
   });
+
+  test(
+    'HomeOverviewRepository computes overview from Local Core in local mode',
+    () async {
+      final memoRepo = MemoRepository(
+        api,
+        localCore: localCore,
+        dataMode: LiflyDataMode.local,
+      );
+      final ledgerRepo = LedgerRepository(
+        api,
+        localCore: localCore,
+        dataMode: LiflyDataMode.local,
+      );
+      final taskRepo = TaskRepository(
+        api,
+        localCore: localCore,
+        dataMode: LiflyDataMode.local,
+      );
+      final homeRepo = HomeOverviewRepository(
+        api,
+        localCore: localCore,
+        dataMode: LiflyDataMode.local,
+      );
+
+      await memoRepo.create({
+        'type': 'memo',
+        'title': '本地备忘',
+        'content_markdown': '首页混合流内容',
+      });
+      await ledgerRepo.create({
+        'direction': 'expense',
+        'amount': 18.0,
+        'merchant': '食堂',
+      });
+      await taskRepo.create({
+        'title': '今天要做',
+        'due_at': DateTime.now().toUtc().toIso8601String(),
+        'priority': 'high',
+      });
+
+      final overview = await homeRepo.load();
+
+      expect(overview.sourceMode, 'local');
+      expect(overview.todayMetrics.memoTotal, 1);
+      expect(overview.todayMetrics.taskTodo, 1);
+      expect(overview.todayMetrics.taskDueToday, 1);
+      expect(overview.financeOverview.monthExpense, 18.0);
+      expect(overview.financeOverview.budgetState, 'not_configured');
+      expect(
+        overview.recentActivity.map((item) => item.entityType),
+        contains('memo'),
+      );
+      expect(
+        overview.recentActivity.map((item) => item.entityType),
+        contains('task'),
+      );
+      expect(
+        overview.recentActivity.map((item) => item.entityType),
+        contains('ledger_transaction'),
+      );
+    },
+  );
 }

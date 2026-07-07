@@ -109,6 +109,12 @@ Local Chat-style AI Capture
 手机端 5 底部导航：首页 / 备忘 / AI / 记账 / 任务
 ```
 
+当前进展：
+
+```text
+本地 Home Overview 基础链路已落地：LocalCoreBridge.getHomeOverview、LocalHomeOverviewBuilder、HomeOverviewRepository、HomePage repository 消费、本地混合最近活动流
+```
+
 验收：
 
 ```text

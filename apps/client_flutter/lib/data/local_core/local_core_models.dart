@@ -134,7 +134,11 @@ class LocalCaptureAction {
   final Map<String, Object?> payload;
   final double confidence;
 
-  const LocalCaptureAction({required this.type, required this.payload, required this.confidence});
+  const LocalCaptureAction({
+    required this.type,
+    required this.payload,
+    required this.confidence,
+  });
 }
 
 class LocalCaptureSession {
@@ -165,7 +169,10 @@ class LocalCaptureUndoResult {
   final int undone;
   final List<LocalCoreEntityRef> failedEntities;
 
-  const LocalCaptureUndoResult({required this.undone, required this.failedEntities});
+  const LocalCaptureUndoResult({
+    required this.undone,
+    required this.failedEntities,
+  });
 }
 
 class LocalExpenseSummary {
@@ -179,5 +186,116 @@ class LocalExpenseSummary {
     required this.totalExpense,
     required this.totalIncome,
     required this.count,
+  });
+}
+
+class LocalHomeOverview {
+  final String schemaVersion;
+  final DateTime generatedAt;
+  final String userTimezone;
+  final String sourceMode;
+  final LocalHomeTodayMetrics todayMetrics;
+  final LocalHomeFinanceOverview financeOverview;
+  final List<LocalHomeAttentionItem> attentionItems;
+  final List<LocalHomeDailyTrendItem> dailyTrend;
+  final List<LocalHomeActivityItem> recentActivity;
+  final String syncStatus;
+  final String importStatus;
+  final String settingsStatus;
+
+  const LocalHomeOverview({
+    required this.schemaVersion,
+    required this.generatedAt,
+    required this.userTimezone,
+    required this.sourceMode,
+    required this.todayMetrics,
+    required this.financeOverview,
+    required this.attentionItems,
+    required this.dailyTrend,
+    required this.recentActivity,
+    required this.syncStatus,
+    required this.importStatus,
+    required this.settingsStatus,
+  });
+}
+
+class LocalHomeTodayMetrics {
+  final int memoTotal;
+  final int taskTodo;
+  final int taskTotal;
+  final int taskOverdue;
+  final int taskDueToday;
+
+  const LocalHomeTodayMetrics({
+    required this.memoTotal,
+    required this.taskTodo,
+    required this.taskTotal,
+    required this.taskOverdue,
+    required this.taskDueToday,
+  });
+}
+
+class LocalHomeFinanceOverview {
+  final double monthIncome;
+  final double monthExpense;
+  final int transactionCount;
+  final String budgetState;
+
+  const LocalHomeFinanceOverview({
+    required this.monthIncome,
+    required this.monthExpense,
+    required this.transactionCount,
+    required this.budgetState,
+  });
+}
+
+class LocalHomeAttentionItem {
+  final String id;
+  final String type;
+  final String level;
+  final String title;
+  final String? description;
+  final String entityType;
+  final String entityId;
+  final DateTime? occurredAt;
+
+  const LocalHomeAttentionItem({
+    required this.id,
+    required this.type,
+    required this.level,
+    required this.title,
+    required this.description,
+    required this.entityType,
+    required this.entityId,
+    required this.occurredAt,
+  });
+}
+
+class LocalHomeDailyTrendItem {
+  final DateTime day;
+  final double total;
+
+  const LocalHomeDailyTrendItem({required this.day, required this.total});
+}
+
+class LocalHomeActivityItem {
+  final String id;
+  final String entityType;
+  final String entityId;
+  final String title;
+  final String? subtitle;
+  final DateTime occurredAt;
+  final double? amount;
+  final String? direction;
+
+  const LocalHomeActivityItem({
+    required this.id,
+    required this.entityType,
+    required this.entityId,
+    required this.title,
+    required this.subtitle,
+    required this.occurredAt,
+    this.amount,
+    this.direction,
   });
 }

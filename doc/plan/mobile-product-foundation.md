@@ -3,10 +3,10 @@
 ## 计划状态
 
 ```text
-状态：待执行
+状态：执行中
 当前分支：develop/v0.7.0
 平台范围：Flutter Local Core / 本地 SQLite / PowerSync schema / repository / 服务端同构 API / 手机端 UI / Web 与桌面端适配原则
-当前动作：先冻结本地优先计划，不直接写业务代码
+当前动作：阶段一已完成基础本地 Home Overview read model，后续继续补服务端同构 API 和更完整的产品字段
 完成规则：计划内能力实现并回写固定正式文档后，删除本文档
 ```
 
@@ -202,6 +202,31 @@ Web / 桌面端：允许侧边导航、更多入口、更高信息密度
 ## 开发阶段
 
 ### 阶段一：本地 Home Overview read model
+
+状态：基础本地链路已落地。
+
+已完成：
+
+```text
+LocalCoreBridge.getHomeOverview
+LocalHomeOverviewBuilder
+HomeOverviewRepository localFirst 读取
+HomePage 消费 HomeOverview repository，不再直接写死调用 /dashboard
+本地 recent_activity 支持 memo / task / ledger_transaction 混合流
+本地 attention_items 支持逾期任务和今天截止任务
+本地 daily_trend 基于本周账单计算
+本地 budget_state 返回 not_configured，不伪造预算
+repository_local_mode_test 覆盖本地 Home Overview
+```
+
+仍待补齐：
+
+```text
+服务端 /api/v1/home/overview 同构兜底
+sync_summary / import_summary / settings_summary 的真实本地状态
+预算、分类占比、消费洞察接入后扩展 finance_overview
+任务预警策略模型接入后扩展 attention_items
+```
 
 平台重点：Flutter Local Core / 本地 SQLite / repository / 服务端同构 API。
 
