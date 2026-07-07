@@ -33,7 +33,8 @@ AI Capture 聊天式体验
 
 ```text
 客户端不写死预算、分类占比、消费洞察、AI 分类状态、任务预警策略
-页面只消费 API、本地 core 或同步 read model 的正式字段
+页面优先消费 Local Core / PowerSync 本地 read model 的正式字段
+云端 API 只作为同构兜底、远程访问和一致性校验
 手机端、Web、桌面端共享业务契约，但布局可以不同
 ```
 
@@ -158,10 +159,11 @@ AI Capture 聊天式体验
 
 验收：
 
-- 首页能展示真实 attention_items 和 recent_activity；
-- 预算、分类占比、消费洞察来自真实接口；
-- AI 分类状态来自结构化模型；
-- 任务预警来自策略模型；
+- 首页能基于本地数据展示真实 attention_items 和 recent_activity；
+- 预算、分类占比、消费洞察优先来自本地 read model；
+- AI 分类状态来自可同步的结构化模型；
+- 任务预警来自可同步的策略模型；
+- 云端 API 与本地 read model 字段同构；
 - 手机端底部导航为 5 个入口。
 
 ## 10. Phase 7：第三方生态

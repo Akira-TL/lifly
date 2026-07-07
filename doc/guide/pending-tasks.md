@@ -30,17 +30,19 @@ Flutter 真实 API 接入和导入导出体验层
 
 ## 2. 当前任务池：客户端体验与手机端产品地基
 
-### LC-0701 Home Overview read model
+### LC-0701 Local Home Overview read model
 
-目标：新增产品化首页聚合接口，支撑今日关注、紧急事项、混合最近内容流和数据状态摘要。
+目标：新增本地优先的产品化首页 read model，支撑今日关注、紧急事项、混合最近内容流和数据状态摘要。
 
 验收：
 
 ```text
-/api/v1/home/overview 返回 schema_version、attention_items、today_metrics、finance_overview、recent_activity 等结构
+LocalCoreBridge.getHomeOverview 可基于本地 PowerSync 数据返回 schema_version、source_mode、attention_items、today_metrics、finance_overview、recent_activity 等结构
+/api/v1/home/overview 提供同构兜底
 /dashboard 保留兼容
-服务端测试覆盖主要聚合规则
-Flutter repository/entity 可消费真实字段
+Local Core tests 覆盖主要聚合规则
+Flutter repository/entity 可消费同构真实字段
+断网时首页仍可展示已有本地概览
 ```
 
 ### LC-0702 Ledger budgets and category aggregation
@@ -51,7 +53,8 @@ Flutter repository/entity 可消费真实字段
 
 ```text
 ledger_budgets 模型明确
-ledger overview/category summary/insights 接口明确
+Local Core ledger overview/category summary/insights 可本地计算
+云端 ledger overview/category summary/insights 接口提供同构兜底
 没有预算时返回 not_configured，而不是客户端假造默认预算
 ```
 
@@ -64,7 +67,8 @@ ledger overview/category summary/insights 接口明确
 ```text
 memo_classifications 模型明确
 tag_metadata 模型明确
-备忘列表可按 tag / classification_status 筛选
+备忘列表可基于本地数据按 tag / classification_status 筛选
+云端分类接口提供同构兜底
 客户端不根据字符串猜测 AI 已分类状态
 ```
 
@@ -76,7 +80,8 @@ tag_metadata 模型明确
 
 ```text
 task_reminder_strategies 模型明确
-任务列表 read model 可输出 urgent / warning / today 分组
+本地任务列表 read model 可输出 urgent / warning / today 分组
+云端任务策略接口提供同构兜底
 策略确认后才更新 Task.remind_at / Reminder
 ```
 
@@ -86,7 +91,7 @@ task_reminder_strategies 模型明确
 
 ### LC-0706 Chat-style AI Capture
 
-目标：在现有 parse / commit / undo 基础上升级聊天式捕获体验。
+目标：在现有 parse / commit / undo 基础上升级聊天式捕获体验，并保证 capture session、turns、确认结果和撤销链路可本地持久化。
 
 ### LC-0707 Product foundation release gate
 

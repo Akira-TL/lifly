@@ -305,7 +305,26 @@ GET  /api/v1/robots/{robot_id}/system-prompt
 
 以下接口属于长期产品地基，未实现前客户端不能写假数据。
 
+这些 API 不是手机端的唯一计算来源。Lifly 的主路径是本地优先：手机端优先通过 Local Core / PowerSync 本地数据计算 read model，云端 API 提供同构兜底、远程访问、调试和跨端一致性校验。
+
+同构 read model 必须包含：
+
+```text
+schema_version
+generated_at
+user_timezone
+source_mode: local / api / fallback
+```
+
 ### 13.1 Home Overview
+
+本地主路径：
+
+```text
+LocalCoreBridge.getHomeOverview(params, context)
+```
+
+云端同构兜底：
 
 ```text
 GET /api/v1/home/overview
@@ -317,6 +336,7 @@ GET /api/v1/home/overview
 schema_version
 generated_at
 user_timezone
+source_mode
 attention_items[]
 today_metrics
 finance_overview
@@ -327,9 +347,19 @@ import_summary
 settings_summary
 ```
 
-`/dashboard` 保留为轻量统计兼容接口，产品化首页走 `/home/overview`。
+`/dashboard` 保留为轻量统计兼容接口，产品化首页 read model 优先本地计算；`/home/overview` 只提供同构 API 兜底。
 
 ### 13.2 Ledger Overview
+
+本地主路径：
+
+```text
+LocalCoreBridge.getLedgerOverview(period)
+LocalCoreBridge.getLedgerCategorySummary(period, direction)
+LocalCoreBridge.getLedgerInsights(period)
+```
+
+云端同构兜底：
 
 ```text
 GET /api/v1/ledger/overview?period=YYYY-MM
@@ -337,9 +367,19 @@ GET /api/v1/ledger/categories/summary?period=YYYY-MM&direction=expense
 GET /api/v1/ledger/insights?period=YYYY-MM
 ```
 
-服务端负责预算进度、分类占比、月环比和消费洞察。客户端只渲染返回结果。
+预算进度、分类占比、月环比和消费洞察优先在本地计算。客户端只渲染 repository 返回的同构 DTO，不关心数据来自 local 还是 api。
 
 ### 13.3 Memo Classifications
+
+本地主路径：
+
+```text
+LocalCoreBridge.searchMemos(filters)
+LocalCoreBridge.getMemoClassifications(memoId)
+LocalCoreBridge.getTagSummary(kind)
+```
+
+云端同构兜底：
 
 ```text
 GET  /api/v1/memos?tag=&classification_status=&type=&limit=&cursor=
@@ -351,6 +391,17 @@ GET  /api/v1/tags/summary?kind=memo
 
 ### 13.4 Task Reminder Strategies
 
+本地主路径：
+
+```text
+LocalCoreBridge.listTasks(group)
+LocalCoreBridge.getTaskReminderStrategy(taskId)
+LocalCoreBridge.confirmTaskReminderStrategy(taskId)
+LocalCoreBridge.dismissTaskReminderStrategy(taskId)
+```
+
+云端同构兜底：
+
 ```text
 GET  /api/v1/tasks?group=today|urgent|warning|all
 GET  /api/v1/tasks/{task_id}/reminder-strategy
@@ -360,6 +411,17 @@ POST /api/v1/tasks/{task_id}/reminder-strategy/dismiss
 
 ### 13.5 Capture Sessions
 
+本地主路径：
+
+```text
+LocalCoreBridge.createCaptureSession()
+LocalCoreBridge.appendCaptureTurn(sessionId, input)
+LocalCoreBridge.commitCaptureSession(sessionId)
+LocalCoreBridge.undoCaptureSession(sessionId)
+```
+
+云端同构兜底：
+
 ```text
 POST /api/v1/capture/sessions
 POST /api/v1/capture/sessions/{session_id}/turns
@@ -367,4 +429,4 @@ POST /api/v1/capture/sessions/{session_id}/commit
 POST /api/v1/capture/sessions/{session_id}/undo
 ```
 
-这些接口应复用当前 capture parse / commit / undo 的业务能力，不绕过审计和撤销边界。
+这些接口应复用当前 capture parse / commit / undo 的业务能力，不绕过审计和撤销边界。Capture session 和确认结果必须能本地持久化；云端 AI 可以用于解析，但不能成为本地记录、确认、撤销链路的唯一依赖。

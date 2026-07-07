@@ -9,13 +9,28 @@
 - 恢复网络后自动同步；
 - 云端和客户端最终一致；
 - 附件 metadata 与二进制文件分离；
-- AI、本地手动、导入都能进入同一同步流程。
+- AI、本地手动、导入都能进入同一同步流程；
+- 首页概览、预算统计、分类占比、任务预警、标签统计等产品化 read model 必须能基于本地数据计算，不依赖云端实时聚合。
 
 ## 2. 同步系统
 
 采用 PowerSync。
 
 客户端读写本地 SQLite，PowerSync 负责将本地变化同步到云端，并将云端变化同步到本地。
+
+产品化聚合能力采用本地优先：
+
+```text
+PowerSync SQLite
+  ↓
+Local Core query / read model service
+  ↓
+Flutter repository
+  ↓
+UI
+```
+
+云端 API 可以提供同构 read model 兜底，但不能成为手机端首页、预算、分类占比、任务预警等能力的唯一计算来源。
 
 ## 3. 同步范围
 
@@ -33,14 +48,22 @@
 - import_batches；
 - import_rows；
 - audit_logs；
-- tombstones。
+- tombstones；
+- memo_classifications；
+- tag_metadata；
+- ledger_budgets；
+- task_reminder_strategies；
+- capture_sessions；
+- capture_turns。
 
 不直接同步：
 
 - 附件二进制；
 - 本地缓存文件；
 - 临时上传文件；
-- AI 推理上下文缓存。
+- AI 推理上下文缓存；
+- 可重新计算的首页 overview 缓存；
+- 可重新计算的统计图表缓存。
 
 ## 4. 附件同步
 

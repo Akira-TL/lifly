@@ -96,23 +96,24 @@ Flutter 导入入口与文件选择
 
 状态：当前阶段。
 
-目标：补齐手机端真实产品页面需要的数据地基，再做真实 UI 消费。
+目标：补齐手机端真实产品页面需要的本地优先数据地基，再做真实 UI 消费。
 
 范围：
 
 ```text
-Home Overview read model
-Ledger budgets / category aggregation / insights
-Memo AI classifications / tag metadata
-Task reminder strategies
-Chat-style AI Capture
+Local Home Overview read model
+Local Ledger budgets / category aggregation / insights
+Local Memo AI classifications / tag metadata
+Local Task reminder strategies
+Local Chat-style AI Capture
 手机端 5 底部导航：首页 / 备忘 / AI / 记账 / 任务
 ```
 
 验收：
 
 ```text
-首页、预算、分类、洞察、AI 分类、任务预警均来自正式数据契约
+首页、预算、分类、洞察、AI 分类、任务预警均优先来自 Local Core / PowerSync 本地 read model
+云端 API 与本地 read model 字段同构，只做兜底和一致性校验
 客户端不写假数据、不硬编码长期产品规则
 手机端、Web、桌面端共享业务语义但可以使用不同布局
 ```

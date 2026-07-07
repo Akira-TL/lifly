@@ -429,3 +429,30 @@ CREATE TABLE capture_turns (
 ```
 
 附件和语音不直接塞进文本字段。语音应先形成音频 Asset，经 STT 生成文本后进入 capture turn。
+
+## 23. 本地 read model 边界
+
+首页概览、预算统计、分类占比、任务预警、标签统计和最近混合内容流原则上不需要单独持久化为正式业务表，应优先由 Local Core 基于本地 PowerSync SQLite 计算。
+
+本地 read model 输出必须和云端同构 API 保持字段一致：
+
+```text
+schema_version
+generated_at
+user_timezone
+source_mode: local / api / fallback
+```
+
+可本地计算的 read model 包括：
+
+```text
+HomeOverview
+LedgerOverview
+LedgerCategorySummary
+LedgerInsight
+MemoTagSummary
+TaskWarningGroup
+RecentActivityFeed
+```
+
+只有在存在性能问题、离线启动耗时问题或需要历史快照时，才考虑新增缓存表。缓存表不是事实来源，可以随时清空重建。

@@ -146,5 +146,9 @@ scripts/smoke-mcp-v0.1.sh
 客户端不伪造消费洞察
 客户端不根据字符串猜测 AI 已分类状态
 客户端不写死任务提前提醒策略
+Local Core 可在断网状态计算首页 overview、预算统计、分类占比、任务预警和标签统计
+本地 read model 与云端 API 字段同构
+repository 支持 localFirst，Local Core 不可用时才降级 API
+断网手动验收首页、记账统计、任务预警、备忘分类状态
 API / repository / UI 的字段边界清楚
 ```
