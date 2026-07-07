@@ -3,6 +3,8 @@ import 'package:client_flutter/data/local_core/local_core_context.dart';
 import 'package:client_flutter/data/local_core/local_core_ids.dart';
 import 'package:client_flutter/data/local_core/local_core_models.dart';
 import 'package:client_flutter/data/local_core/local_home_overview_builder.dart';
+import 'package:client_flutter/data/local_core/memo/local_memo_classification_engine.dart';
+import 'package:client_flutter/data/local_core/task/local_task_reminder_strategy_engine.dart';
 
 class FakeLocalCoreBridge implements LocalCoreBridge {
   final LocalCoreIdGenerator _idGenerator;
@@ -12,9 +14,11 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
 
   final List<LocalMemoRecord> _memos = [];
   final List<LocalMemoClassification> _memoClassifications = [];
+  final List<LocalTagMetadata> _tagMetadata = [];
   final List<LocalLedgerTransactionRecord> _expenses = [];
   final List<LocalTaskRecord> _tasks = [];
   final List<LocalTaskReminderStrategy> _taskReminderStrategies = [];
+  final List<LocalReminderRecord> _reminders = [];
   final List<LocalAssetRecord> _assets = [];
   final Map<String, LocalCaptureSession> _captures = {};
   final Map<String, List<LocalCoreEntityRef>> _undoEntries = {};
@@ -66,6 +70,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
       updatedAt: now,
     );
     _memos.insert(0, memo);
+    await generateMemoClassifications({'memo_id': memo.id}, context);
     return memo;
   }
 
@@ -114,6 +119,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
       updatedAt: context.effectiveNow,
     );
     _memos[index] = updated;
+    await generateMemoClassifications({'memo_id': updated.id}, context);
     return updated;
   }
 
@@ -155,6 +161,63 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
         .where((item) => memoId == null || item.memoId == memoId)
         .where((item) => status == null || item.status == status)
         .toList(growable: false);
+  }
+
+  @override
+  Future<List<LocalMemoClassification>> generateMemoClassifications(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final memoId = input['memo_id'] as String? ?? input['id'] as String?;
+    final memo = _memos.firstWhere(
+      (item) => item.id == memoId && item.status == 'active',
+    );
+    _memoClassifications.removeWhere(
+      (item) => item.memoId == memo.id && item.source == 'ai' && item.status == 'suggested',
+    );
+    final existing = _memoClassifications
+        .where((item) => item.memoId == memo.id && item.status != 'rejected')
+        .map((item) => item.tag)
+        .toSet();
+    final now = context.effectiveNow;
+    for (final tag in memo.tags.where((tag) => tag.trim().isNotEmpty)) {
+      _ensureFakeTagMetadata(tag.trim(), context);
+      if (existing.add(tag.trim())) {
+        _memoClassifications.add(
+          LocalMemoClassification(
+            id: _nextStableId('memo_cls'),
+            memoId: memo.id,
+            tag: tag.trim(),
+            source: 'user',
+            status: 'confirmed',
+            confidence: 1,
+            reason: '来自用户手动标签。',
+            createdAt: now,
+            updatedAt: now,
+            confirmedAt: now,
+          ),
+        );
+      }
+    }
+    for (final suggestion in const LocalMemoClassificationEngine().classify(memo)) {
+      _ensureFakeTagMetadata(suggestion.tag, context);
+      if (!existing.add(suggestion.tag)) continue;
+      _memoClassifications.add(
+        LocalMemoClassification(
+          id: _nextStableId('memo_cls'),
+          memoId: memo.id,
+          tag: suggestion.tag,
+          source: 'ai',
+          status: 'suggested',
+          confidence: suggestion.confidence,
+          reason: suggestion.reason,
+          createdAt: now,
+          updatedAt: now,
+          confirmedAt: null,
+        ),
+      );
+    }
+    return getMemoClassifications({'memo_id': memo.id}, context);
   }
 
   @override
@@ -205,6 +268,62 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
         })
         .toList(growable: false)
       ..sort((a, b) => b.count.compareTo(a.count));
+  }
+
+  @override
+  Future<List<LocalTagMetadata>> listTagMetadata(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final kind = input['kind'] as String? ?? 'memo';
+    final status = input['status'] as String? ?? 'active';
+    return _tagMetadata
+        .where((item) => item.kind == kind && item.status == status)
+        .toList(growable: false)
+      ..sort((a, b) => (a.sortOrder ?? 0).compareTo(b.sortOrder ?? 0));
+  }
+
+  @override
+  Future<LocalTagMetadata> upsertTagMetadata(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final name = (input['name'] as String?)?.trim();
+    if (name == null || name.isEmpty) throw ArgumentError('name is required');
+    return _ensureFakeTagMetadata(
+      name,
+      context,
+      colorToken: input['color_token'] as String?,
+      iconToken: input['icon_token'] as String?,
+      sortOrder: input['sort_order'] as int?,
+      status: input['status'] as String? ?? 'active',
+      overrideExisting: true,
+    );
+  }
+
+  @override
+  Future<LocalTagMetadata> deleteTagMetadata(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final name = (input['name'] as String?)?.trim();
+    if (name == null || name.isEmpty) throw ArgumentError('name is required');
+    final index = _tagMetadata.indexWhere((item) => item.name == name);
+    if (index < 0) throw StateError('Tag metadata not found: $name');
+    final old = _tagMetadata[index];
+    final updated = LocalTagMetadata(
+      id: old.id,
+      name: old.name,
+      kind: old.kind,
+      colorToken: old.colorToken,
+      iconToken: old.iconToken,
+      sortOrder: old.sortOrder,
+      status: 'deleted',
+      createdAt: old.createdAt,
+      updatedAt: context.effectiveNow,
+    );
+    _tagMetadata[index] = updated;
+    return updated;
   }
 
   LocalMemoClassification _upsertClassification(
@@ -434,6 +553,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
       updatedAt: now,
     );
     _tasks.insert(0, task);
+    await generateTaskReminderStrategy({'task_id': task.id}, context);
     return task;
   }
 
@@ -566,6 +686,44 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
+  Future<LocalTaskReminderStrategy?> generateTaskReminderStrategy(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final taskId = input['task_id'] as String? ?? input['id'] as String?;
+    final task = _tasks.firstWhere(
+      (item) => item.id == taskId && item.status == 'active',
+    );
+    final existing = await getTaskReminderStrategy({'task_id': task.id}, context);
+    if (existing?.strategyStatus == 'confirmed') return existing;
+    _taskReminderStrategies.removeWhere(
+      (item) => item.taskId == task.id && item.source == 'ai' && item.strategyStatus == 'suggested',
+    );
+    final suggestion = const LocalTaskReminderStrategyEngine().suggest(
+      task,
+      now: context.effectiveNow,
+    );
+    if (suggestion == null) return null;
+    final now = context.effectiveNow;
+    final item = LocalTaskReminderStrategy(
+      id: _nextStableId('task_strategy'),
+      taskId: task.id,
+      warningLevel: suggestion.warningLevel,
+      warningReason: suggestion.warningReason,
+      preparationWindowDays: suggestion.preparationWindowDays,
+      aiSuggestedRemindAt: suggestion.aiSuggestedRemindAt,
+      strategyStatus: 'suggested',
+      source: 'ai',
+      createdAt: now,
+      updatedAt: now,
+      confirmedAt: null,
+      dismissedAt: null,
+    );
+    _taskReminderStrategies.add(item);
+    return item;
+  }
+
+  @override
   Future<LocalTaskReminderStrategy> confirmTaskReminderStrategy(
     Map<String, Object?> input,
     LocalCoreContext context,
@@ -577,6 +735,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
         'task_id': item.taskId,
         'remind_at': remindAt.toIso8601String(),
       }, context);
+      _upsertFakeReminder(item, context);
     }
     return item;
   }
@@ -589,6 +748,43 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
     return _upsertTaskReminderStrategy(input, context, 'dismissed');
   }
 
+  @override
+  Future<List<LocalReminderRecord>> listTaskReminders(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final status = input['status'] as String? ?? input['reminder_status'] as String? ?? 'pending';
+    return _reminders
+        .where((item) => item.targetType == 'task' && item.status == status)
+        .toList(growable: false)
+      ..sort((a, b) => a.remindAt.compareTo(b.remindAt));
+  }
+
+  void _upsertFakeReminder(
+    LocalTaskReminderStrategy strategy,
+    LocalCoreContext context,
+  ) {
+    final remindAt = strategy.aiSuggestedRemindAt;
+    if (remindAt == null) return;
+    final index = _reminders.indexWhere(
+      (item) => item.targetType == 'task' && item.targetId == strategy.taskId && item.status == 'pending',
+    );
+    final item = LocalReminderRecord(
+      id: index < 0 ? _nextStableId('reminder') : _reminders[index].id,
+      targetType: 'task',
+      targetId: strategy.taskId,
+      remindAt: remindAt,
+      channel: 'app',
+      status: 'pending',
+      createdAt: index < 0 ? context.effectiveNow : _reminders[index].createdAt,
+    );
+    if (index < 0) {
+      _reminders.add(item);
+    } else {
+      _reminders[index] = item;
+    }
+  }
+
   LocalTaskReminderStrategy _upsertTaskReminderStrategy(
     Map<String, Object?> input,
     LocalCoreContext context,
@@ -598,7 +794,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
         input['strategy_id'] as String? ?? input['id'] as String?;
     final taskId = input['task_id'] as String?;
     final index = strategyId == null
-        ? -1
+        ? _taskReminderStrategies.indexWhere((item) => item.taskId == taskId)
         : _taskReminderStrategies.indexWhere((item) => item.id == strategyId);
     final old = index < 0 ? null : _taskReminderStrategies[index];
     if (old == null && taskId == null) {
@@ -788,6 +984,45 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
 
     _undoEntries.remove(undoToken);
     return LocalCaptureUndoResult(undone: undone, failedEntities: failed);
+  }
+
+  LocalTagMetadata _ensureFakeTagMetadata(
+    String tag,
+    LocalCoreContext context, {
+    String? colorToken,
+    String? iconToken,
+    int? sortOrder,
+    String status = 'active',
+    bool overrideExisting = false,
+  }) {
+    final rule = const LocalMemoClassificationEngine().tagRuleFor(tag);
+    final index = _tagMetadata.indexWhere(
+      (item) => item.name == tag && item.kind == 'memo',
+    );
+    final old = index < 0 ? null : _tagMetadata[index];
+    final resolved = LocalTagMetadata(
+      id: old?.id ?? _nextStableId('tag_meta'),
+      name: tag,
+      kind: 'memo',
+      colorToken: overrideExisting
+          ? colorToken
+          : old?.colorToken ?? colorToken ?? rule.colorToken,
+      iconToken: overrideExisting
+          ? iconToken
+          : old?.iconToken ?? iconToken ?? rule.iconToken,
+      sortOrder: overrideExisting
+          ? sortOrder
+          : old?.sortOrder ?? sortOrder ?? rule.sortOrder,
+      status: status,
+      createdAt: old?.createdAt ?? context.effectiveNow,
+      updatedAt: context.effectiveNow,
+    );
+    if (index < 0) {
+      _tagMetadata.add(resolved);
+    } else {
+      _tagMetadata[index] = resolved;
+    }
+    return resolved;
   }
 
   String _nextStableId(String prefix) => _idGenerator.nextStable(prefix);

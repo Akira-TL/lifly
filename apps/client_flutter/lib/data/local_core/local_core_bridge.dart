@@ -28,6 +28,10 @@ abstract class LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   );
+  Future<List<LocalMemoClassification>> generateMemoClassifications(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
   Future<LocalMemoClassification> confirmMemoClassification(
     Map<String, Object?> input,
     LocalCoreContext context,
@@ -37,6 +41,18 @@ abstract class LocalCoreBridge {
     LocalCoreContext context,
   );
   Future<List<LocalTagSummary>> getTagSummary(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
+  Future<List<LocalTagMetadata>> listTagMetadata(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
+  Future<LocalTagMetadata> upsertTagMetadata(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
+  Future<LocalTagMetadata> deleteTagMetadata(
     Map<String, Object?> input,
     LocalCoreContext context,
   );
@@ -94,11 +110,19 @@ abstract class LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   );
+  Future<LocalTaskReminderStrategy?> generateTaskReminderStrategy(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
   Future<LocalTaskReminderStrategy> confirmTaskReminderStrategy(
     Map<String, Object?> input,
     LocalCoreContext context,
   );
   Future<LocalTaskReminderStrategy> dismissTaskReminderStrategy(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
+  Future<List<LocalReminderRecord>> listTaskReminders(
     Map<String, Object?> input,
     LocalCoreContext context,
   );

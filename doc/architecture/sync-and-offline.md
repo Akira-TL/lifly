@@ -30,7 +30,7 @@ Flutter repository
 UI
 ```
 
-云端 API 是正常联网状态下的读取入口；Local Core 提供同构 read model，在云端失败、断网或弱网时兜底，不能让首页、预算、分类占比、任务预警等能力被网络卡死。
+云端 API 是正常联网状态下的读取入口；Local Core 提供同构 read model，在云端失败、断网或弱网时兜底，不能让首页、预算、分类占比、任务预警等能力被网络卡死。备忘分类建议、标签元数据、任务预警策略和 pending reminders 也必须在 PowerSync 本地库中完整落地。
 
 ## 3. 同步范围
 

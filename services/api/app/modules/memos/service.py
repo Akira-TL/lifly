@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import AuditLog, Memo
+from app.modules.memos.classification_engine import generate_memo_classifications
 from app.schemas.common import MemoCreate, MemoResponse, json_serialize
 
 
@@ -90,5 +91,6 @@ async def create_memo_record(
         source_text=source_text,
         request_id=request_id,
     )
+    await generate_memo_classifications(db, memo)
 
     return memo

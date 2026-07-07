@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +17,7 @@ from app.db.models import (
     Task,
     TaskReminderStrategy,
 )
-from app.schemas.common import ApiResponse
+from app.schemas.common import ApiResponse, TagMetadataUpsert
 
 router = APIRouter()
 
@@ -457,7 +457,90 @@ async def search_all(
     return ApiResponse(data={"q": q, "total": len(results), "items": results[:limit]})
 
 
-# ─── 标签统计 ─────────────────────────────────────────────────────────────────
+# ─── 标签统计与元数据 ───────────────────────────────────────────────────────────
+
+def _tag_metadata_data(item: TagMetadata) -> dict[str, object | None]:
+    return {
+        "id": item.id,
+        "name": item.name,
+        "kind": item.kind,
+        "color_token": item.color_token,
+        "icon_token": item.icon_token,
+        "sort_order": item.sort_order,
+        "status": item.status,
+        "created_at": item.created_at.isoformat() if item.created_at else None,
+        "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+    }
+
+
+@router.get("/tags/metadata", response_model=ApiResponse)
+async def list_tag_metadata(
+    kind: str = Query(default="memo"),
+    status: str = Query(default="active"),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(TagMetadata)
+        .where(
+            TagMetadata.user_id == DEFAULT_LOCAL_USER_ID,
+            TagMetadata.kind == kind,
+            TagMetadata.status == status,
+        )
+        .order_by(TagMetadata.sort_order.asc(), TagMetadata.name.asc())
+    )
+    return ApiResponse(data=[_tag_metadata_data(item) for item in result.scalars().all()])
+
+
+@router.post("/tags/metadata", response_model=ApiResponse)
+async def upsert_tag_metadata(
+    data: TagMetadataUpsert = Body(),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(TagMetadata).where(
+            TagMetadata.user_id == DEFAULT_LOCAL_USER_ID,
+            TagMetadata.name == data.name.strip(),
+            TagMetadata.kind == data.kind,
+        )
+    )
+    item = result.scalar_one_or_none()
+    if item is None:
+        item = TagMetadata(
+            user_id=DEFAULT_LOCAL_USER_ID,
+            name=data.name.strip(),
+            kind=data.kind,
+        )
+        db.add(item)
+    item.color_token = data.color_token
+    item.icon_token = data.icon_token
+    item.sort_order = data.sort_order
+    item.status = data.status
+    await db.commit()
+    await db.refresh(item)
+    return ApiResponse(data=_tag_metadata_data(item))
+
+
+@router.delete("/tags/metadata/{tag_name}", response_model=ApiResponse)
+async def delete_tag_metadata(
+    tag_name: str,
+    kind: str = Query(default="memo"),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(TagMetadata).where(
+            TagMetadata.user_id == DEFAULT_LOCAL_USER_ID,
+            TagMetadata.name == tag_name,
+            TagMetadata.kind == kind,
+        )
+    )
+    item = result.scalar_one_or_none()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Tag metadata not found")
+    item.status = "deleted"
+    await db.commit()
+    await db.refresh(item)
+    return ApiResponse(data=_tag_metadata_data(item))
+
 
 @router.get("/tags/summary", response_model=ApiResponse)
 async def tag_summary(

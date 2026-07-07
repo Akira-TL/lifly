@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import AuditLog, Task
+from app.modules.tasks.reminder_strategy_engine import ensure_task_reminder_strategy
 from app.schemas.common import TaskCreate, TaskResponse, json_serialize
 
 DEFAULT_LOCAL_USER_ID = "local-dev"
@@ -99,6 +100,7 @@ async def create_task_record(
         source_text=source_text,
         request_id=request_id,
     )
+    await ensure_task_reminder_strategy(db, task)
     return task
 
 

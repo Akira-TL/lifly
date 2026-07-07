@@ -380,7 +380,11 @@ GET /api/v1/ledger/insights?period=YYYY-MM
 ```text
 LocalCoreBridge.searchMemos(filters)
 LocalCoreBridge.getMemoClassifications(memoId)
+LocalCoreBridge.generateMemoClassifications(memoId)
 LocalCoreBridge.getTagSummary(kind)
+LocalCoreBridge.listTagMetadata(kind)
+LocalCoreBridge.upsertTagMetadata(input)
+LocalCoreBridge.deleteTagMetadata(name)
 ```
 
 云端正常读取入口：
@@ -388,12 +392,16 @@ LocalCoreBridge.getTagSummary(kind)
 ```text
 GET  /api/v1/memos?tag=&classification_status=&type=&limit=&cursor=
 GET  /api/v1/memos/{memo_id}/classifications
+POST /api/v1/memos/{memo_id}/classifications/generate
 POST /api/v1/memos/{memo_id}/classifications/confirm
 POST /api/v1/memos/{memo_id}/classifications/reject
 GET  /api/v1/tags/summary?kind=memo
+GET  /api/v1/tags/metadata?kind=memo
+POST /api/v1/tags/metadata
+DELETE /api/v1/tags/metadata/{tag_name}?kind=memo
 ```
 
-边界：`Memo.tags` 只做旧字段兼容，不代表 AI 分类状态；`rejected` 分类不得进入标签统计。
+边界：`Memo.tags` 只做旧字段兼容，不代表 AI 分类状态；`rejected` 分类不得进入标签统计。备忘创建/更新会自动生成 suggested 分类；用户确认后才进入 confirmed 语义。
 
 ### 13.4 Task Reminder Strategies
 
@@ -401,21 +409,25 @@ GET  /api/v1/tags/summary?kind=memo
 
 ```text
 LocalCoreBridge.listTasks(group)
+LocalCoreBridge.generateTaskReminderStrategy(taskId)
 LocalCoreBridge.getTaskReminderStrategy(taskId)
 LocalCoreBridge.confirmTaskReminderStrategy(taskId)
 LocalCoreBridge.dismissTaskReminderStrategy(taskId)
+LocalCoreBridge.listTaskReminders(status)
 ```
 
 云端正常读取入口：
 
 ```text
 GET  /api/v1/tasks?group=today|urgent|warning|all
+GET  /api/v1/tasks/reminders
 GET  /api/v1/tasks/{task_id}/reminder-strategy
+POST /api/v1/tasks/{task_id}/reminder-strategy/generate
 POST /api/v1/tasks/{task_id}/reminder-strategy/confirm
 POST /api/v1/tasks/{task_id}/reminder-strategy/dismiss
 ```
 
-边界：没有策略时返回 null，不伪造 AI 预警；策略确认后才更新 Task.remind_at；dismissed 策略不参与任务分组。
+边界：没有策略时返回 null，不伪造 AI 预警；任务创建/更新会生成 suggested 策略；策略确认后才更新 Task.remind_at，并写入 pending reminders；dismissed 策略不参与任务分组。
 
 ### 13.5 Capture Sessions
 

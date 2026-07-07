@@ -89,6 +89,20 @@ class MemoResponse(BaseModel):
     assets: list[dict] | None = None
 
 
+class MemoClassificationGenerateRequest(BaseModel):
+    replace_suggested: bool = True
+    include_user_tags: bool = True
+
+
+class TagMetadataUpsert(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    kind: str = Field(default="memo", pattern=r"^(memo|system)$")
+    color_token: str | None = Field(default=None, max_length=64)
+    icon_token: str | None = Field(default=None, max_length=64)
+    sort_order: int | None = None
+    status: str = Field(default="active", pattern=r"^(active|hidden|deleted)$")
+
+
 # ─── Ledger ─────────────────────────────────────────────────────────────────
 
 class LedgerTransactionCreate(BaseModel):
@@ -169,6 +183,10 @@ class TaskResponse(BaseModel):
     completed_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class TaskReminderStrategyGenerateRequest(BaseModel):
+    replace_suggested: bool = True
 
 
 # ─── Asset ───────────────────────────────────────────────────────────────────

@@ -156,6 +156,28 @@ class TaskRepository {
     }
   }
 
+  Future<Map<String, dynamic>?> generateReminderStrategy(
+    String taskId, {
+    bool replaceSuggested = true,
+  }) async {
+    final data = {'replace_suggested': replaceSuggested};
+    if (dataMode == LiflyDataMode.local) {
+      final item = await localCore!.generateTaskReminderStrategy({
+        ...data,
+        'task_id': taskId,
+      }, LocalCoreContext.flutterUser());
+      return item == null ? null : _strategyToMap(item);
+    }
+
+    final res = await api.post(
+      '/tasks/$taskId/reminder-strategy/generate',
+      data: data,
+    );
+    return res['data'] == null
+        ? null
+        : Map<String, dynamic>.from(res['data'] as Map);
+  }
+
   Future<Map<String, dynamic>> confirmReminderStrategy(
     String taskId,
     Map<String, dynamic> data,
@@ -194,6 +216,24 @@ class TaskRepository {
     return Map<String, dynamic>.from(res['data'] as Map);
   }
 
+  Future<List<Map<String, dynamic>>> reminders({
+    String status = 'pending',
+  }) async {
+    if (dataMode == LiflyDataMode.local) {
+      final items = await localCore!.listTaskReminders({
+        'status': status,
+      }, LocalCoreContext.flutterUser());
+      return items.map(_reminderToMap).toList(growable: false);
+    }
+
+    final res = await api.get('/tasks/reminders', params: {'reminder_status': status});
+    final items = res['data'] as List? ?? const [];
+    return items
+        .whereType<Map>()
+        .map((item) => item.cast<String, dynamic>())
+        .toList(growable: false);
+  }
+
   Future<void> delete(String id) async {
     if (_useLocalCore) {
       await localCore!.deleteTask({
@@ -217,6 +257,18 @@ class TaskRepository {
       completedAt: record.completedAt,
       createdAt: record.createdAt,
     );
+  }
+
+  Map<String, dynamic> _reminderToMap(LocalReminderRecord item) {
+    return {
+      'id': item.id,
+      'target_type': item.targetType,
+      'target_id': item.targetId,
+      'remind_at': item.remindAt.toIso8601String(),
+      'channel': item.channel,
+      'reminder_status': item.status,
+      'created_at': item.createdAt.toIso8601String(),
+    };
   }
 
   Map<String, dynamic> _strategyToMap(LocalTaskReminderStrategy item) {

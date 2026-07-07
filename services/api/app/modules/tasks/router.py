@@ -7,7 +7,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.db.models import Task, TaskReminderStrategy
+from app.db.models import Reminder, Task, TaskReminderStrategy
+from app.modules.tasks.reminder_strategy_engine import (
+    ensure_reminder_for_strategy,
+    ensure_task_reminder_strategy,
+)
 from app.modules.tasks.service import (
     DEFAULT_LOCAL_USER_ID,
     complete_task_record,
@@ -17,6 +21,7 @@ from app.modules.tasks.service import (
 )
 from app.schemas.common import (
     TaskCreate,
+    TaskReminderStrategyGenerateRequest,
     TaskUpdate,
     PaginatedResponse,
     ApiResponse,
@@ -55,6 +60,18 @@ def _strategy_data(strategy: TaskReminderStrategy) -> dict:
     }
 
 
+def _reminder_data(reminder: Reminder) -> dict:
+    return {
+        "id": reminder.id,
+        "target_type": reminder.target_type,
+        "target_id": reminder.target_id,
+        "remind_at": reminder.remind_at.isoformat() if reminder.remind_at else None,
+        "channel": reminder.channel,
+        "reminder_status": reminder.reminder_status,
+        "created_at": reminder.created_at.isoformat() if reminder.created_at else None,
+    }
+
+
 async def _load_task(db: AsyncSession, task_id: str) -> Task:
     result = await db.execute(
         select(Task).where(Task.id == task_id, Task.user_id == DEFAULT_LOCAL_USER_ID)
@@ -90,7 +107,10 @@ async def _upsert_strategy(
 ) -> TaskReminderStrategy:
     await _load_task(db, task_id)
     strategy_id = data.get("strategy_id") or data.get("id")
-    strategy = await _load_strategy(db, task_id, str(strategy_id)) if strategy_id else None
+    if strategy_id:
+        strategy = await _load_strategy(db, task_id, str(strategy_id))
+    else:
+        strategy = await _load_strategy(db, task_id)
     if strategy is None:
         strategy = TaskReminderStrategy(
             user_id=DEFAULT_LOCAL_USER_ID,
@@ -109,6 +129,7 @@ async def _upsert_strategy(
             task = await _load_task(db, task_id)
             task.remind_at = strategy.ai_suggested_remind_at
             task.revision += 1
+            await ensure_reminder_for_strategy(db, task=task, strategy=strategy)
     elif status == "dismissed":
         strategy.dismissed_at = datetime.now(timezone.utc)
     await db.commit()
@@ -222,11 +243,47 @@ async def list_tasks(
     )
 
 
+@router.get("/reminders", response_model=ApiResponse)
+async def list_task_reminders(
+    reminder_status: str = Query(default="pending"),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Reminder)
+        .where(
+            Reminder.user_id == DEFAULT_LOCAL_USER_ID,
+            Reminder.target_type == "task",
+            Reminder.reminder_status == reminder_status,
+        )
+        .order_by(Reminder.remind_at.asc())
+    )
+    return ApiResponse(data=[_reminder_data(item) for item in result.scalars().all()])
+
+
 @router.get("/{task_id}/reminder-strategy", response_model=ApiResponse)
 async def get_task_reminder_strategy(task_id: str, db: AsyncSession = Depends(get_db)):
     await _load_task(db, task_id)
     strategy = await _load_strategy(db, task_id)
     return ApiResponse(data=None if strategy is None else _strategy_data(strategy))
+
+
+@router.post("/{task_id}/reminder-strategy/generate", response_model=ApiResponse)
+async def generate_task_reminder_strategy(
+    task_id: str,
+    data: TaskReminderStrategyGenerateRequest = Body(default_factory=TaskReminderStrategyGenerateRequest),
+    db: AsyncSession = Depends(get_db),
+):
+    task = await _load_task(db, task_id)
+    strategy = await ensure_task_reminder_strategy(
+        db,
+        task,
+        replace_suggested=data.replace_suggested,
+    )
+    await db.commit()
+    if strategy is None:
+        return ApiResponse(data=None)
+    await db.refresh(strategy)
+    return ApiResponse(data=_strategy_data(strategy))
 
 
 @router.post("/{task_id}/reminder-strategy/confirm", response_model=ApiResponse)

@@ -353,17 +353,20 @@ doc/guide/testing-quality.md
 
 ### 阶段三：Memo AI 分类与标签元数据
 
-状态：基础链路已落地。
+状态：功能地基已落地，UI 消费待补。
 
 已完成：
 
 ```text
 服务端 MemoClassification / TagMetadata 模型
 PowerSync memo_classifications / tag_metadata schema
-备忘分类读取、确认、拒绝接口
+服务端与本地 Memo 分类生成器
+备忘创建 / 更新自动生成 AI 分类建议
+备忘分类读取、生成、确认、拒绝接口
 标签统计接口
-LocalCoreBridge memo classifications / tag summary
-MemoRepository 分类读取、确认、拒绝、标签统计
+tag_metadata 列表 / 创建更新 / 删除接口
+LocalCoreBridge memo classifications / tag summary / tag metadata
+MemoRepository 分类读取、生成、确认、拒绝、标签统计、标签元数据管理
 rejected 分类不进入标签统计
 Memo.tags 保留兼容但不代表 AI 分类状态
 ```
@@ -371,10 +374,8 @@ Memo.tags 保留兼容但不代表 AI 分类状态
 仍待补齐：
 
 ```text
-AI 自动建议生成器
-备忘列表按 classification_status 的本地精确过滤
-tag_metadata 创建 / 更新 API
-备忘页 UI 消费分类状态
+备忘页 UI 消费分类状态、标签颜色和筛选
+更复杂的语义分类模型或可插拔本地模型
 ```
 
 平台重点：本地数据模型 / PowerSync schema / Local Core query service / Flutter repository / 服务端同构 API。
@@ -397,7 +398,11 @@ local tag summary
 ```text
 LocalCoreBridge.searchMemos(filters)
 LocalCoreBridge.getMemoClassifications(memoId)
+LocalCoreBridge.generateMemoClassifications(memoId)
 LocalCoreBridge.getTagSummary(kind)
+LocalCoreBridge.listTagMetadata(kind)
+LocalCoreBridge.upsertTagMetadata(input)
+LocalCoreBridge.deleteTagMetadata(name)
 ```
 
 云端正常读取入口：
@@ -405,9 +410,13 @@ LocalCoreBridge.getTagSummary(kind)
 ```text
 GET /api/v1/memos?tag=&classification_status=&type=&limit=&cursor=
 GET /api/v1/memos/{memo_id}/classifications
+POST /api/v1/memos/{memo_id}/classifications/generate
 POST /api/v1/memos/{memo_id}/classifications/confirm
 POST /api/v1/memos/{memo_id}/classifications/reject
 GET /api/v1/tags/summary?kind=memo
+GET /api/v1/tags/metadata?kind=memo
+POST /api/v1/tags/metadata
+DELETE /api/v1/tags/metadata/{tag_name}?kind=memo
 ```
 
 完成后回写：
@@ -427,26 +436,30 @@ doc/design/ui-information-architecture.md
 已完成：
 
 ```text
-服务端 TaskReminderStrategy 模型
-PowerSync task_reminder_strategies schema
+服务端 TaskReminderStrategy / Reminder 模型
+PowerSync task_reminder_strategies / reminders schema
+服务端与本地任务预警策略生成器
+任务创建 / 更新自动生成提醒策略建议
 GET /api/v1/tasks?group=today|urgent|warning|all
+GET /api/v1/tasks/reminders
 GET /api/v1/tasks/{task_id}/reminder-strategy
+POST /api/v1/tasks/{task_id}/reminder-strategy/generate
 POST /api/v1/tasks/{task_id}/reminder-strategy/confirm
 POST /api/v1/tasks/{task_id}/reminder-strategy/dismiss
-LocalCoreBridge task reminder strategy 读取、确认、dismiss
-TaskRepository reminderStrategy / confirmReminderStrategy / dismissReminderStrategy
+LocalCoreBridge task reminder strategy 生成、读取、确认、dismiss、reminders 读取
+TaskRepository generateReminderStrategy / reminders / reminderStrategy / confirmReminderStrategy / dismissReminderStrategy
 没有策略时返回 null，不伪造 AI 预警
 策略确认后才写入 Task.remind_at
+策略确认后写入 pending reminders
 dismissed 策略不参与任务分组
 ```
 
 仍待补齐：
 
 ```text
-AI 预警策略自动生成器
-Reminder 表落地写入
-任务页 UI 消费策略状态
-首页 attention_items 接入策略增强
+任务页 UI 消费策略状态和 reminders 队列
+首页 attention_items 继续增强未来几天准备事项排序
+系统通知 / App 内提醒派发
 ```
 
 平台重点：本地数据模型 / PowerSync schema / Local Core strategy service / reminder 边界 / Flutter repository / 服务端同构 API。
@@ -469,16 +482,20 @@ local task warning groups
 
 ```text
 LocalCoreBridge.listTasks(group)
+LocalCoreBridge.generateTaskReminderStrategy(taskId)
 LocalCoreBridge.getTaskReminderStrategy(taskId)
 LocalCoreBridge.confirmTaskReminderStrategy(taskId)
 LocalCoreBridge.dismissTaskReminderStrategy(taskId)
+LocalCoreBridge.listTaskReminders(status)
 ```
 
 云端正常读取入口：
 
 ```text
 GET /api/v1/tasks?group=today|urgent|warning|all
+GET /api/v1/tasks/reminders
 GET /api/v1/tasks/{task_id}/reminder-strategy
+POST /api/v1/tasks/{task_id}/reminder-strategy/generate
 POST /api/v1/tasks/{task_id}/reminder-strategy/confirm
 POST /api/v1/tasks/{task_id}/reminder-strategy/dismiss
 ```

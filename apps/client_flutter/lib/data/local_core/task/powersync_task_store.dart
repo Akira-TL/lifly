@@ -1,6 +1,7 @@
 import 'package:client_flutter/data/local_core/local_core_context.dart';
 import 'package:client_flutter/data/local_core/local_core_models.dart';
 import 'package:client_flutter/data/local_core/task/local_task_mapper.dart';
+import 'package:client_flutter/data/local_core/task/local_task_reminder_strategy_engine.dart';
 import 'package:client_flutter/data/local_core/write/local_core_audit_log_writer.dart';
 import 'package:client_flutter/data/local_core/write/local_core_write_handle.dart';
 import 'package:client_flutter/data/local_core/write/local_core_write_policy.dart';
@@ -59,6 +60,7 @@ class PowerSyncTaskStore {
         metadata,
         sourceCaptureId: createInput.sourceCaptureId,
       );
+      await _replaceSuggestedStrategy(handle, task, context);
       await auditLogWriter.write(
         handle,
         LocalCoreAuditLogInput(
@@ -233,6 +235,7 @@ class PowerSyncTaskStore {
       );
 
       await _updateTask(handle, updatedTask, metadata);
+      await _replaceSuggestedStrategy(handle, updatedTask, context);
       await auditLogWriter.write(
         handle,
         LocalCoreAuditLogInput(
@@ -273,6 +276,24 @@ class PowerSyncTaskStore {
     return row == null ? null : _strategyFromRow(row);
   }
 
+  Future<LocalTaskReminderStrategy?> generateTaskReminderStrategy(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final taskId = input['task_id'] as String? ?? input['id'] as String?;
+    if (taskId == null || taskId.trim().isEmpty) {
+      throw ArgumentError('task_id is required');
+    }
+    await syncService.ensureInitialized();
+    final task = await _findTaskById(taskId);
+    if (task == null) throw StateError('Task not found: $taskId');
+    final strategy = await LocalCoreWriteExecutor(syncService: syncService)
+        .run<LocalTaskReminderStrategy?>((handle) async {
+      return _replaceSuggestedStrategy(handle, task, context);
+    });
+    return strategy;
+  }
+
   Future<LocalTaskReminderStrategy> confirmTaskReminderStrategy(
     Map<String, Object?> input,
     LocalCoreContext context,
@@ -284,6 +305,7 @@ class PowerSyncTaskStore {
         'task_id': strategy.taskId,
         'remind_at': remindAt.toIso8601String(),
       }, context);
+      await _upsertTaskReminderRecord(strategy, context);
     }
     return strategy;
   }
@@ -309,8 +331,14 @@ class PowerSyncTaskStore {
       );
     }
     await syncService.ensureInitialized();
+    final existing = strategyId == null
+        ? await syncService.db.getOptional(
+            'SELECT id FROM task_reminder_strategies WHERE task_id = ? AND strategy_status != ? ORDER BY updated_at DESC LIMIT 1',
+            [taskId, 'dismissed'],
+          )
+        : null;
     final now = context.effectiveNow.toUtc().toIso8601String();
-    final id = strategyId ?? policy.nextEntityId('task_strategy');
+    final id = strategyId ?? existing?['id'] as String? ?? policy.nextEntityId('task_strategy');
     await syncService.db.execute(
       'INSERT OR REPLACE INTO task_reminder_strategies('
       'id, user_id, task_id, warning_level, warning_reason, preparation_window_days, '
@@ -354,6 +382,131 @@ class PowerSyncTaskStore {
       [id],
     );
     return _strategyFromRow(row);
+  }
+
+  Future<List<LocalReminderRecord>> listTaskReminders(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final status = input['status'] as String? ?? input['reminder_status'] as String? ?? 'pending';
+    await syncService.ensureInitialized();
+    final rows = await syncService.db.getAll(
+      'SELECT id, target_type, target_id, remind_at, channel, reminder_status, created_at '
+      'FROM reminders WHERE target_type = ? AND reminder_status = ? ORDER BY remind_at ASC',
+      ['task', status],
+    );
+    return rows.map(_reminderFromRow).toList(growable: false);
+  }
+
+  Future<LocalTaskReminderStrategy?> _replaceSuggestedStrategy(
+    LocalCoreWriteHandle handle,
+    LocalTaskRecord task,
+    LocalCoreContext context,
+  ) async {
+    final existing = await handle.getOptional(
+      'SELECT id, strategy_status FROM task_reminder_strategies '
+      'WHERE task_id = ? AND strategy_status != ? ORDER BY updated_at DESC LIMIT 1',
+      [task.id, 'dismissed'],
+    );
+    if (existing?['strategy_status'] == 'confirmed') {
+      return null;
+    }
+    final suggestion = const LocalTaskReminderStrategyEngine().suggest(
+      task,
+      now: context.effectiveNow,
+    );
+    if (suggestion == null) return null;
+    if (existing != null) {
+      await handle.execute(
+        'DELETE FROM task_reminder_strategies WHERE id = ? AND source = ? AND strategy_status = ?',
+        [existing['id'], 'ai', 'suggested'],
+      );
+    }
+    final now = context.effectiveNow.toUtc().toIso8601String();
+    final id = policy.nextEntityId('task_strategy');
+    await handle.execute(
+      'INSERT INTO task_reminder_strategies('
+      'id, user_id, task_id, warning_level, warning_reason, preparation_window_days, '
+      'ai_suggested_remind_at, strategy_status, source, created_at, updated_at'
+      ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        id,
+        context.userId,
+        task.id,
+        suggestion.warningLevel,
+        suggestion.warningReason,
+        suggestion.preparationWindowDays,
+        suggestion.aiSuggestedRemindAt?.toIso8601String(),
+        'suggested',
+        'ai',
+        now,
+        now,
+      ],
+    );
+    final row = await handle.getOptional(
+      'SELECT id, task_id, warning_level, warning_reason, preparation_window_days, '
+      'ai_suggested_remind_at, strategy_status, source, confirmed_at, dismissed_at, created_at, updated_at '
+      'FROM task_reminder_strategies WHERE id = ?',
+      [id],
+    );
+    return row == null ? null : _strategyFromRow(row);
+  }
+
+  Future<void> _upsertTaskReminderRecord(
+    LocalTaskReminderStrategy strategy,
+    LocalCoreContext context,
+  ) async {
+    final remindAt = strategy.aiSuggestedRemindAt;
+    if (remindAt == null) return;
+    await syncService.ensureInitialized();
+    final now = context.effectiveNow.toUtc().toIso8601String();
+    final existing = await syncService.db.getOptional(
+      'SELECT id FROM reminders WHERE target_type = ? AND target_id = ? AND channel = ? AND reminder_status = ? '
+      'ORDER BY created_at DESC LIMIT 1',
+      ['task', strategy.taskId, 'app', 'pending'],
+    );
+    if (existing == null) {
+      await syncService.db.execute(
+        'INSERT INTO reminders(id, user_id, target_type, target_id, remind_at, channel, reminder_status, created_at) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          policy.nextEntityId('reminder'),
+          context.userId,
+          'task',
+          strategy.taskId,
+          remindAt.toIso8601String(),
+          'app',
+          'pending',
+          now,
+        ],
+      );
+    } else {
+      await syncService.db.execute(
+        'UPDATE reminders SET remind_at = ?, reminder_status = ? WHERE id = ?',
+        [remindAt.toIso8601String(), 'pending', existing['id']],
+      );
+    }
+  }
+
+  LocalReminderRecord _reminderFromRow(Map<String, Object?> row) {
+    return LocalReminderRecord(
+      id: row['id'] as String,
+      targetType: row['target_type'] as String? ?? 'task',
+      targetId: row['target_id'] as String,
+      remindAt: _readDateTime(row['remind_at']),
+      channel: row['channel'] as String? ?? 'app',
+      status: row['reminder_status'] as String? ?? 'pending',
+      createdAt: _readDateTime(row['created_at']),
+    );
+  }
+
+  Future<LocalTaskRecord?> _findTaskById(String taskId) async {
+    final row = await syncService.db.getOptional(
+      'SELECT id, title, description, due_at, remind_at, priority, task_status, completed_at, status, revision, created_at, updated_at '
+      'FROM tasks WHERE id = ? AND status = ?',
+      [taskId, 'active'],
+    );
+    return row == null ? null : LocalTaskMapper.fromRow(row);
   }
 
   Future<Map<String, LocalTaskReminderStrategy>> _strategyMap() async {

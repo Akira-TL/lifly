@@ -151,6 +151,34 @@ class MemoRepository {
     }
   }
 
+  Future<List<Map<String, dynamic>>> generateClassifications(
+    String memoId, {
+    bool replaceSuggested = true,
+    bool includeUserTags = true,
+  }) async {
+    final data = {
+      'replace_suggested': replaceSuggested,
+      'include_user_tags': includeUserTags,
+    };
+    if (dataMode == LiflyDataMode.local) {
+      final items = await localCore!.generateMemoClassifications({
+        ...data,
+        'memo_id': memoId,
+      }, LocalCoreContext.flutterUser());
+      return items.map(_classificationToMap).toList(growable: false);
+    }
+
+    final res = await api.post(
+      '/memos/$memoId/classifications/generate',
+      data: data,
+    );
+    final items = res['data'] as List? ?? const [];
+    return items
+        .whereType<Map>()
+        .map((item) => item.cast<String, dynamic>())
+        .toList(growable: false);
+  }
+
   Future<Map<String, dynamic>> confirmClassification(
     String memoId,
     Map<String, dynamic> data,
@@ -213,6 +241,55 @@ class MemoRepository {
       }
       throw StateError('Tag summary unavailable: $error');
     }
+  }
+
+  Future<List<Map<String, dynamic>>> tagMetadata({String kind = 'memo'}) async {
+    if (dataMode == LiflyDataMode.local) {
+      final items = await localCore!.listTagMetadata({
+        'kind': kind,
+      }, LocalCoreContext.flutterUser());
+      return items.map(_tagMetadataToMap).toList(growable: false);
+    }
+
+    final res = await api.get('/tags/metadata', params: {'kind': kind});
+    final items = res['data'] as List? ?? const [];
+    return items
+        .whereType<Map>()
+        .map((item) => item.cast<String, dynamic>())
+        .toList(growable: false);
+  }
+
+  Future<Map<String, dynamic>> upsertTagMetadata(
+    Map<String, dynamic> data,
+  ) async {
+    if (dataMode == LiflyDataMode.local) {
+      final item = await localCore!.upsertTagMetadata(
+        data,
+        LocalCoreContext.flutterUser(),
+      );
+      return _tagMetadataToMap(item);
+    }
+
+    final res = await api.post('/tags/metadata', data: data);
+    return Map<String, dynamic>.from(res['data'] as Map);
+  }
+
+  Future<Map<String, dynamic>> deleteTagMetadata(
+    String name, {
+    String kind = 'memo',
+  }) async {
+    if (dataMode == LiflyDataMode.local) {
+      final item = await localCore!.deleteTagMetadata({
+        'name': name,
+        'kind': kind,
+      }, LocalCoreContext.flutterUser());
+      return _tagMetadataToMap(item);
+    }
+
+    final res = await api.delete(
+      '/tags/metadata/${Uri.encodeComponent(name)}?kind=${Uri.encodeQueryComponent(kind)}',
+    );
+    return Map<String, dynamic>.from(res['data'] as Map);
   }
 
   Future<void> delete(String id) async {
@@ -292,6 +369,20 @@ class MemoRepository {
       'color_token': item.colorToken,
       'icon_token': item.iconToken,
       'sort_order': item.sortOrder,
+    };
+  }
+
+  Map<String, dynamic> _tagMetadataToMap(LocalTagMetadata item) {
+    return {
+      'id': item.id,
+      'name': item.name,
+      'kind': item.kind,
+      'color_token': item.colorToken,
+      'icon_token': item.iconToken,
+      'sort_order': item.sortOrder,
+      'status': item.status,
+      'created_at': item.createdAt.toIso8601String(),
+      'updated_at': item.updatedAt.toIso8601String(),
     };
   }
 

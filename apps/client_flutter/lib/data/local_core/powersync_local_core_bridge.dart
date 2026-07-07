@@ -140,6 +140,14 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
+  Future<List<LocalMemoClassification>> generateMemoClassifications(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _memoStore.generateMemoClassifications(input, context);
+  }
+
+  @override
   Future<LocalMemoClassification> confirmMemoClassification(
     Map<String, Object?> input,
     LocalCoreContext context,
@@ -161,6 +169,30 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
     LocalCoreContext context,
   ) {
     return _memoStore.getTagSummary(input, context);
+  }
+
+  @override
+  Future<List<LocalTagMetadata>> listTagMetadata(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _memoStore.listTagMetadata(input, context);
+  }
+
+  @override
+  Future<LocalTagMetadata> upsertTagMetadata(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _memoStore.upsertTagMetadata(input, context);
+  }
+
+  @override
+  Future<LocalTagMetadata> deleteTagMetadata(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _memoStore.deleteTagMetadata(input, context);
   }
 
   @override
@@ -268,6 +300,14 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
+  Future<LocalTaskReminderStrategy?> generateTaskReminderStrategy(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _taskStore.generateTaskReminderStrategy(input, context);
+  }
+
+  @override
   Future<LocalTaskReminderStrategy> confirmTaskReminderStrategy(
     Map<String, Object?> input,
     LocalCoreContext context,
@@ -281,6 +321,14 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
     LocalCoreContext context,
   ) {
     return _taskStore.dismissTaskReminderStrategy(input, context);
+  }
+
+  @override
+  Future<List<LocalReminderRecord>> listTaskReminders(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _taskStore.listTaskReminders(input, context);
   }
 
   @override

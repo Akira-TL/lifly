@@ -95,6 +95,30 @@ class LocalTagSummary {
   });
 }
 
+class LocalTagMetadata {
+  final String id;
+  final String name;
+  final String kind;
+  final String? colorToken;
+  final String? iconToken;
+  final int? sortOrder;
+  final String status;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const LocalTagMetadata({
+    required this.id,
+    required this.name,
+    required this.kind,
+    required this.colorToken,
+    required this.iconToken,
+    required this.sortOrder,
+    required this.status,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+}
+
 class LocalLedgerTransactionRecord {
   final String id;
   final String direction;
@@ -182,6 +206,26 @@ class LocalTaskReminderStrategy {
     required this.updatedAt,
     required this.confirmedAt,
     required this.dismissedAt,
+  });
+}
+
+class LocalReminderRecord {
+  final String id;
+  final String targetType;
+  final String targetId;
+  final DateTime remindAt;
+  final String channel;
+  final String status;
+  final DateTime createdAt;
+
+  const LocalReminderRecord({
+    required this.id,
+    required this.targetType,
+    required this.targetId,
+    required this.remindAt,
+    required this.channel,
+    required this.status,
+    required this.createdAt,
   });
 }
 

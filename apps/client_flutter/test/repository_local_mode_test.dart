@@ -67,7 +67,9 @@ void main() {
       'priority': 'normal',
     });
 
-    expect(await repo.reminderStrategy(task.id), isNull);
+    final generated = await repo.reminderStrategy(task.id);
+    expect(generated, isNotNull);
+    expect(generated!['source'], 'ai');
     final warningPageBefore = await repo.listPage(group: 'warning');
     expect(warningPageBefore.items.map((item) => item.id), contains(task.id));
 
@@ -118,10 +120,11 @@ void main() {
       final tags = await memoRepo.tagSummary();
 
       expect(confirmed['status'], 'confirmed');
-      expect(classifications.length, 2);
-      expect(tags.length, 1);
-      expect(tags.single['tag'], '读书');
-      expect(tags.single['confirmed_count'], 1);
+      expect(classifications.length, greaterThanOrEqualTo(2));
+      expect(classifications.map((item) => item['tag']), contains('读书'));
+      expect(tags.map((item) => item['tag']), contains('读书'));
+      final readingTag = tags.firstWhere((item) => item['tag'] == '读书');
+      expect(readingTag['confirmed_count'], 1);
     },
   );
 

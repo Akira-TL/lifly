@@ -1,5 +1,6 @@
 import 'package:client_flutter/data/local_core/local_core_context.dart';
 import 'package:client_flutter/data/local_core/local_core_models.dart';
+import 'package:client_flutter/data/local_core/memo/local_memo_classification_engine.dart';
 import 'package:client_flutter/data/local_core/memo/local_memo_mapper.dart';
 import 'package:client_flutter/data/local_core/write/local_core_audit_log_writer.dart';
 import 'package:client_flutter/data/local_core/write/local_core_write_handle.dart';
@@ -67,6 +68,7 @@ class PowerSyncMemoStore {
         ),
       );
     });
+    await generateMemoClassifications({'memo_id': memo.id}, context);
 
     return memo;
   }
@@ -124,6 +126,7 @@ class PowerSyncMemoStore {
         ),
       );
     });
+    await generateMemoClassifications({'memo_id': updatedMemo.id}, context);
 
     return updatedMemo;
   }
@@ -143,6 +146,85 @@ class PowerSyncMemoStore {
       [memoId, memoId, status, status],
     );
     return rows.map(_classificationFromRow).toList(growable: false);
+  }
+
+  Future<List<LocalMemoClassification>> generateMemoClassifications(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final memoId = input['memo_id'] as String? ?? input['id'] as String?;
+    if (memoId == null || memoId.trim().isEmpty) {
+      throw ArgumentError('memo_id is required');
+    }
+    final replaceSuggested = input['replace_suggested'] as bool? ?? true;
+    final includeUserTags = input['include_user_tags'] as bool? ?? true;
+    await syncService.ensureInitialized();
+    final memo = await _activeMemoById(memoId);
+    if (memo == null) throw StateError('Memo not found: $memoId');
+    if (replaceSuggested) {
+      await syncService.db.execute(
+        'DELETE FROM memo_classifications WHERE memo_id = ? AND source = ? AND status = ?',
+        [memo.id, 'ai', 'suggested'],
+      );
+    }
+    final existingRows = await syncService.db.getAll(
+      'SELECT tag, status FROM memo_classifications WHERE memo_id = ? AND status != ?',
+      [memo.id, 'rejected'],
+    );
+    final existing = <String, String>{
+      for (final row in existingRows) row['tag'] as String: row['status'] as String,
+    };
+    final now = context.effectiveNow.toUtc().toIso8601String();
+    if (includeUserTags) {
+      for (final rawTag in memo.tags) {
+        final tag = rawTag.trim();
+        if (tag.isEmpty || existing.containsKey(tag)) continue;
+        await _ensureTagMetadata(tag: tag, kind: 'memo', context: context);
+        await syncService.db.execute(
+          'INSERT INTO memo_classifications('
+          'id, user_id, memo_id, tag, source, status, confidence, reason, confirmed_at, created_at, updated_at'
+          ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [
+            policy.nextEntityId('memo_cls'),
+            context.userId,
+            memo.id,
+            tag,
+            'user',
+            'confirmed',
+            1.0,
+            '来自用户手动标签。',
+            now,
+            now,
+            now,
+          ],
+        );
+        existing[tag] = 'confirmed';
+      }
+    }
+    final engine = const LocalMemoClassificationEngine();
+    for (final suggestion in engine.classify(memo)) {
+      await _ensureTagMetadata(tag: suggestion.tag, kind: 'memo', context: context);
+      if (existing[suggestion.tag] == 'confirmed') continue;
+      await syncService.db.execute(
+        'INSERT INTO memo_classifications('
+        'id, user_id, memo_id, tag, source, status, confidence, reason, created_at, updated_at'
+        ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          policy.nextEntityId('memo_cls'),
+          context.userId,
+          memo.id,
+          suggestion.tag,
+          'ai',
+          'suggested',
+          suggestion.confidence,
+          suggestion.reason,
+          now,
+          now,
+        ],
+      );
+      existing[suggestion.tag] = 'suggested';
+    }
+    return getMemoClassifications({'memo_id': memo.id}, context);
   }
 
   Future<LocalMemoClassification> confirmMemoClassification(
@@ -193,6 +275,75 @@ class PowerSyncMemoStore {
         .toList(growable: false);
   }
 
+  Future<List<LocalTagMetadata>> listTagMetadata(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final kind = input['kind'] as String? ?? 'memo';
+    final status = input['status'] as String? ?? 'active';
+    await syncService.ensureInitialized();
+    final rows = await syncService.db.getAll(
+      'SELECT id, name, kind, color_token, icon_token, sort_order, status, created_at, updated_at '
+      'FROM tag_metadata WHERE kind = ? AND status = ? ORDER BY sort_order ASC, name ASC',
+      [kind, status],
+    );
+    return rows.map(_tagMetadataFromRow).toList(growable: false);
+  }
+
+  Future<LocalTagMetadata> upsertTagMetadata(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final name = (input['name'] as String?)?.trim();
+    if (name == null || name.isEmpty) throw ArgumentError('name is required');
+    final kind = input['kind'] as String? ?? 'memo';
+    final status = input['status'] as String? ?? 'active';
+    await syncService.ensureInitialized();
+    await _ensureTagMetadata(
+      tag: name,
+      kind: kind,
+      context: context,
+      colorToken: input['color_token'] as String?,
+      iconToken: input['icon_token'] as String?,
+      sortOrder: input['sort_order'] as int?,
+      status: status,
+      overrideExisting: true,
+    );
+    final row = await syncService.db.get(
+      'SELECT id, name, kind, color_token, icon_token, sort_order, status, created_at, updated_at '
+      'FROM tag_metadata WHERE name = ? AND kind = ? ORDER BY updated_at DESC LIMIT 1',
+      [name, kind],
+    );
+    return _tagMetadataFromRow(row);
+  }
+
+  Future<LocalTagMetadata> deleteTagMetadata(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final name = (input['name'] as String?)?.trim();
+    if (name == null || name.isEmpty) throw ArgumentError('name is required');
+    final kind = input['kind'] as String? ?? 'memo';
+    await syncService.ensureInitialized();
+    final row = await syncService.db.getOptional(
+      'SELECT id, name, kind, color_token, icon_token, sort_order, status, created_at, updated_at '
+      'FROM tag_metadata WHERE name = ? AND kind = ? ORDER BY updated_at DESC LIMIT 1',
+      [name, kind],
+    );
+    if (row == null) throw StateError('Tag metadata not found: $name');
+    final now = context.effectiveNow.toUtc().toIso8601String();
+    await syncService.db.execute(
+      'UPDATE tag_metadata SET status = ?, updated_at = ? WHERE id = ?',
+      ['deleted', now, row['id']],
+    );
+    final updated = await syncService.db.get(
+      'SELECT id, name, kind, color_token, icon_token, sort_order, status, created_at, updated_at '
+      'FROM tag_metadata WHERE id = ?',
+      [row['id']],
+    );
+    return _tagMetadataFromRow(updated);
+  }
+
   Future<LocalMemoRecord> deleteMemo(
     Map<String, Object?> input,
     LocalCoreContext context,
@@ -240,6 +391,76 @@ class PowerSyncMemoStore {
     return deletedMemo;
   }
 
+  Future<LocalMemoRecord?> _activeMemoById(String memoId) async {
+    final row = await syncService.db.getOptional(
+      'SELECT id, type, title, content_markdown, tags, status, revision, created_at, updated_at '
+      'FROM memos WHERE id = ? AND status = ?',
+      [memoId, 'active'],
+    );
+    return row == null ? null : LocalMemoMapper.fromRow(row);
+  }
+
+  Future<void> _ensureTagMetadata({
+    required String tag,
+    required String kind,
+    required LocalCoreContext context,
+    String? colorToken,
+    String? iconToken,
+    int? sortOrder,
+    String status = 'active',
+    bool overrideExisting = false,
+  }) async {
+    final engine = const LocalMemoClassificationEngine();
+    final rule = engine.tagRuleFor(tag);
+    final existing = await syncService.db.getOptional(
+      'SELECT id, color_token, icon_token, sort_order, status, created_at FROM tag_metadata '
+      'WHERE name = ? AND kind = ? ORDER BY updated_at DESC LIMIT 1',
+      [tag, kind],
+    );
+    final now = context.effectiveNow.toUtc().toIso8601String();
+    final id = existing?['id'] as String? ?? policy.nextEntityId('tag_meta');
+    final resolvedColor = overrideExisting
+        ? colorToken
+        : (existing?['color_token'] as String? ?? colorToken ?? rule.colorToken);
+    final resolvedIcon = overrideExisting
+        ? iconToken
+        : (existing?['icon_token'] as String? ?? iconToken ?? rule.iconToken);
+    final resolvedSort = overrideExisting
+        ? sortOrder
+        : (existing?['sort_order'] as int? ?? sortOrder ?? rule.sortOrder);
+    await syncService.db.execute(
+      'INSERT OR REPLACE INTO tag_metadata('
+      'id, user_id, name, kind, color_token, icon_token, sort_order, status, created_at, updated_at'
+      ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        id,
+        context.userId,
+        tag,
+        kind,
+        resolvedColor,
+        resolvedIcon,
+        resolvedSort,
+        status,
+        existing?['created_at'] as String? ?? now,
+        now,
+      ],
+    );
+  }
+
+  LocalTagMetadata _tagMetadataFromRow(Map<String, Object?> row) {
+    return LocalTagMetadata(
+      id: row['id'] as String,
+      name: row['name'] as String,
+      kind: row['kind'] as String? ?? 'memo',
+      colorToken: row['color_token'] as String?,
+      iconToken: row['icon_token'] as String?,
+      sortOrder: row['sort_order'] as int?,
+      status: row['status'] as String? ?? 'active',
+      createdAt: _readDateTime(row['created_at']),
+      updatedAt: _readDateTime(row['updated_at']),
+    );
+  }
+
   Future<LocalMemoClassification> _upsertClassification(
     Map<String, Object?> input,
     LocalCoreContext context,
@@ -256,6 +477,9 @@ class PowerSyncMemoStore {
       );
     }
     await syncService.ensureInitialized();
+    if (tag != null && tag.isNotEmpty) {
+      await _ensureTagMetadata(tag: tag, kind: 'memo', context: context);
+    }
     final now = context.effectiveNow.toUtc();
     final id = classificationId ?? policy.nextEntityId('memo_cls');
     await syncService.db.execute(

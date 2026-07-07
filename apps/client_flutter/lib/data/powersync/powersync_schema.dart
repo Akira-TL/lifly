@@ -75,6 +75,16 @@ const liflyPowerSyncSchema = Schema([
     Column.text('created_at'),
     Column.text('updated_at'),
   ]),
+  Table('reminders', [
+    Column.text('id'),
+    Column.text('user_id'),
+    Column.text('target_type'),
+    Column.text('target_id'),
+    Column.text('remind_at'),
+    Column.text('channel'),
+    Column.text('reminder_status'),
+    Column.text('created_at'),
+  ]),
   Table('ledger_transactions', [
     Column.text('id'),
     Column.text('user_id'),
