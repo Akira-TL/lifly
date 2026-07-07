@@ -1,6 +1,6 @@
 # Lifly 文档总览
 
-Lifly 文档按用途分层，不再使用数字前缀区分文档。固定内容进入固定目录，临时计划和阶段流水进入 archive 或删除。
+Lifly 文档按用途分层，不再使用数字前缀区分文档。固定内容进入固定目录，临时执行计划进入 plan，完成后回写正式文档并删除。
 
 ## 目录结构
 
@@ -12,6 +12,7 @@ doc/
 ├─ design/           客户端、UI 信息架构、AI 交互、角色边界
 ├─ guide/            开发指南、路线图、当前状态、任务池、测试质量
 ├─ legal/            安全隐私、开源商业化、隐私政策、用户协议
+├─ plan/             临时执行计划，完成后回写正式文档并删除
 └─ requirements/     产品需求、MVP 范围、业务模块需求
 ```
 
@@ -39,6 +40,7 @@ design/ui-information-architecture.md
 guide/development.md
 guide/current-status.md
 guide/roadmap.md
+plan/mobile-product-foundation.md
 ```
 
 ## 维护规则
@@ -49,5 +51,6 @@ guide/roadmap.md
 4. 客户端交互、页面、导航进入 `design/`。
 5. 开发、测试、路线、状态进入 `guide/`。
 6. 安全、隐私、协议、商业化进入 `legal/`。
-7. 旧计划、旧冻结、历史评审进入 `archive/`。
-8. 不再新增数字前缀文档名。
+7. 临时执行计划进入 `plan/`，完成后必须回写固定文档并删除计划。
+8. 旧计划、旧冻结、历史评审进入 `archive/`。
+9. 不再新增数字前缀文档名。
