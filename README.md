@@ -21,25 +21,25 @@ AI Capture 聊天式体验
 正式文档入口：
 
 ```text
-docs/README.md
+doc/README.md
 ```
 
 常用文档：
 
 ```text
-docs/01-product-definition.md
-docs/03-architecture-overview.md
-docs/06-data-model.md
-docs/09-ai-interaction-design.md
-docs/10-client-app.md
-docs/11-backend-api.md
-docs/13-memo-doc-system.md
-docs/14-ledger-system.md
-docs/15-task-reminder-system.md
-docs/20-devops-deployment.md
-docs/22-ui-information-architecture.md
-docs/24-roadmap.md
-docs/25-ai-execution-model.md
+doc/requirements/product-definition.md
+doc/architecture/architecture-overview.md
+doc/architecture/data-model.md
+doc/design/ai-interaction.md
+doc/design/client-app.md
+doc/api/api-contract.md
+doc/requirements/memo-doc-system.md
+doc/requirements/ledger-system.md
+doc/requirements/task-reminder-system.md
+doc/guide/development.md
+doc/design/ui-information-architecture.md
+doc/guide/roadmap.md
+doc/guide/ai-execution-model.md
 ```
 
 临时开发计划和已完成阶段记录不再作为长期文档入口维护。固定内容应迁移到上面的正式文档。
@@ -64,7 +64,7 @@ packages/protocol
 packages/domain
 packages/shared
 infra
-docs
+doc
 ```
 
 ## AI Agent Rule
@@ -74,7 +74,7 @@ Before editing code, every AI agent must read:
 ```text
 CLAUDE.md
 /home/Akira/.claude/CLAUDE.md
-related module docs
+related module docs under doc/
 current Issue or user request
 ```
 

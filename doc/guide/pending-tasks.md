@@ -1,0 +1,93 @@
+# Lifly Issues Backlog
+
+本文档只保留 Issue 种子和长期任务池，不再链接临时开发计划文档。已完成版本的实现细节以代码和正式模块文档为准。
+
+## 1. 已完成能力族
+
+```text
+v0.1 Foundation / Governance
+v0.2 Local Data
+v0.3 Cloud Sync
+v0.4 AI Write / MCP
+v0.5 Assets & Import / Export
+v0.6 Import / Export / Asset Experience
+```
+
+已完成能力包括：
+
+```text
+备忘 / 记账 / 任务 CRUD
+本地数据和同步基础
+Cloud MCP / Local MCP
+capture_parse / capture_commit / capture_undo
+审计 / 回收站 / 撤销
+附件 metadata / 上传意图 / 外链注册
+通用 CSV / 支付宝 / 微信账单导入
+导入预览 / 提交 / 回滚
+导出基础能力
+Flutter 真实 API 接入和导入导出体验层
+```
+
+## 2. 当前任务池：客户端体验与手机端产品地基
+
+### LC-0701 Home Overview read model
+
+目标：新增产品化首页聚合接口，支撑今日关注、紧急事项、混合最近内容流和数据状态摘要。
+
+验收：
+
+```text
+/api/v1/home/overview 返回 schema_version、attention_items、today_metrics、finance_overview、recent_activity 等结构
+/dashboard 保留兼容
+服务端测试覆盖主要聚合规则
+Flutter repository/entity 可消费真实字段
+```
+
+### LC-0702 Ledger budgets and category aggregation
+
+目标：补齐预算、分类占比、月环比和消费洞察地基。
+
+验收：
+
+```text
+ledger_budgets 模型明确
+ledger overview/category summary/insights 接口明确
+没有预算时返回 not_configured，而不是客户端假造默认预算
+```
+
+### LC-0703 Memo AI classifications and tag metadata
+
+目标：补齐备忘 AI 自动分类、分类置信度、用户确认状态和标签元数据。
+
+验收：
+
+```text
+memo_classifications 模型明确
+tag_metadata 模型明确
+备忘列表可按 tag / classification_status 筛选
+客户端不根据字符串猜测 AI 已分类状态
+```
+
+### LC-0704 Task reminder strategies
+
+目标：补齐任务预警策略、AI 提醒建议、提前准备窗口和用户确认状态。
+
+验收：
+
+```text
+task_reminder_strategies 模型明确
+任务列表 read model 可输出 urgent / warning / today 分组
+策略确认后才更新 Task.remind_at / Reminder
+```
+
+### LC-0705 Mobile five-tab shell
+
+目标：手机端底部导航收敛为：首页 / 备忘 / AI / 记账 / 任务。
+
+### LC-0706 Chat-style AI Capture
+
+目标：在现有 parse / commit / undo 基础上升级聊天式捕获体验。
+
+### LC-0707 Product foundation release gate
+
+目标：确认 v0.7 产品地基没有假数据和客户端硬编码产品规则。
