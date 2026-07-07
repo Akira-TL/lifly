@@ -47,6 +47,54 @@ class LocalMemoRecord {
   });
 }
 
+class LocalMemoClassification {
+  final String id;
+  final String memoId;
+  final String tag;
+  final String source;
+  final String status;
+  final double? confidence;
+  final String? reason;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? confirmedAt;
+
+  const LocalMemoClassification({
+    required this.id,
+    required this.memoId,
+    required this.tag,
+    required this.source,
+    required this.status,
+    required this.confidence,
+    required this.reason,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.confirmedAt,
+  });
+}
+
+class LocalTagSummary {
+  final String tag;
+  final String kind;
+  final int count;
+  final int confirmedCount;
+  final int suggestedCount;
+  final String? colorToken;
+  final String? iconToken;
+  final int? sortOrder;
+
+  const LocalTagSummary({
+    required this.tag,
+    required this.kind,
+    required this.count,
+    required this.confirmedCount,
+    required this.suggestedCount,
+    required this.colorToken,
+    required this.iconToken,
+    required this.sortOrder,
+  });
+}
+
 class LocalLedgerTransactionRecord {
   final String id;
   final String direction;

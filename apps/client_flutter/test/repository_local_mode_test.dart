@@ -52,6 +52,37 @@ void main() {
     expect(page.items.map((item) => item.id), contains(task.id));
   });
 
+  test(
+    'MemoRepository handles local classifications and tag summary',
+    () async {
+      final memoRepo = MemoRepository(
+        api,
+        localCore: localCore,
+        dataMode: LiflyDataMode.local,
+      );
+      final memo = await memoRepo.create({
+        'type': 'memo',
+        'title': '分类备忘',
+        'content_markdown': '用于测试分类边界',
+      });
+
+      final confirmed = await memoRepo.confirmClassification(memo.id, {
+        'tag': '读书',
+        'source': 'ai',
+        'confidence': 0.8,
+      });
+      await memoRepo.rejectClassification(memo.id, {'tag': '丢弃'});
+      final classifications = await memoRepo.classifications(memo.id);
+      final tags = await memoRepo.tagSummary();
+
+      expect(confirmed['status'], 'confirmed');
+      expect(classifications.length, 2);
+      expect(tags.length, 1);
+      expect(tags.single['tag'], '读书');
+      expect(tags.single['confirmed_count'], 1);
+    },
+  );
+
   test('LedgerRepository uses Local Core in local mode', () async {
     final repo = LedgerRepository(
       api,

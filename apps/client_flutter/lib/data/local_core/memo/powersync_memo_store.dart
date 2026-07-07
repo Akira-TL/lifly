@@ -123,6 +123,71 @@ class PowerSyncMemoStore {
     return updatedMemo;
   }
 
+  Future<List<LocalMemoClassification>> getMemoClassifications(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    await syncService.ensureInitialized();
+    final memoId = input['memo_id'] as String? ?? input['id'] as String?;
+    final status = input['classification_status'] as String?;
+    final rows = await syncService.db.getAll(
+      'SELECT id, memo_id, tag, source, status, confidence, reason, created_at, updated_at, confirmed_at '
+      'FROM memo_classifications '
+      'WHERE (? IS NULL OR memo_id = ?) AND (? IS NULL OR status = ?) '
+      'ORDER BY updated_at DESC',
+      [memoId, memoId, status, status],
+    );
+    return rows.map(_classificationFromRow).toList(growable: false);
+  }
+
+  Future<LocalMemoClassification> confirmMemoClassification(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    return _upsertClassification(input, context, 'confirmed');
+  }
+
+  Future<LocalMemoClassification> rejectMemoClassification(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    return _upsertClassification(input, context, 'rejected');
+  }
+
+  Future<List<LocalTagSummary>> getTagSummary(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final kind = input['kind'] as String? ?? 'memo';
+    await syncService.ensureInitialized();
+    final rows = await syncService.db.getAll(
+      'SELECT c.tag AS tag, count(*) AS count, '
+      'sum(CASE WHEN c.status = ? THEN 1 ELSE 0 END) AS confirmed_count, '
+      'sum(CASE WHEN c.status = ? THEN 1 ELSE 0 END) AS suggested_count, '
+      'm.color_token AS color_token, m.icon_token AS icon_token, m.sort_order AS sort_order '
+      'FROM memo_classifications c '
+      'LEFT JOIN tag_metadata m ON m.name = c.tag AND m.kind = ? AND m.status = ? '
+      'WHERE c.status != ? '
+      'GROUP BY c.tag, m.color_token, m.icon_token, m.sort_order '
+      'ORDER BY count DESC, c.tag ASC',
+      ['confirmed', 'suggested', kind, 'active', 'rejected'],
+    );
+    return rows
+        .map((row) {
+          return LocalTagSummary(
+            tag: row['tag'] as String,
+            kind: kind,
+            count: row['count'] as int? ?? 0,
+            confirmedCount: row['confirmed_count'] as int? ?? 0,
+            suggestedCount: row['suggested_count'] as int? ?? 0,
+            colorToken: row['color_token'] as String?,
+            iconToken: row['icon_token'] as String?,
+            sortOrder: row['sort_order'] as int?,
+          );
+        })
+        .toList(growable: false);
+  }
+
   Future<LocalMemoRecord> deleteMemo(
     Map<String, Object?> input,
     LocalCoreContext context,
@@ -168,6 +233,82 @@ class PowerSyncMemoStore {
     });
 
     return deletedMemo;
+  }
+
+  Future<LocalMemoClassification> _upsertClassification(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+    String status,
+  ) async {
+    final classificationId =
+        input['classification_id'] as String? ?? input['id'] as String?;
+    final memoId = input['memo_id'] as String?;
+    final tag = (input['tag'] as String?)?.trim();
+    if (classificationId == null &&
+        (memoId == null || tag == null || tag.isEmpty)) {
+      throw ArgumentError(
+        'memo_id and tag are required when classification_id is not provided',
+      );
+    }
+    await syncService.ensureInitialized();
+    final now = context.effectiveNow.toUtc();
+    final id = classificationId ?? policy.nextEntityId('memo_cls');
+    await syncService.db.execute(
+      'INSERT OR REPLACE INTO memo_classifications('
+      'id, user_id, memo_id, tag, source, status, confidence, reason, confirmed_at, created_at, updated_at'
+      ') VALUES (?, ?, coalesce((SELECT memo_id FROM memo_classifications WHERE id = ?), ?), '
+      'coalesce((SELECT tag FROM memo_classifications WHERE id = ?), ?), '
+      'coalesce((SELECT source FROM memo_classifications WHERE id = ?), ?), ?, '
+      'coalesce((SELECT confidence FROM memo_classifications WHERE id = ?), ?), '
+      'coalesce((SELECT reason FROM memo_classifications WHERE id = ?), ?), ?, '
+      'coalesce((SELECT created_at FROM memo_classifications WHERE id = ?), ?), ?)',
+      [
+        id,
+        context.userId,
+        id,
+        memoId,
+        id,
+        tag,
+        id,
+        input['source'] as String? ?? 'user',
+        status,
+        id,
+        (input['confidence'] as num?)?.toDouble(),
+        id,
+        input['reason'] as String?,
+        status == 'confirmed' ? now.toIso8601String() : null,
+        id,
+        now.toIso8601String(),
+        now.toIso8601String(),
+      ],
+    );
+    final rows = await getMemoClassifications({
+      'classification_status': status,
+    }, context);
+    return rows.firstWhere((item) => item.id == id);
+  }
+
+  LocalMemoClassification _classificationFromRow(Map<String, Object?> row) {
+    return LocalMemoClassification(
+      id: row['id'] as String,
+      memoId: row['memo_id'] as String,
+      tag: row['tag'] as String,
+      source: row['source'] as String? ?? 'ai',
+      status: row['status'] as String? ?? 'suggested',
+      confidence: (row['confidence'] as num?)?.toDouble(),
+      reason: row['reason'] as String?,
+      createdAt: _readDateTime(row['created_at']),
+      updatedAt: _readDateTime(row['updated_at']),
+      confirmedAt: row['confirmed_at'] == null
+          ? null
+          : _readDateTime(row['confirmed_at']),
+    );
+  }
+
+  DateTime _readDateTime(Object? value) {
+    if (value is DateTime) return value.toUtc();
+    if (value is String) return DateTime.parse(value).toUtc();
+    throw ArgumentError('Expected ISO datetime string, got $value');
   }
 
   Future<List<Map<String, Object?>>> _searchRows({

@@ -16,20 +16,27 @@ class MemoRepository {
   bool get _useLocalCore =>
       dataMode == LiflyDataMode.local && localCore != null;
 
+  bool get _hasLocalCore => localCore != null;
+
   Future<PagedResult<Memo>> listPage({
     int limit = 20,
     int offset = 0,
     String? type,
     String? q,
+    String? tag,
+    String? classificationStatus,
   }) async {
     if (_useLocalCore) {
       final records = await localCore!.searchMemos({
         'q': q,
         'limit': limit + offset,
       }, LocalCoreContext.flutterUser());
-      final filtered = type == null || type.isEmpty
+      var filtered = type == null || type.isEmpty
           ? records
           : records.where((memo) => memo.type == type).toList();
+      if (tag != null && tag.isNotEmpty) {
+        filtered = filtered.where((memo) => memo.tags.contains(tag)).toList();
+      }
       final pageItems = filtered
           .skip(offset)
           .take(limit)
@@ -46,6 +53,10 @@ class MemoRepository {
     final params = <String, dynamic>{'limit': limit, 'offset': offset};
     if (type != null && type.isNotEmpty) params['type'] = type;
     if (q != null && q.isNotEmpty) params['q'] = q;
+    if (tag != null && tag.isNotEmpty) params['tag'] = tag;
+    if (classificationStatus != null && classificationStatus.isNotEmpty) {
+      params['classification_status'] = classificationStatus;
+    }
 
     final res = await api.get('/memos', params: params);
     return PagedResult.fromData(
@@ -59,8 +70,17 @@ class MemoRepository {
     int offset = 0,
     String? type,
     String? q,
+    String? tag,
+    String? classificationStatus,
   }) async {
-    final page = await listPage(limit: limit, offset: offset, type: type, q: q);
+    final page = await listPage(
+      limit: limit,
+      offset: offset,
+      type: type,
+      q: q,
+      tag: tag,
+      classificationStatus: classificationStatus,
+    );
     return page.items;
   }
 
@@ -105,6 +125,96 @@ class MemoRepository {
     return Memo.fromJson(res['data'] as Map<String, dynamic>);
   }
 
+  Future<List<Map<String, dynamic>>> classifications(String memoId) async {
+    if (dataMode == LiflyDataMode.local) {
+      final items = await localCore!.getMemoClassifications({
+        'memo_id': memoId,
+      }, LocalCoreContext.flutterUser());
+      return items.map(_classificationToMap).toList(growable: false);
+    }
+
+    try {
+      final res = await api.get('/memos/$memoId/classifications');
+      final items = res['data'] as List? ?? const [];
+      return items
+          .whereType<Map>()
+          .map((item) => item.cast<String, dynamic>())
+          .toList(growable: false);
+    } catch (error) {
+      if (_hasLocalCore) {
+        final items = await localCore!.getMemoClassifications({
+          'memo_id': memoId,
+        }, LocalCoreContext.flutterUser());
+        return items.map(_classificationToMap).toList(growable: false);
+      }
+      throw StateError('Memo classifications unavailable: $error');
+    }
+  }
+
+  Future<Map<String, dynamic>> confirmClassification(
+    String memoId,
+    Map<String, dynamic> data,
+  ) async {
+    if (dataMode == LiflyDataMode.local) {
+      final item = await localCore!.confirmMemoClassification({
+        ...data,
+        'memo_id': memoId,
+      }, LocalCoreContext.flutterUser());
+      return _classificationToMap(item);
+    }
+
+    final res = await api.post(
+      '/memos/$memoId/classifications/confirm',
+      data: data,
+    );
+    return Map<String, dynamic>.from(res['data'] as Map);
+  }
+
+  Future<Map<String, dynamic>> rejectClassification(
+    String memoId,
+    Map<String, dynamic> data,
+  ) async {
+    if (dataMode == LiflyDataMode.local) {
+      final item = await localCore!.rejectMemoClassification({
+        ...data,
+        'memo_id': memoId,
+      }, LocalCoreContext.flutterUser());
+      return _classificationToMap(item);
+    }
+
+    final res = await api.post(
+      '/memos/$memoId/classifications/reject',
+      data: data,
+    );
+    return Map<String, dynamic>.from(res['data'] as Map);
+  }
+
+  Future<List<Map<String, dynamic>>> tagSummary({String kind = 'memo'}) async {
+    if (dataMode == LiflyDataMode.local) {
+      final items = await localCore!.getTagSummary({
+        'kind': kind,
+      }, LocalCoreContext.flutterUser());
+      return items.map(_tagSummaryToMap).toList(growable: false);
+    }
+
+    try {
+      final res = await api.get('/tags/summary', params: {'kind': kind});
+      final items = res['data'] as List? ?? const [];
+      return items
+          .whereType<Map>()
+          .map((item) => item.cast<String, dynamic>())
+          .toList(growable: false);
+    } catch (error) {
+      if (_hasLocalCore) {
+        final items = await localCore!.getTagSummary({
+          'kind': kind,
+        }, LocalCoreContext.flutterUser());
+        return items.map(_tagSummaryToMap).toList(growable: false);
+      }
+      throw StateError('Tag summary unavailable: $error');
+    }
+  }
+
   Future<void> delete(String id) async {
     if (_useLocalCore) {
       await localCore!.deleteMemo({
@@ -132,13 +242,15 @@ class MemoRepository {
     String refType = 'attachment',
   }) async {
     if (_useLocalCore) {
-      throw UnsupportedError('Local Core memo asset binding is not available in v0.5.2.');
+      throw UnsupportedError(
+        'Local Core memo asset binding is not available in v0.5.2.',
+      );
     }
 
-    final res = await api.post('/memos/$memoId/assets', data: {
-      'asset_id': assetId,
-      'ref_type': refType,
-    });
+    final res = await api.post(
+      '/memos/$memoId/assets',
+      data: {'asset_id': assetId, 'ref_type': refType},
+    );
     final items = res['data']['assets'] as List? ?? const [];
     return items
         .map((item) => MemoAssetRef.fromJson(item as Map<String, dynamic>))
@@ -147,10 +259,40 @@ class MemoRepository {
 
   Future<void> unbindAsset(String memoId, String assetId) async {
     if (_useLocalCore) {
-      throw UnsupportedError('Local Core memo asset unbinding is not available in v0.5.2.');
+      throw UnsupportedError(
+        'Local Core memo asset unbinding is not available in v0.5.2.',
+      );
     }
 
     await api.delete('/memos/$memoId/assets/$assetId');
+  }
+
+  Map<String, dynamic> _classificationToMap(LocalMemoClassification item) {
+    return {
+      'id': item.id,
+      'memo_id': item.memoId,
+      'tag': item.tag,
+      'source': item.source,
+      'status': item.status,
+      'confidence': item.confidence,
+      'reason': item.reason,
+      'created_at': item.createdAt.toIso8601String(),
+      'updated_at': item.updatedAt.toIso8601String(),
+      'confirmed_at': item.confirmedAt?.toIso8601String(),
+    };
+  }
+
+  Map<String, dynamic> _tagSummaryToMap(LocalTagSummary item) {
+    return {
+      'tag': item.tag,
+      'kind': item.kind,
+      'count': item.count,
+      'confirmed_count': item.confirmedCount,
+      'suggested_count': item.suggestedCount,
+      'color_token': item.colorToken,
+      'icon_token': item.iconToken,
+      'sort_order': item.sortOrder,
+    };
   }
 
   Memo _memoFromLocal(LocalMemoRecord record) {

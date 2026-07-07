@@ -108,6 +108,38 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
+  Future<List<LocalMemoClassification>> getMemoClassifications(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _memoStore.getMemoClassifications(input, context);
+  }
+
+  @override
+  Future<LocalMemoClassification> confirmMemoClassification(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _memoStore.confirmMemoClassification(input, context);
+  }
+
+  @override
+  Future<LocalMemoClassification> rejectMemoClassification(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _memoStore.rejectMemoClassification(input, context);
+  }
+
+  @override
+  Future<List<LocalTagSummary>> getTagSummary(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _memoStore.getTagSummary(input, context);
+  }
+
+  @override
   Future<LocalLedgerTransactionRecord> createExpense(
     Map<String, Object?> input,
     LocalCoreContext context,

@@ -349,7 +349,31 @@ doc/requirements/ledger-system.md
 doc/guide/testing-quality.md
 ```
 
-### 阶段三：本地 Memo AI 分类与标签元数据
+### 阶段三：Memo AI 分类与标签元数据
+
+状态：基础链路已落地。
+
+已完成：
+
+```text
+服务端 MemoClassification / TagMetadata 模型
+PowerSync memo_classifications / tag_metadata schema
+备忘分类读取、确认、拒绝接口
+标签统计接口
+LocalCoreBridge memo classifications / tag summary
+MemoRepository 分类读取、确认、拒绝、标签统计
+rejected 分类不进入标签统计
+Memo.tags 保留兼容但不代表 AI 分类状态
+```
+
+仍待补齐：
+
+```text
+AI 自动建议生成器
+备忘列表按 classification_status 的本地精确过滤
+tag_metadata 创建 / 更新 API
+备忘页 UI 消费分类状态
+```
 
 平台重点：本地数据模型 / PowerSync schema / Local Core query service / Flutter repository / 服务端同构 API。
 

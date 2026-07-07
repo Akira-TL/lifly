@@ -68,6 +68,8 @@ LedgerRepository 支持云端优先、失败后本地 fallback
 
 ### LC-0703 Memo AI classifications and tag metadata
 
+状态：基础链路已完成，自动建议生成、tag_metadata 管理 API 和备忘页 UI 消费待补。
+
 目标：补齐备忘 AI 自动分类、分类置信度、用户确认状态和标签元数据。
 
 验收：
@@ -75,8 +77,10 @@ LedgerRepository 支持云端优先、失败后本地 fallback
 ```text
 memo_classifications 模型明确
 tag_metadata 模型明确
-备忘列表可基于本地数据按 tag / classification_status 筛选
-云端分类接口提供同构兜底
+PowerSync memo_classifications / tag_metadata schema 已接入
+Local Core 分类读取、确认、拒绝、标签统计可本地计算
+云端分类接口和标签统计接口已提供正常读取入口
+rejected 分类不进入标签统计
 客户端不根据字符串猜测 AI 已分类状态
 ```
 

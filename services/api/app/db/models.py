@@ -50,6 +50,19 @@ class RevisionMixin:
 
 # ─── Memo ───────────────────────────────────────────────────────────────────
 
+class TagMetadata(Base, TimestampMixin):
+    __tablename__ = "tag_metadata"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, default="memo")
+    color_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    icon_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    sort_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+
+
 class Memo(Base, TimestampMixin, SoftDeleteMixin, RevisionMixin):
     __tablename__ = "memos"
 
@@ -67,6 +80,20 @@ class Memo(Base, TimestampMixin, SoftDeleteMixin, RevisionMixin):
     assets: Mapped[list[MemoAssetRef]] = relationship(
         "MemoAssetRef", back_populates="memo", cascade="all, delete-orphan"
     )
+
+
+class MemoClassification(Base, TimestampMixin):
+    __tablename__ = "memo_classifications"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    memo_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    tag: Mapped[str] = mapped_column(String(128), nullable=False)
+    source: Mapped[str] = mapped_column(String(16), nullable=False, default="ai")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="suggested")
+    confidence: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 # ─── Asset ──────────────────────────────────────────────────────────────────

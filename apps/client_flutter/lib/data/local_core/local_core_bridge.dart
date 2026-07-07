@@ -24,6 +24,22 @@ abstract class LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   );
+  Future<List<LocalMemoClassification>> getMemoClassifications(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
+  Future<LocalMemoClassification> confirmMemoClassification(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
+  Future<LocalMemoClassification> rejectMemoClassification(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
+  Future<List<LocalTagSummary>> getTagSummary(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
 
   Future<LocalLedgerTransactionRecord> createExpense(
     Map<String, Object?> input,

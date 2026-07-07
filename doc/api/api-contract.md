@@ -379,7 +379,7 @@ LocalCoreBridge.getMemoClassifications(memoId)
 LocalCoreBridge.getTagSummary(kind)
 ```
 
-云端同构兜底：
+云端正常读取入口：
 
 ```text
 GET  /api/v1/memos?tag=&classification_status=&type=&limit=&cursor=
@@ -388,6 +388,8 @@ POST /api/v1/memos/{memo_id}/classifications/confirm
 POST /api/v1/memos/{memo_id}/classifications/reject
 GET  /api/v1/tags/summary?kind=memo
 ```
+
+边界：`Memo.tags` 只做旧字段兼容，不代表 AI 分类状态；`rejected` 分类不得进入标签统计。
 
 ### 13.4 Task Reminder Strategies
 

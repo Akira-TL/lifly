@@ -3,11 +3,11 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.db.models import LedgerTransaction, Memo, Task
+from app.db.models import LedgerTransaction, Memo, MemoClassification, TagMetadata, Task
 from app.schemas.common import ApiResponse
 
 router = APIRouter()
@@ -307,6 +307,56 @@ async def search_all(
 
     results.sort(key=lambda r: r.get("created_at") or "", reverse=True)
     return ApiResponse(data={"q": q, "total": len(results), "items": results[:limit]})
+
+
+# ─── 标签统计 ─────────────────────────────────────────────────────────────────
+
+@router.get("/tags/summary", response_model=ApiResponse)
+async def tag_summary(
+    kind: str = Query(default="memo"),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(
+            MemoClassification.tag.label("tag"),
+            func.count().label("count"),
+            func.sum(case((MemoClassification.status == "confirmed", 1), else_=0)).label("confirmed_count"),
+            func.sum(case((MemoClassification.status == "suggested", 1), else_=0)).label("suggested_count"),
+            TagMetadata.color_token.label("color_token"),
+            TagMetadata.icon_token.label("icon_token"),
+            TagMetadata.sort_order.label("sort_order"),
+        )
+        .select_from(MemoClassification)
+        .join(
+            TagMetadata,
+            (TagMetadata.name == MemoClassification.tag)
+            & (TagMetadata.kind == kind)
+            & (TagMetadata.status == "active"),
+            isouter=True,
+        )
+        .where(
+            MemoClassification.user_id == DEFAULT_LOCAL_USER_ID,
+            MemoClassification.status != "rejected",
+        )
+        .group_by(
+            MemoClassification.tag,
+            TagMetadata.color_token,
+            TagMetadata.icon_token,
+            TagMetadata.sort_order,
+        )
+        .order_by(func.count().desc(), MemoClassification.tag.asc())
+    )
+    rows = result.all()
+    return ApiResponse(data=[{
+        "tag": row.tag,
+        "kind": kind,
+        "count": int(row.count or 0),
+        "confirmed_count": int(row.confirmed_count or 0),
+        "suggested_count": int(row.suggested_count or 0),
+        "color_token": row.color_token,
+        "icon_token": row.icon_token,
+        "sort_order": row.sort_order,
+    } for row in rows])
 
 
 # ─── 首页统计 ─────────────────────────────────────────────────────────────────

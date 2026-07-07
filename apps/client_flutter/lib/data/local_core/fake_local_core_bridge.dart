@@ -11,6 +11,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
     : _idGenerator = idGenerator ?? LocalCoreIdGenerator();
 
   final List<LocalMemoRecord> _memos = [];
+  final List<LocalMemoClassification> _memoClassifications = [];
   final List<LocalLedgerTransactionRecord> _expenses = [];
   final List<LocalTaskRecord> _tasks = [];
   final List<LocalAssetRecord> _assets = [];
@@ -140,6 +141,110 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
     );
     _memos[index] = deleted;
     return deleted;
+  }
+
+  @override
+  Future<List<LocalMemoClassification>> getMemoClassifications(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final memoId = input['memo_id'] as String? ?? input['id'] as String?;
+    final status = input['classification_status'] as String?;
+    return _memoClassifications
+        .where((item) => memoId == null || item.memoId == memoId)
+        .where((item) => status == null || item.status == status)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<LocalMemoClassification> confirmMemoClassification(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    return _upsertClassification(input, context, 'confirmed');
+  }
+
+  @override
+  Future<LocalMemoClassification> rejectMemoClassification(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    return _upsertClassification(input, context, 'rejected');
+  }
+
+  @override
+  Future<List<LocalTagSummary>> getTagSummary(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final counts = <String, List<LocalMemoClassification>>{};
+    for (final item in _memoClassifications.where(
+      (item) => item.status != 'rejected',
+    )) {
+      counts.putIfAbsent(item.tag, () => []).add(item);
+    }
+    return counts.entries
+        .map((entry) {
+          final confirmed = entry.value
+              .where((item) => item.status == 'confirmed')
+              .length;
+          final suggested = entry.value
+              .where((item) => item.status == 'suggested')
+              .length;
+          return LocalTagSummary(
+            tag: entry.key,
+            kind: input['kind'] as String? ?? 'memo',
+            count: entry.value.length,
+            confirmedCount: confirmed,
+            suggestedCount: suggested,
+            colorToken: null,
+            iconToken: null,
+            sortOrder: null,
+          );
+        })
+        .toList(growable: false)
+      ..sort((a, b) => b.count.compareTo(a.count));
+  }
+
+  LocalMemoClassification _upsertClassification(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+    String status,
+  ) {
+    final classificationId =
+        input['classification_id'] as String? ?? input['id'] as String?;
+    final memoId = input['memo_id'] as String?;
+    final tag = input['tag'] as String?;
+    final index = classificationId == null
+        ? -1
+        : _memoClassifications.indexWhere(
+            (item) => item.id == classificationId,
+          );
+    final old = index < 0 ? null : _memoClassifications[index];
+    if (old == null && (memoId == null || tag == null || tag.trim().isEmpty)) {
+      throw ArgumentError(
+        'memo_id and tag are required when classification_id is not provided',
+      );
+    }
+    final now = context.effectiveNow;
+    final item = LocalMemoClassification(
+      id: old?.id ?? _nextStableId('memo_cls'),
+      memoId: old?.memoId ?? memoId!,
+      tag: old?.tag ?? tag!.trim(),
+      source: old?.source ?? input['source'] as String? ?? 'user',
+      status: status,
+      confidence: old?.confidence ?? (input['confidence'] as num?)?.toDouble(),
+      reason: old?.reason ?? input['reason'] as String?,
+      createdAt: old?.createdAt ?? now,
+      updatedAt: now,
+      confirmedAt: status == 'confirmed' ? now : null,
+    );
+    if (index < 0) {
+      _memoClassifications.add(item);
+    } else {
+      _memoClassifications[index] = item;
+    }
+    return item;
   }
 
   @override
