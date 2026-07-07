@@ -29,24 +29,21 @@ v1.0.0-personal-production.md
 
 ## 当前开发状态
 
-v0.5 Assets & Import/Export 已完成发布门禁，最终 tag 为：
-
-```text
-v0.5.7
-```
+v0.6 Import / Export / Asset Experience 已完成发布门禁，当前进入 v0.7 客户端体验与移动端产品地基阶段。
 
 当前开发分支：
 
 ```text
-develop/v0.6.0
+develop/v0.7.0
 ```
 
-当前阶段：v0.6 Import / Export / Asset Experience 规划。
+当前阶段：v0.7.1 手机端导航与功能地基缺口规划。
 
 ## 当前计划文件
 
 ```text
-v0.6.0-import-export-experience.md
+v0.7.0-client-experience-system.md
+v0.7.1-mobile-navigation-and-feature-foundation-gap.md
 ```
 
 历史收口记录保留在：
@@ -54,6 +51,7 @@ v0.6.0-import-export-experience.md
 ```text
 v0.4.0-ai-write-full-development.md
 v0.5.0-assets-import-export-mvp.md
+v0.6.0-import-export-experience.md
 ```
 
 ## 维护规则

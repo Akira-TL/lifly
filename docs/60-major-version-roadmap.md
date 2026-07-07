@@ -9,9 +9,9 @@
 当前判断：
 
 ```text
-当前稳定版本：v0.5.7
-当前开发入口：v0.6.0 Import / Export / Asset Experience 规划
-近期重点：把 v0.5 的 API 闭环做成 Flutter 可用体验层
+当前稳定版本：v0.6.x Import / Export / Asset Experience 已收口
+当前开发入口：v0.7.1 手机端导航与功能地基缺口规划
+近期重点：先补首页、预算、分类、预警、AI Capture 的产品地基，再做 Flutter 手机端真实 UI
 ```
 
 ## 2. 总体路线
@@ -31,9 +31,9 @@ v0.4.x AI Write 全量开发
   ↓
 v0.5.0 Assets & Import/Export MVP
   ↓
-v0.6.0 Private Alpha
+v0.6.0 Import / Export Experience
   ↓
-v0.7.0 Private Beta
+v0.7.0 Client Experience & Mobile Product Foundation
   ↓
 v1.0.0 Personal Production
 ```
@@ -568,65 +568,73 @@ docs/development-plans/v0.6.0-import-export-experience.md
 
 ---
 
-## 9. v0.7.0 Private Beta
+## 9. v0.7.0 Client Experience & Mobile Product Foundation
 
 ### 9.1 版本定位
 
-`v0.7.0` 是小范围测试版本。目标是让非开发者也能安装、升级、反馈问题。
+`v0.7.0` 是客户端体验与手机端产品地基版本。目标不是先做安装包，而是让 Lifly 的首页、备忘、AI、记账、任务在手机端具备真实可落地的数据地基，避免页面先行导致假数据和客户端硬编码。
 
 ### 9.2 核心目标
 
 ```text
-Windows 安装包
-Android 安装包
-升级不破坏已有数据
-数据库 migration 体系
-更完整测试覆盖
-隐私政策 / 用户协议草案
-基础监控与错误反馈
+手机端 5 底部导航：首页 / 备忘 / AI / 记账 / 任务
+首页 Home Overview read model
+记账预算、分类占比、消费洞察地基
+备忘 AI 自动分类、标签元数据、分类状态地基
+任务预警策略、AI 提醒建议地基
+AI Capture 聊天式输入体验地基
+多端共享 API 契约和 repository，不共享僵硬布局
 ```
 
 ### 9.3 工程内容
 
 ```text
-Flutter Windows packaging
-Flutter Android packaging
-Versioned database migrations
-Release checklist
-Crash/error report collection
-Privacy policy draft
-User agreement draft
-Beta feedback channel
+Home overview 聚合接口
+Ledger budget / category summary / insights
+Memo classifications / tag metadata
+Task reminder strategy
+Capture session / turn 边界
+Flutter mobile shell 五入口导航
+客户端 entity / repository / widget tests
+服务端 schema / repository / tests
+同步 schema 演进规划
 ```
 
 ### 9.4 明确不做
 
 ```text
-不做大规模商业发布
-不做企业部署
+不做小程序端
 不做多人协作
 不做复杂订阅计费
+不做无数据地基的假图表
+不做客户端写死的预算、分类、预警、AI 状态
+不做完整 STT 和原生语音权限闭环
 ```
 
 ### 9.5 验收标准
 
 ```text
-Windows 可安装使用
-Android 可安装使用
-从 v0.6.x 升级到 v0.7.0 不丢数据
-主要功能有回归测试
-用户可提交反馈和日志
+首页可以消费 home overview 聚合数据
+记账页的预算、分类占比、洞察来自真实接口
+备忘页的 AI 分类状态来自结构化模型
+任务页的预警状态来自提醒策略模型
+手机端底部导航收敛为 5 个入口
+Web/桌面端仍保持可用的信息架构
+服务端和 Flutter 检查通过
+无假预算、假饼图、假消费洞察、假 AI 分类状态
 ```
 
 ### 9.6 推荐 Issue
 
 ```text
-LC-0701 Add migration system
-LC-0702 Build Windows installer
-LC-0703 Build Android release package
-LC-0704 Add release upgrade tests
-LC-0705 Draft privacy policy and user agreement
-LC-0706 Add beta feedback and log export flow
+LC-0701 Freeze mobile navigation and foundation gaps
+LC-0702 Add home overview read model
+LC-0703 Add ledger budgets and category aggregation
+LC-0704 Add memo AI classifications and tag metadata
+LC-0705 Add task reminder strategies
+LC-0706 Add mobile five-tab shell
+LC-0707 Add chat-style AI Capture foundation
+LC-0708 Add v0.7 release gate and manual verification
 ```
 
 ---

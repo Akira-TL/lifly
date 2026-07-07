@@ -313,29 +313,30 @@ CSV 不直接写正式账单表
 核心路径连续使用一周不丢数据
 ```
 
-### v0.7.0：Private Beta
+### v0.7.0：Client Experience & Mobile Product Foundation
 
-主题：接近真实发布前的稳定性版本。
+主题：客户端体验与手机端产品地基版本。
 
 范围：
 
 ```text
-Android 端体验补齐
-Windows 安装包
-自动更新策略初版
-性能优化
-数据库 migration 体系
-更完整的测试覆盖
-隐私政策 / 用户协议草案
+手机端 5 底部导航
+首页 Home Overview read model
+记账预算与分类聚合
+备忘 AI 分类与标签元数据
+任务预警策略
+AI Capture 聊天式体验地基
+多端共享 API 契约与 repository
 ```
 
 验收：
 
 ```text
-Windows + Android 双端可安装使用
-升级不破坏已有数据
-主要功能有回归测试
-可以邀请小范围用户测试
+首页、备忘、AI、记账、任务主要路径可用
+手机端底部导航收敛为 5 个入口
+预算、分类占比、AI 分类、任务预警来自真实数据地基
+客户端不写死产品规则
+服务端和 Flutter 检查通过
 ```
 
 ### v1.0.0：Personal Production
