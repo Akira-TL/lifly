@@ -9,6 +9,10 @@ class LocalHomeOverviewBuilder {
     required List<LocalLedgerTransactionRecord> transactions,
     required LocalExpenseSummary summary,
     required DateTime now,
+    LocalLedgerOverview? ledgerOverview,
+    List<LocalLedgerCategorySummary> categoryBreakdown = const [],
+    List<LocalLedgerInsight> financeInsights = const [],
+    Map<String, LocalTaskReminderStrategy> taskStrategies = const {},
     String userTimezone = 'local',
     String sourceMode = 'local',
   }) {
@@ -45,13 +49,17 @@ class LocalHomeOverviewBuilder {
         taskOverdue: overdueTasks.length,
         taskDueToday: todayTasks.length,
       ),
-      financeOverview: LocalHomeFinanceOverview(
-        monthIncome: summary.totalIncome,
-        monthExpense: summary.totalExpense,
-        transactionCount: summary.count,
-        budgetState: 'not_configured',
+      financeOverview: _buildFinanceOverview(
+        summary: summary,
+        ledgerOverview: ledgerOverview,
+        categoryBreakdown: categoryBreakdown,
+        financeInsights: financeInsights,
       ),
-      attentionItems: _buildAttentionItems(overdueTasks, todayTasks),
+      attentionItems: _buildAttentionItems(
+        overdueTasks,
+        todayTasks,
+        taskStrategies,
+      ),
       dailyTrend: _buildDailyTrend(activeTransactions, generatedAt),
       recentActivity: _buildRecentActivity(
         memos: memos,
@@ -64,19 +72,47 @@ class LocalHomeOverviewBuilder {
     );
   }
 
+  LocalHomeFinanceOverview _buildFinanceOverview({
+    required LocalExpenseSummary summary,
+    required LocalLedgerOverview? ledgerOverview,
+    required List<LocalLedgerCategorySummary> categoryBreakdown,
+    required List<LocalLedgerInsight> financeInsights,
+  }) {
+    final overview = ledgerOverview;
+    final budgetAmount = overview?.budgetAmount;
+    final budgetUsed = overview?.budgetUsed;
+    return LocalHomeFinanceOverview(
+      monthIncome: overview?.monthIncome ?? summary.totalIncome,
+      monthExpense: overview?.monthExpense ?? summary.totalExpense,
+      transactionCount: overview?.transactionCount ?? summary.count,
+      budgetState: overview?.budgetState ?? 'not_configured',
+      budgetAmount: budgetAmount,
+      budgetUsed: budgetUsed,
+      budgetProgress: overview?.budgetProgress,
+      budgetRemaining: budgetAmount == null || budgetUsed == null
+          ? null
+          : budgetAmount - budgetUsed,
+      currency: overview?.currency ?? 'CNY',
+      categoryBreakdown: categoryBreakdown,
+      insights: financeInsights,
+    );
+  }
+
   List<LocalHomeAttentionItem> _buildAttentionItems(
     List<LocalTaskRecord> overdueTasks,
     List<LocalTaskRecord> todayTasks,
+    Map<String, LocalTaskReminderStrategy> taskStrategies,
   ) {
     final items = <LocalHomeAttentionItem>[];
     for (final task in overdueTasks.take(3)) {
+      final strategy = taskStrategies[task.id];
       items.add(
         LocalHomeAttentionItem(
           id: 'overdue_task_${task.id}',
           type: 'task_overdue',
           level: 'critical',
           title: task.title,
-          description: '任务已逾期',
+          description: strategy?.warningReason ?? '任务已逾期',
           entityType: 'task',
           entityId: task.id,
           occurredAt: task.dueAt,
@@ -88,21 +124,31 @@ class LocalHomeOverviewBuilder {
         .where((task) => !overdueTasks.any((overdue) => overdue.id == task.id))
         .take(3 - items.length);
     for (final task in todayNotOverdue) {
+      final strategy = taskStrategies[task.id];
       items.add(
         LocalHomeAttentionItem(
           id: 'today_task_${task.id}',
-          type: 'task_due_today',
-          level: task.priority == 'high' ? 'warning' : 'normal',
+          type: strategy == null ? 'task_due_today' : 'task_warning_strategy',
+          level: _taskAttentionLevel(task, strategy),
           title: task.title,
-          description: '今天截止',
+          description: strategy?.warningReason ?? '今天截止',
           entityType: 'task',
           entityId: task.id,
-          occurredAt: task.dueAt,
+          occurredAt: task.dueAt ?? strategy?.aiSuggestedRemindAt,
         ),
       );
     }
 
     return items;
+  }
+
+  String _taskAttentionLevel(
+    LocalTaskRecord task,
+    LocalTaskReminderStrategy? strategy,
+  ) {
+    if (strategy?.warningLevel == 'critical') return 'critical';
+    if (strategy?.warningLevel == 'warning') return 'warning';
+    return task.priority == 'high' ? 'warning' : 'normal';
   }
 
   List<LocalHomeDailyTrendItem> _buildDailyTrend(

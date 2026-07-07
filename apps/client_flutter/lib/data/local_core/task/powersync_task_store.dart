@@ -249,6 +249,10 @@ class PowerSyncTaskStore {
     return updatedTask;
   }
 
+  Future<Map<String, LocalTaskReminderStrategy>> listTaskReminderStrategies() {
+    return _strategyMap();
+  }
+
   Future<LocalTaskReminderStrategy?> getTaskReminderStrategy(
     Map<String, Object?> input,
     LocalCoreContext context,

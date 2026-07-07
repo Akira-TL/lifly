@@ -6,6 +6,36 @@ import 'support/powersync_persistence_harness.dart';
 
 void main() {
   test(
+    'PowerSync capture parses local mixed task and ledger input',
+    () async {
+      final harness = await PowerSyncPersistenceHarness.create(
+        'lifly_capture_parse_',
+      );
+      addTearDown(harness.dispose);
+
+      final service = await harness.openService();
+      if (service == null) return;
+
+      final bridge = PowerSyncLocalCoreBridge(syncService: service);
+      final parsed = await bridge.captureParse({
+        'text': '明天下午提醒我交房租，支付宝昨天有一笔 320 的超市消费',
+      }, LocalCoreContext.flutterUser(now: DateTime.utc(2026, 7, 7, 10)));
+
+      expect(parsed.actions.map((item) => item.type), contains('task_create'));
+      expect(parsed.actions.map((item) => item.type), contains('expense_create'));
+      final expense = parsed.actions.firstWhere(
+        (item) => item.type == 'expense_create',
+      );
+      expect(expense.payload['amount'], 320.0);
+      expect(expense.payload['category_id'], 'shopping');
+      final task = parsed.actions.firstWhere((item) => item.type == 'task_create');
+      expect(task.payload['title'], '交房租');
+
+      service.dispose();
+    },
+  );
+
+  test(
     'PowerSync capture sessions persist turns, commit refs, and undo refs',
     () async {
       final harness = await PowerSyncPersistenceHarness.create(

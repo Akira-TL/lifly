@@ -436,12 +436,26 @@ class LocalHomeFinanceOverview {
   final double monthExpense;
   final int transactionCount;
   final String budgetState;
+  final double? budgetAmount;
+  final double? budgetUsed;
+  final double? budgetProgress;
+  final double? budgetRemaining;
+  final String currency;
+  final List<LocalLedgerCategorySummary> categoryBreakdown;
+  final List<LocalLedgerInsight> insights;
 
   const LocalHomeFinanceOverview({
     required this.monthIncome,
     required this.monthExpense,
     required this.transactionCount,
     required this.budgetState,
+    required this.budgetAmount,
+    required this.budgetUsed,
+    required this.budgetProgress,
+    required this.budgetRemaining,
+    required this.currency,
+    this.categoryBreakdown = const [],
+    this.insights = const [],
   });
 }
 

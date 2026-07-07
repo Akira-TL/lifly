@@ -129,6 +129,7 @@ security tests
 常用入口：
 
 ```text
+scripts/check-api.sh
 scripts/check-client-flutter.sh
 scripts/check-v0.4-ai-write.sh
 scripts/smoke-mcp-v0.1.sh
@@ -153,4 +154,5 @@ repository 支持 cloudPreferred，云端失败或断网时才降级 Local Core
 断网手动验收首页、记账统计、任务预警、备忘分类状态
 API / repository / UI 的字段边界清楚
 AI Capture 本地模式必须覆盖 mcp_capture_sessions、mcp_capture_turns、mcp_undo_actions、source_capture_id、ai_trashed undo 链路
+AI Capture 本地规则拆分必须覆盖 task_create / expense_create / memo_create 候选动作
 ```

@@ -216,6 +216,7 @@ HomePage 消费 HomeOverview repository，不再直接写死调用 /dashboard
 本地 attention_items 支持逾期任务和今天截止任务
 本地 daily_trend 基于本周账单计算
 本地 budget_state 返回 not_configured，不伪造预算
+finance_overview 已扩展预算金额、预算使用、预算进度、预算剩余、分类占比和财务洞察字段
 repository_local_mode_test 覆盖本地 Home Overview
 ```
 
@@ -223,8 +224,8 @@ repository_local_mode_test 覆盖本地 Home Overview
 
 ```text
 sync_summary / import_summary / settings_summary 的真实业务状态
-预算、分类占比、消费洞察接入后扩展 finance_overview
-任务预警策略模型接入后扩展 attention_items
+首页 UI 消费扩展后的 finance_overview.category_breakdown / insights
+任务预警策略未来几天 warning 事项继续增强 attention_items 排序
 ```
 
 平台重点：Flutter Local Core / 本地 SQLite / repository / 服务端同构 API。
@@ -296,6 +297,7 @@ GET /api/v1/ledger/insights
 LocalCoreBridge ledger overview / category summary / insights
 LedgerRepository 云端优先读取，失败后本地 fallback
 category_id 在本地账单记录中保留
+本地 ledger overview/category summary/summary 已按月份 period 过滤
 没有预算时返回 not_configured，不伪造默认预算
 ```
 
@@ -306,7 +308,7 @@ category_id 在本地账单记录中保留
 分类预算
 月环比
 更细消费洞察
-首页 finance_overview 接入预算进度
+首页 UI 消费预算进度、分类占比和洞察
 ```
 
 平台重点：本地数据模型 / PowerSync schema / Local Core query service / repository / 服务端同构 API。
@@ -569,6 +571,7 @@ PowerSyncLocalCoreBridge.captureParse / captureCommit / captureUndo 已接入本
 AiCaptureService 本地模式可走 Local Core，不再只能依赖 Cloud MCP
 本地 commit 创建的 memo / task / ledger_transaction 会写入 source_capture_id
 本地 undo 通过 mcp_undo_actions 转为 ai_trashed，并写入 undo turn
+本地 capture_parse 已具备最小规则拆分，可从一句话生成 task_create / expense_create / memo_create 候选动作
 ```
 
 当前本地主入口：
@@ -594,6 +597,7 @@ POST /api/v1/mcp/capture/undo
 asset_ids 参与云端/本地解析规则，而不是只作为 payload 引用边界
 语音输入与 STT
 更完整的 capture session 列表、恢复和取消接口
+本地规则解析继续补充更多自然语言金额、日期、商户和任务拆分边界
 ```
 
 边界：

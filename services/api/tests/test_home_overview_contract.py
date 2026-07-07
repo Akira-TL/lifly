@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import inspect
 
-from app.db.models import LedgerTransaction, Memo, Task
+from app.db.models import LedgerTransaction, Memo, Task, TaskReminderStrategy
 from app.modules.search import router as search_router
 
 
@@ -20,6 +20,9 @@ def test_home_overview_route_is_cloud_primary_contract() -> None:
     assert '"attention_items"' in builder_source
     assert '"today_metrics"' in builder_source
     assert '"finance_overview"' in builder_source
+    assert '"budget_progress"' in builder_source
+    assert '"category_breakdown"' in builder_source
+    assert '"insights"' in builder_source
     assert '"recent_activity"' in builder_source
     assert '"sync_summary"' in builder_source
     assert "build_home_overview" in dashboard_source
@@ -48,9 +51,24 @@ def test_home_overview_attention_items_prioritize_overdue_then_today() -> None:
         updated_at=now,
     )
 
-    items = search_router._build_attention_items([today, overdue], now)
+    strategy = TaskReminderStrategy(
+        id="strategy-today",
+        user_id="local-dev",
+        task_id="task-today",
+        warning_level="warning",
+        warning_reason="AI 建议提前准备",
+        strategy_status="suggested",
+        source="ai",
+        updated_at=now,
+    )
 
-    assert [item["type"] for item in items] == ["task_overdue", "task_due_today"]
+    items = search_router._build_attention_items(
+        [today, overdue],
+        {"task-today": strategy},
+        now,
+    )
+
+    assert [item["type"] for item in items] == ["task_overdue", "task_warning_strategy"]
     assert items[0]["level"] == "critical"
     assert items[1]["level"] == "warning"
     assert items[0]["entity_type"] == "task"

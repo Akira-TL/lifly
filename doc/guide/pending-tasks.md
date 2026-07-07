@@ -32,7 +32,7 @@ Flutter 真实 API 接入和导入导出体验层
 
 ### LC-0701 Local Home Overview read model
 
-状态：云端 /api/v1/home/overview 与本地 fallback 基础链路已完成，完整状态摘要待补。
+状态：云端 /api/v1/home/overview 与本地 fallback 基础链路已完成，预算进度、分类占比和财务洞察字段已扩展，完整状态摘要待补。
 
 目标：新增云端同步优先、本地失败兜底的产品化首页 read model，支撑今日关注、紧急事项、混合最近内容流和数据状态摘要。
 
@@ -51,7 +51,7 @@ Flutter repository/entity 可消费同构真实字段
 
 ### LC-0702 Ledger budgets and category aggregation
 
-状态：基础链路已完成，预算 CRUD、分类预算、月环比和更细洞察待补。
+状态：基础链路已完成，本地月份 period 聚合已修正，预算 CRUD、分类预算、月环比和更细洞察待补。
 
 目标：补齐预算、分类占比、月环比和消费洞察地基。
 
@@ -121,7 +121,7 @@ widget test 已覆盖核心入口切换和底部入口收敛
 
 ### LC-0706 Chat-style AI Capture
 
-状态：基础链路已完成，聊天式多轮 UI、asset_ids 真实解析、STT 和会话恢复体验待补。
+状态：基础链路已完成，本地 capture_parse 已具备最小规则拆分，聊天式多轮 UI、asset_ids 真实解析、STT 和会话恢复体验待补。
 
 目标：在现有 parse / commit / undo 基础上升级聊天式捕获体验，并保证 capture session、turns、确认结果和撤销链路可本地持久化。
 
@@ -136,6 +136,7 @@ PowerSyncCaptureStore 可本地持久化 captureParse / captureCommit / captureU
 本地 undo 使用 mcp_undo_actions 并将实体转为 ai_trashed
 AiCaptureService local mode 可走 Local Core
 PowerSync capture store test 覆盖 session / turn / commit / undo 链路
+本地 capture_parse 最小规则拆分覆盖 task_create / expense_create 候选动作
 ```
 
 ### LC-0707 Product foundation release gate

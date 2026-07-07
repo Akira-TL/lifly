@@ -73,6 +73,17 @@ class HomeOverview {
             financeOverviewJson['budget_state'] as String? ??
             json['budget_state'] as String? ??
             'not_configured',
+        budgetAmount: _nullableNum(financeOverviewJson['budget_amount']),
+        budgetUsed: _nullableNum(financeOverviewJson['budget_used']),
+        budgetProgress: _nullableNum(financeOverviewJson['budget_progress']),
+        budgetRemaining: _nullableNum(financeOverviewJson['budget_remaining']),
+        currency: financeOverviewJson['currency'] as String? ?? 'CNY',
+        categoryBreakdown: _listOfMaps(
+          financeOverviewJson['category_breakdown'],
+        ).map(HomeFinanceCategory.fromJson).toList(growable: false),
+        insights: _listOfMaps(
+          financeOverviewJson['insights'] ?? json['finance_insights'],
+        ).map(HomeFinanceInsight.fromJson).toList(growable: false),
       ),
       attentionItems: _listOfMaps(
         json['attention_items'],
@@ -135,6 +146,8 @@ class HomeOverview {
 
   static double _numValue(Object? value) => value is num ? value.toDouble() : 0;
 
+  static double? _nullableNum(Object? value) => value is num ? value.toDouble() : null;
+
   static int _intValue(Object? value) => value is num ? value.toInt() : 0;
 
   static DateTime? _dateTime(Object? value) {
@@ -165,13 +178,88 @@ class HomeFinanceOverview {
   final double monthExpense;
   final int transactionCount;
   final String budgetState;
+  final double? budgetAmount;
+  final double? budgetUsed;
+  final double? budgetProgress;
+  final double? budgetRemaining;
+  final String currency;
+  final List<HomeFinanceCategory> categoryBreakdown;
+  final List<HomeFinanceInsight> insights;
 
   const HomeFinanceOverview({
     required this.monthIncome,
     required this.monthExpense,
     required this.transactionCount,
     required this.budgetState,
+    required this.budgetAmount,
+    required this.budgetUsed,
+    required this.budgetProgress,
+    required this.budgetRemaining,
+    required this.currency,
+    this.categoryBreakdown = const [],
+    this.insights = const [],
   });
+}
+
+class HomeFinanceCategory {
+  final String categoryId;
+  final String categoryName;
+  final String direction;
+  final double amount;
+  final double ratio;
+  final int transactionCount;
+  final String? colorToken;
+  final String? iconToken;
+
+  const HomeFinanceCategory({
+    required this.categoryId,
+    required this.categoryName,
+    required this.direction,
+    required this.amount,
+    required this.ratio,
+    required this.transactionCount,
+    required this.colorToken,
+    required this.iconToken,
+  });
+
+  factory HomeFinanceCategory.fromJson(Map<String, dynamic> json) {
+    return HomeFinanceCategory(
+      categoryId: json['category_id'] as String? ?? 'uncategorized',
+      categoryName: json['category_name'] as String? ?? '未分类',
+      direction: json['direction'] as String? ?? 'expense',
+      amount: HomeOverview._numValue(json['amount']),
+      ratio: HomeOverview._numValue(json['ratio'] ?? json['percentage']),
+      transactionCount: HomeOverview._intValue(json['transaction_count']),
+      colorToken: json['color_token'] as String?,
+      iconToken: json['icon_token'] as String?,
+    );
+  }
+}
+
+class HomeFinanceInsight {
+  final String id;
+  final String type;
+  final String level;
+  final String title;
+  final String description;
+
+  const HomeFinanceInsight({
+    required this.id,
+    required this.type,
+    required this.level,
+    required this.title,
+    required this.description,
+  });
+
+  factory HomeFinanceInsight.fromJson(Map<String, dynamic> json) {
+    return HomeFinanceInsight(
+      id: json['id'] as String? ?? '',
+      type: json['type'] as String? ?? 'unknown',
+      level: json['level'] as String? ?? 'info',
+      title: json['title'] as String? ?? '财务提醒',
+      description: json['description'] as String? ?? '',
+    );
+  }
 }
 
 class HomeAttentionItem {

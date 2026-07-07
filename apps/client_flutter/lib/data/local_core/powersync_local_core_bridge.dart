@@ -69,15 +69,32 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
     final transactions = await _expenseStore.searchExpenses({
       'limit': limit,
     }, context);
+    final period = input['period'] as String? ?? 'current_month';
     final summary = await _expenseStore.summarizeExpenses({
-      'period': input['period'] as String? ?? 'current_month',
+      'period': period,
     }, context);
+    final ledgerOverview = await _expenseStore.getLedgerOverview({
+      'period': period,
+      'source_mode': input['source_mode'] as String? ?? 'local',
+    }, context);
+    final categoryBreakdown = await _expenseStore.getLedgerCategorySummary({
+      'period': period,
+      'direction': 'expense',
+    }, context);
+    final financeInsights = await _expenseStore.getLedgerInsights({
+      'period': period,
+    }, context);
+    final taskStrategies = await _taskStore.listTaskReminderStrategies();
     return const LocalHomeOverviewBuilder().build(
       memos: memos,
       tasks: tasks,
       transactions: transactions,
       summary: summary,
       now: context.effectiveNow,
+      ledgerOverview: ledgerOverview,
+      categoryBreakdown: categoryBreakdown,
+      financeInsights: financeInsights,
+      taskStrategies: taskStrategies,
       sourceMode: input['source_mode'] as String? ?? 'local',
     );
   }

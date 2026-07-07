@@ -7,7 +7,16 @@ from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.db.models import LedgerTransaction, Memo, MemoClassification, TagMetadata, Task
+from app.db.models import (
+    LedgerBudget,
+    LedgerCategory,
+    LedgerTransaction,
+    Memo,
+    MemoClassification,
+    TagMetadata,
+    Task,
+    TaskReminderStrategy,
+)
 from app.schemas.common import ApiResponse
 
 router = APIRouter()
@@ -48,7 +57,11 @@ def _same_utc_day(left: datetime | None, right: datetime) -> bool:
     return normalized.date() == baseline.date()
 
 
-def _build_attention_items(tasks: list[Task], now: datetime) -> list[dict[str, object | None]]:
+def _build_attention_items(
+    tasks: list[Task],
+    strategies: dict[str, TaskReminderStrategy],
+    now: datetime,
+) -> list[dict[str, object | None]]:
     todo_tasks = [task for task in tasks if task.task_status == "todo"]
     overdue_tasks = [
         task for task in todo_tasks if _to_utc(task.due_at) is not None and _to_utc(task.due_at) < now
@@ -57,12 +70,13 @@ def _build_attention_items(tasks: list[Task], now: datetime) -> list[dict[str, o
 
     items: list[dict[str, object | None]] = []
     for task in overdue_tasks[:3]:
+        strategy = strategies.get(task.id)
         items.append({
             "id": f"overdue_task_{task.id}",
             "type": "task_overdue",
             "level": "critical",
             "title": task.title,
-            "description": "任务已逾期",
+            "description": strategy.warning_reason if strategy else "任务已逾期",
             "entity_type": "task",
             "entity_id": task.id,
             "occurred_at": _iso(task.due_at),
@@ -74,18 +88,28 @@ def _build_attention_items(tasks: list[Task], now: datetime) -> list[dict[str, o
             break
         if task.id in overdue_ids:
             continue
+        strategy = strategies.get(task.id)
+        level = _task_attention_level(task, strategy)
         items.append({
             "id": f"today_task_{task.id}",
-            "type": "task_due_today",
-            "level": "warning" if task.priority == "high" else "normal",
+            "type": "task_warning_strategy" if strategy else "task_due_today",
+            "level": level,
             "title": task.title,
-            "description": "今天截止",
+            "description": strategy.warning_reason if strategy else "今天截止",
             "entity_type": "task",
             "entity_id": task.id,
-            "occurred_at": _iso(task.due_at),
+            "occurred_at": _iso(task.due_at or (strategy.ai_suggested_remind_at if strategy else None)),
         })
 
     return items
+
+
+def _task_attention_level(task: Task, strategy: TaskReminderStrategy | None) -> str:
+    if strategy and strategy.warning_level == "critical":
+        return "critical"
+    if strategy and strategy.warning_level == "warning":
+        return "warning"
+    return "warning" if task.priority == "high" else "normal"
 
 
 def _build_daily_trend(transactions: list[LedgerTransaction], now: datetime) -> list[dict[str, object]]:
@@ -196,15 +220,121 @@ async def _active_transactions(
     return list(result.scalars().all())
 
 
+async def _task_strategy_map(db: AsyncSession, user_id: str) -> dict[str, TaskReminderStrategy]:
+    result = await db.execute(
+        select(TaskReminderStrategy)
+        .where(
+            TaskReminderStrategy.user_id == user_id,
+            TaskReminderStrategy.strategy_status != "dismissed",
+        )
+        .order_by(TaskReminderStrategy.updated_at.desc())
+    )
+    strategies: dict[str, TaskReminderStrategy] = {}
+    for strategy in result.scalars().all():
+        strategies.setdefault(strategy.task_id, strategy)
+    return strategies
+
+
+async def _monthly_budget(
+    db: AsyncSession,
+    user_id: str,
+    period_key: str,
+) -> LedgerBudget | None:
+    return await db.scalar(
+        select(LedgerBudget)
+        .where(
+            LedgerBudget.user_id == user_id,
+            LedgerBudget.status == "active",
+            LedgerBudget.period_type == "month",
+            LedgerBudget.period_key == period_key,
+            LedgerBudget.category_id.is_(None),
+        )
+        .order_by(LedgerBudget.updated_at.desc())
+    )
+
+
+async def _category_breakdown(
+    db: AsyncSession,
+    user_id: str,
+    month_start: datetime,
+    month_end: datetime,
+) -> list[dict[str, object]]:
+    result = await db.execute(
+        select(
+            LedgerTransaction.category_id.label("category_id"),
+            LedgerCategory.name.label("category_name"),
+            LedgerCategory.color.label("color_token"),
+            LedgerCategory.icon.label("icon_token"),
+            func.sum(LedgerTransaction.amount).label("amount"),
+            func.count().label("transaction_count"),
+        )
+        .select_from(LedgerTransaction)
+        .join(LedgerCategory, LedgerCategory.id == LedgerTransaction.category_id, isouter=True)
+        .where(
+            LedgerTransaction.user_id == user_id,
+            LedgerTransaction.status == "active",
+            LedgerTransaction.direction == "expense",
+            LedgerTransaction.occurred_at >= month_start,
+            LedgerTransaction.occurred_at < month_end,
+        )
+        .group_by(
+            LedgerTransaction.category_id,
+            LedgerCategory.name,
+            LedgerCategory.color,
+            LedgerCategory.icon,
+        )
+        .order_by(func.sum(LedgerTransaction.amount).desc())
+    )
+    rows = result.all()
+    total = sum(float(row.amount or 0) for row in rows)
+    return [{
+        "category_id": row.category_id or "uncategorized",
+        "category_name": row.category_name or "未分类",
+        "direction": "expense",
+        "amount": round(float(row.amount or 0), 2),
+        "ratio": float(row.amount or 0) / total if total > 0 else 0,
+        "transaction_count": int(row.transaction_count or 0),
+        "color_token": row.color_token,
+        "icon_token": row.icon_token,
+    } for row in rows]
+
+
+def _finance_insights(
+    *,
+    budget_state: str,
+    budget_progress: float | None,
+) -> list[dict[str, object]]:
+    if budget_state == "not_configured":
+        return [{
+            "id": "budget_not_configured",
+            "type": "budget",
+            "level": "info",
+            "title": "未设置预算",
+            "description": "设置月度预算后，可在首页看到预算进度和提醒。",
+        }]
+    progress = budget_progress or 0
+    if progress >= 0.8:
+        return [{
+            "id": "budget_progress_warning",
+            "type": "budget",
+            "level": "critical" if progress >= 1 else "warning",
+            "title": "预算已超出" if progress >= 1 else "预算接近上限",
+            "description": f"本月支出已达到预算的 {progress * 100:.0f}% 。",
+        }]
+    return []
+
+
 async def build_home_overview(db: AsyncSession, user_id: str = DEFAULT_LOCAL_USER_ID) -> dict[str, object]:
     now = datetime.now(timezone.utc)
-    month_start, _ = _month_range()
+    month_start, month_end = _month_range()
+    period_key = now.strftime("%Y-%m")
     memos = await _active_memos(db, user_id)
     memo_total = await _active_memo_count(db, user_id)
     tasks = await _active_tasks(db, user_id)
+    strategies = await _task_strategy_map(db, user_id)
     transactions = await _active_transactions(db, user_id)
     month_transactions = [
-        tx for tx in transactions if (_to_utc(tx.occurred_at) or now) >= month_start
+        tx for tx in transactions if month_start <= (_to_utc(tx.occurred_at) or now) < month_end
     ]
     task_todo = [task for task in tasks if task.task_status == "todo"]
     task_overdue = [
@@ -214,13 +344,24 @@ async def build_home_overview(db: AsyncSession, user_id: str = DEFAULT_LOCAL_USE
 
     month_expense = sum(float(tx.amount) for tx in month_transactions if tx.direction == "expense")
     month_income = sum(float(tx.amount) for tx in month_transactions if tx.direction == "income")
+    budget = await _monthly_budget(db, user_id, period_key)
+    budget_amount = float(budget.amount) if budget else None
+    budget_used = round(month_expense, 2) if budget else None
+    budget_progress = month_expense / budget_amount if budget_amount and budget_amount > 0 else None
+    budget_remaining = None if budget_amount is None else round(budget_amount - month_expense, 2)
+    budget_state = "configured" if budget else "not_configured"
+    category_breakdown = await _category_breakdown(db, user_id, month_start, month_end)
+    finance_insights = _finance_insights(
+        budget_state=budget_state,
+        budget_progress=budget_progress,
+    )
 
     return {
         "schema_version": HOME_OVERVIEW_SCHEMA_VERSION,
         "generated_at": now.isoformat(),
         "user_timezone": "UTC",
         "source_mode": "api",
-        "attention_items": _build_attention_items(tasks, now),
+        "attention_items": _build_attention_items(tasks, strategies, now),
         "today_metrics": {
             "memo_total": memo_total,
             "task_todo": len(task_todo),
@@ -232,9 +373,16 @@ async def build_home_overview(db: AsyncSession, user_id: str = DEFAULT_LOCAL_USE
             "month_income": round(month_income, 2),
             "month_expense": round(month_expense, 2),
             "transaction_count": len(month_transactions),
-            "budget_state": "not_configured",
+            "budget_state": budget_state,
+            "budget_amount": budget_amount,
+            "budget_used": budget_used,
+            "budget_progress": budget_progress,
+            "budget_remaining": budget_remaining,
+            "currency": budget.currency if budget else "CNY",
+            "category_breakdown": category_breakdown,
+            "insights": finance_insights,
         },
-        "finance_insights": [],
+        "finance_insights": finance_insights,
         "daily_trend": _build_daily_trend(transactions, now),
         "recent_activity": _build_recent_activity(memos, tasks, transactions),
         "sync_summary": {"status": "api_available"},

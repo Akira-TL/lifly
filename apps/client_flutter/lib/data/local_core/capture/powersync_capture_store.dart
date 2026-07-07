@@ -34,18 +34,11 @@ class PowerSyncCaptureStore {
     final now = context.effectiveNow.toUtc();
     final captureId = policy.nextEntityId('capture');
     final expiresAt = now.add(const Duration(hours: 24));
-    final action = LocalCaptureAction(
-      type: 'memo_create',
-      payload: {
-        'type': 'memo',
-        'title': null,
-        'content_markdown': text,
-        'tags': ['capture'],
-        'source_capture_id': captureId,
-        if (assetIds.isNotEmpty) 'asset_ids': assetIds,
-      },
-      confidence: 0.45,
-      rawText: text,
+    final actions = _parseLocalActions(
+      text: text,
+      captureId: captureId,
+      assetIds: assetIds,
+      now: now,
     );
     final turn = LocalCaptureTurn(
       id: policy.nextEntityId('capture_turn'),
@@ -53,7 +46,7 @@ class PowerSyncCaptureStore {
       turnIndex: 0,
       role: 'assistant',
       text: text,
-      actions: [action],
+      actions: actions,
       selectedActionIndexes: const [],
       resultEntities: const [],
       turnStatus: 'parsed',
@@ -65,7 +58,7 @@ class PowerSyncCaptureStore {
       originalText: text,
       timezone: timezone,
       locale: locale,
-      actions: [action],
+      actions: actions,
       requiresConfirmation: true,
       sessionStatus: 'parsed',
       sourceChannel: context.sourceChannelName,
@@ -399,6 +392,153 @@ class PowerSyncCaptureStore {
       createdAt: _readRequiredDateTime(row['created_at']),
       updatedAt: _readRequiredDateTime(row['updated_at']),
     );
+  }
+
+  List<LocalCaptureAction> _parseLocalActions({
+    required String text,
+    required String captureId,
+    required List<String> assetIds,
+    required DateTime now,
+  }) {
+    final actions = <LocalCaptureAction>[];
+    final expense = _expenseAction(text, captureId, now);
+    if (expense != null) actions.add(expense);
+    final task = _taskAction(text, now);
+    if (task != null) actions.add(task);
+    final memo = _memoAction(text, captureId, assetIds, fallback: actions.isEmpty);
+    if (memo != null) actions.add(memo);
+    return actions;
+  }
+
+  LocalCaptureAction? _expenseAction(
+    String text,
+    String captureId,
+    DateTime now,
+  ) {
+    final amountMatch = RegExp(
+      r'(?:花了?|消费|支出)\s*(\d+(?:\.\d{1,2})?)|'
+      r'(\d+(?:\.\d{1,2})?)\s*[元块]|'
+      r'[¥￥](\d+(?:\.\d{1,2})?)|'
+      r'(\d+(?:\.\d{1,2})?)\s*(?:的)?[^，,。；;！!]{0,12}(?:消费|支出|账单)',
+    ).firstMatch(text);
+    if (amountMatch == null) return null;
+    final amountText = amountMatch.groups([1, 2, 3, 4]).whereType<String>().first;
+    final amount = double.tryParse(amountText);
+    if (amount == null || amount <= 0) return null;
+    return LocalCaptureAction(
+      type: 'expense_create',
+      payload: {
+        'amount': amount,
+        'currency': 'CNY',
+        'direction': 'expense',
+        'merchant': _inferMerchant(text),
+        'category_id': _inferCategoryId(text),
+        'occurred_at': _inferExpenseOccurredAt(text, now).toIso8601String(),
+        'source_capture_id': captureId,
+      },
+      confidence: 0.78,
+      rawText: amountMatch.group(0),
+    );
+  }
+
+  LocalCaptureAction? _taskAction(String text, DateTime now) {
+    final match = RegExp(
+      r'(?:提醒我|记得|别忘了|要做)\s*([^，,。；;！!\n]{2,40})',
+    ).firstMatch(text);
+    if (match == null) return null;
+    final title = match.group(1)?.trim();
+    if (title == null || title.isEmpty) return null;
+    final remindAt = _inferTaskRemindAt(text, now);
+    return LocalCaptureAction(
+      type: 'task_create',
+      payload: {
+        'title': title,
+        'remind_at': remindAt.toIso8601String(),
+        'priority': _inferTaskPriority(text),
+      },
+      confidence: 0.80,
+      rawText: title,
+    );
+  }
+
+  LocalCaptureAction? _memoAction(
+    String text,
+    String captureId,
+    List<String> assetIds, {
+    required bool fallback,
+  }) {
+    final hasMemoIntent = RegExp(r'(记录一下|记一下|备忘|日记)').hasMatch(text);
+    if (!fallback && !hasMemoIntent && assetIds.isEmpty) return null;
+    return LocalCaptureAction(
+      type: 'memo_create',
+      payload: {
+        'type': hasMemoIntent && text.contains('日记') ? 'journal' : 'memo',
+        'title': null,
+        'content_markdown': text,
+        'tags': ['capture'],
+        'source_capture_id': captureId,
+        if (assetIds.isNotEmpty) 'asset_ids': assetIds,
+      },
+      confidence: fallback ? 0.45 : 0.70,
+      rawText: text,
+    );
+  }
+
+  String _inferMerchant(String text) {
+    final merchantKeywords = <String, String>{
+      '食堂': '食堂',
+      '超市': '超市',
+      '支付宝': '支付宝',
+      '微信': '微信',
+      '地铁': '地铁',
+      '滴滴': '滴滴出行',
+      '咖啡': '咖啡',
+      '奶茶': '奶茶',
+    };
+    for (final entry in merchantKeywords.entries) {
+      if (text.contains(entry.key)) return entry.value;
+    }
+    return '未知商户';
+  }
+
+  String _inferCategoryId(String text) {
+    if (RegExp(r'(食堂|餐厅|饭|外卖|咖啡|奶茶)').hasMatch(text)) {
+      return 'food';
+    }
+    if (RegExp(r'(公交|地铁|打车|滴滴)').hasMatch(text)) return 'transport';
+    if (RegExp(r'(购物|买了|淘宝|天猫|超市)').hasMatch(text)) return 'shopping';
+    return 'uncategorized';
+  }
+
+  DateTime _inferExpenseOccurredAt(String text, DateTime now) {
+    final baseline = now.toUtc();
+    if (text.contains('昨天')) return baseline.subtract(const Duration(days: 1));
+    if (text.contains('前天')) return baseline.subtract(const Duration(days: 2));
+    return baseline;
+  }
+
+  DateTime _inferTaskRemindAt(String text, DateTime now) {
+    var target = now.toUtc();
+    if (text.contains('明天')) {
+      target = target.add(const Duration(days: 1));
+    } else if (text.contains('后天')) {
+      target = target.add(const Duration(days: 2));
+    }
+    var hour = 9;
+    if (RegExp(r'(下午|晚些|今晚)').hasMatch(text)) hour = 15;
+    if (RegExp(r'(晚上|今晚)').hasMatch(text)) hour = 20;
+    if (RegExp(r'(中午)').hasMatch(text)) hour = 12;
+    if (RegExp(r'(早上|明早)').hasMatch(text)) hour = 8;
+    final explicitHour = RegExp(r'(\d{1,2})\s*点').firstMatch(text);
+    if (explicitHour != null) {
+      final parsed = int.tryParse(explicitHour.group(1) ?? '');
+      if (parsed != null && parsed >= 0 && parsed <= 23) hour = parsed;
+    }
+    return DateTime.utc(target.year, target.month, target.day, hour);
+  }
+
+  String _inferTaskPriority(String text) {
+    return RegExp(r'(紧急|必须|今天)').hasMatch(text) ? 'high' : 'normal';
   }
 
   List<int> _selectedIndexes(Map<String, Object?> input, int length) {

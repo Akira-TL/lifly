@@ -340,6 +340,10 @@ source_mode
 attention_items[]
 today_metrics
 finance_overview
+  month_income / month_expense / transaction_count
+  budget_state / budget_amount / budget_used / budget_progress / budget_remaining / currency
+  category_breakdown[]
+  insights[]
 finance_insights[]
 recent_activity[]
 sync_summary
@@ -439,7 +443,7 @@ POST /api/v1/mcp/capture/commit
 POST /api/v1/mcp/capture/undo
 ```
 
-云端 parse 会写入 `McpCaptureSession` 与首个 `McpCaptureTurn`；commit 会写入业务实体、audit_logs、mcp_undo_actions，并追加 commit turn；undo 会消费 undo token，将实体转为 ai_trashed，并在能解析 source_capture_id 时追加 undo turn。
+云端 parse 会写入 `McpCaptureSession` 与首个 `McpCaptureTurn`；commit 会写入业务实体、audit_logs、mcp_undo_actions，并追加 commit turn；undo 会消费 undo token，将实体转为 ai_trashed，并在能解析 source_capture_id 时追加 undo turn。本地 capture_parse 已具备最小规则拆分，可从一句话生成 task_create / expense_create / memo_create 候选动作；后续继续扩展多轮 append turn、asset_ids 真实解析、STT 和会话恢复。
 
 后续可选兼容 API：
 

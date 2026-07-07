@@ -103,6 +103,42 @@ class HomeOverviewRepository {
       monthExpense: local.monthExpense,
       transactionCount: local.transactionCount,
       budgetState: local.budgetState,
+      budgetAmount: local.budgetAmount,
+      budgetUsed: local.budgetUsed,
+      budgetProgress: local.budgetProgress,
+      budgetRemaining: local.budgetRemaining,
+      currency: local.currency,
+      categoryBreakdown: local.categoryBreakdown
+          .map(_financeCategoryFromLocal)
+          .toList(growable: false),
+      insights: local.insights
+          .map(_financeInsightFromLocal)
+          .toList(growable: false),
+    );
+  }
+
+  HomeFinanceCategory _financeCategoryFromLocal(
+    LocalLedgerCategorySummary local,
+  ) {
+    return HomeFinanceCategory(
+      categoryId: local.categoryId,
+      categoryName: local.categoryName,
+      direction: local.direction,
+      amount: local.amount,
+      ratio: local.ratio,
+      transactionCount: local.transactionCount,
+      colorToken: null,
+      iconToken: null,
+    );
+  }
+
+  HomeFinanceInsight _financeInsightFromLocal(LocalLedgerInsight local) {
+    return HomeFinanceInsight(
+      id: local.id,
+      type: local.type,
+      level: local.level,
+      title: local.title,
+      description: local.description,
     );
   }
 

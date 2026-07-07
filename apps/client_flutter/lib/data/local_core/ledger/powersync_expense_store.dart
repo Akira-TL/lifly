@@ -92,20 +92,21 @@ class PowerSyncExpenseStore {
   ) async {
     final period = input['period'] as String? ?? 'current_month';
     final sourceMode = input['source_mode'] as String? ?? 'local';
+    final range = _periodRange(period, context.effectiveNow);
     final summary = await summarizeExpenses({'period': period}, context);
     await syncService.ensureInitialized();
     final budget = await syncService.db.getOptional(
       'SELECT amount, currency FROM ledger_budgets '
-      'WHERE status = ? AND category_id IS NULL AND (? = ? OR period_key = ?) '
+      'WHERE status = ? AND category_id IS NULL AND period_type = ? AND period_key = ? '
       'ORDER BY updated_at DESC LIMIT 1',
-      ['active', period, 'current_month', period],
+      ['active', 'month', range.periodKey],
     );
     final budgetAmount = (budget?['amount'] as num?)?.toDouble();
     final budgetUsed = budgetAmount == null ? null : summary.totalExpense;
     return LocalLedgerOverview(
       schemaVersion: 'ledger_overview.v1',
       generatedAt: context.effectiveNow.toUtc(),
-      period: period,
+      period: range.periodKey,
       sourceMode: sourceMode,
       monthIncome: summary.totalIncome,
       monthExpense: summary.totalExpense,
@@ -125,6 +126,8 @@ class PowerSyncExpenseStore {
     LocalCoreContext context,
   ) async {
     final direction = input['direction'] as String? ?? 'expense';
+    final period = input['period'] as String? ?? 'current_month';
+    final range = _periodRange(period, context.effectiveNow);
     await syncService.ensureInitialized();
     final rows = await syncService.db.getAll(
       'SELECT coalesce(t.category_id, ?) AS category_id, '
@@ -132,10 +135,19 @@ class PowerSyncExpenseStore {
       'sum(t.amount) AS amount, count(*) AS transaction_count '
       'FROM ledger_transactions t '
       'LEFT JOIN ledger_categories c ON c.id = t.category_id '
-      'WHERE t.status = ? AND t.direction = ? '
+      'WHERE t.status = ? AND t.direction = ? AND t.occurred_at >= ? AND t.occurred_at < ? '
       'GROUP BY coalesce(t.category_id, ?), coalesce(c.name, ?) '
       'ORDER BY amount DESC',
-      ['uncategorized', '未分类', 'active', direction, 'uncategorized', '未分类'],
+      [
+        'uncategorized',
+        '未分类',
+        'active',
+        direction,
+        range.start.toIso8601String(),
+        range.end.toIso8601String(),
+        'uncategorized',
+        '未分类',
+      ],
     );
     final total = rows.fold<double>(
       0,
@@ -242,18 +254,25 @@ class PowerSyncExpenseStore {
     LocalCoreContext context,
   ) async {
     final summaryInput = LocalExpenseSummaryInput.fromMap(input);
+    final range = _periodRange(summaryInput.period, context.effectiveNow);
     await syncService.ensureInitialized();
     final row = await syncService.db.get(
       'SELECT '
       'coalesce(sum(CASE WHEN direction = ? THEN amount ELSE 0 END), 0) AS total_expense, '
       'coalesce(sum(CASE WHEN direction = ? THEN amount ELSE 0 END), 0) AS total_income, '
       'count(*) AS count '
-      'FROM ledger_transactions WHERE status = ?',
-      ['expense', 'income', 'active'],
+      'FROM ledger_transactions WHERE status = ? AND occurred_at >= ? AND occurred_at < ?',
+      [
+        'expense',
+        'income',
+        'active',
+        range.start.toIso8601String(),
+        range.end.toIso8601String(),
+      ],
     );
 
     return LocalExpenseSummary(
-      period: summaryInput.period,
+      period: range.periodKey,
       totalExpense: (row['total_expense'] as num).toDouble(),
       totalIncome: (row['total_income'] as num).toDouble(),
       count: row['count'] as int,
@@ -340,4 +359,41 @@ class PowerSyncExpenseStore {
       ],
     );
   }
+
+  _LedgerPeriodRange _periodRange(String period, DateTime now) {
+    final normalized = period == 'current_month'
+        ? '${now.toUtc().year.toString().padLeft(4, '0')}-${now.toUtc().month.toString().padLeft(2, '0')}'
+        : period;
+    final parts = normalized.split('-');
+    if (parts.length != 2) {
+      return _periodRange('current_month', now);
+    }
+    final year = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    if (year == null || month == null || month < 1 || month > 12) {
+      return _periodRange('current_month', now);
+    }
+    final start = DateTime.utc(year, month, 1);
+    final end = month == 12
+        ? DateTime.utc(year + 1, 1, 1)
+        : DateTime.utc(year, month + 1, 1);
+    return _LedgerPeriodRange(
+      periodKey:
+          '${year.toString().padLeft(4, '0')}-${month.toString().padLeft(2, '0')}',
+      start: start,
+      end: end,
+    );
+  }
+}
+
+class _LedgerPeriodRange {
+  final String periodKey;
+  final DateTime start;
+  final DateTime end;
+
+  const _LedgerPeriodRange({
+    required this.periodKey,
+    required this.start,
+    required this.end,
+  });
 }

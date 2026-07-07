@@ -189,6 +189,8 @@ capture_parse → capture_commit → capture_undo
 写入业务表、audit_logs、undo token
 ```
 
+本地模式下，`PowerSyncCaptureStore.captureParse` 已具备最小规则拆分能力：普通记录会降级为 `memo_create`，包含提醒语义会生成 `task_create`，包含金额消费语义会生成 `expense_create`。这只是离线可用的规则地基，不等于完整 AI 推理；后续仍需扩展更多金额、日期、商户、任务标题和多轮上下文边界。
+
 当前基础会话模型：
 
 ```text
@@ -237,4 +239,4 @@ asset_context[]
 STT 转文本后进入 CaptureTurn
 ```
 
-没有 STT 能力前，客户端可以展示语音入口占位，但不能伪装成已完成语音识别。
+没有 STT 能力前，客户端可以展示语音入口占位，但不能伪装成已完成语音识别。AI Capture 手机端体验默认应自动判断类型，不要求用户先选择“备忘 / 任务 / 记账”。

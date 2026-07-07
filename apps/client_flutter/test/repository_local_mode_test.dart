@@ -317,6 +317,13 @@ void main() {
                       'month_expense': 0,
                       'transaction_count': 0,
                       'budget_state': 'not_configured',
+                      'budget_amount': null,
+                      'budget_used': null,
+                      'budget_progress': null,
+                      'budget_remaining': null,
+                      'currency': 'CNY',
+                      'category_breakdown': const [],
+                      'insights': const [],
                     },
                     'daily_trend': const [],
                     'recent_activity': const [],
@@ -361,7 +368,33 @@ void main() {
         'month_income': 200,
         'month_expense': 18.5,
         'transaction_count': 1,
-        'budget_state': 'not_configured',
+        'budget_state': 'configured',
+        'budget_amount': 100,
+        'budget_used': 18.5,
+        'budget_progress': 0.185,
+        'budget_remaining': 81.5,
+        'currency': 'CNY',
+        'category_breakdown': [
+          {
+            'category_id': 'food',
+            'category_name': '餐饮',
+            'direction': 'expense',
+            'amount': 18.5,
+            'ratio': 1.0,
+            'transaction_count': 1,
+            'color_token': 'orange',
+            'icon_token': 'restaurant',
+          },
+        ],
+        'insights': [
+          {
+            'id': 'budget_ok',
+            'type': 'budget',
+            'level': 'info',
+            'title': '预算正常',
+            'description': '本月预算仍充足',
+          },
+        ],
       },
       'daily_trend': [
         {'day': '2026-07-07', 'total': 18.5},
@@ -387,6 +420,10 @@ void main() {
     expect(overview.todayMetrics.memoTotal, 2);
     expect(overview.todayMetrics.taskOverdue, 1);
     expect(overview.financeOverview.monthExpense, 18.5);
+    expect(overview.financeOverview.budgetAmount, 100);
+    expect(overview.financeOverview.budgetProgress, 0.185);
+    expect(overview.financeOverview.categoryBreakdown.single.categoryName, '餐饮');
+    expect(overview.financeOverview.insights.single.id, 'budget_ok');
     expect(overview.dailyTrend.single.total, 18.5);
     expect(overview.recentActivity.single.entityType, 'ledger_transaction');
     expect(overview.syncStatus, 'api_available');
