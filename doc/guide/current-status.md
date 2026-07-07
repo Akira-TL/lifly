@@ -112,7 +112,7 @@ Local Chat-style AI Capture
 当前进展：
 
 ```text
-Home Overview 基础兜底链路已落地：LocalCoreBridge.getHomeOverview、LocalHomeOverviewBuilder、HomeOverviewRepository 云端优先/失败 fallback、HomePage repository 消费、本地混合最近活动流
+Home Overview 基础链路已落地：服务端 /api/v1/home/overview、LocalCoreBridge.getHomeOverview、LocalHomeOverviewBuilder、HomeOverviewRepository 云端优先/失败 fallback、HomePage repository 消费、云端/本地混合最近活动流
 ```
 
 验收：

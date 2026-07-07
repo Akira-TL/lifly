@@ -77,7 +77,7 @@ P1：最近混合活动，包含备忘、任务、流水、导入、AI Capture
 P2：数据模式、同步状态、设置摘要
 ```
 
-首页数据应来自 `home overview` read model，不在客户端页面临时拼接长期产品规则。该 read model 主路径必须由 Local Core 基于本地 PowerSync 数据计算；云端 `/home/overview` 只提供同构兜底。
+首页数据应来自 `home overview` read model，不在客户端页面临时拼接长期产品规则。正常联网时走云端 `/home/overview`；云端失败、断网或弱网时由 Local Core 基于本地 PowerSync 数据计算同构 read model 兜底。
 
 ## 4. AI Capture / 快速记录页
 

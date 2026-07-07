@@ -36,7 +36,7 @@ class HomeOverviewRepository {
   }
 
   Future<HomeOverview> _loadCloud() async {
-    final response = await api.get('/dashboard');
+    final response = await api.get('/home/overview');
     if (response['success'] == true) {
       return HomeOverview.fromDashboardJson(
         response['data'] as Map<String, dynamic>? ?? const {},

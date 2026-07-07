@@ -5,6 +5,7 @@ import 'package:client_flutter/data/repositories/home_overview_repository.dart';
 import 'package:client_flutter/data/repositories/ledger_repository.dart';
 import 'package:client_flutter/data/repositories/memo_repository.dart';
 import 'package:client_flutter/data/repositories/task_repository.dart';
+import 'package:client_flutter/domain/entities/home_overview.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -132,6 +133,113 @@ void main() {
       );
     },
   );
+
+  test(
+    'HomeOverviewRepository loads cloud home overview endpoint first',
+    () async {
+      String? requestedPath;
+      final dio = Dio(BaseOptions(baseUrl: 'http://localhost/api/v1'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            requestedPath = options.path;
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                statusCode: 200,
+                data: {
+                  'success': true,
+                  'data': {
+                    'schema_version': 'home_overview.v1',
+                    'generated_at': '2026-07-07T12:00:00Z',
+                    'user_timezone': 'UTC',
+                    'source_mode': 'api',
+                    'today_metrics': {
+                      'memo_total': 1,
+                      'task_todo': 0,
+                      'task_total': 0,
+                      'task_overdue': 0,
+                      'task_due_today': 0,
+                    },
+                    'finance_overview': {
+                      'month_income': 0,
+                      'month_expense': 0,
+                      'transaction_count': 0,
+                      'budget_state': 'not_configured',
+                    },
+                    'daily_trend': const [],
+                    'recent_activity': const [],
+                    'sync_summary': {'status': 'api_available'},
+                    'import_summary': {'status': 'idle'},
+                    'settings_summary': {'status': 'ok'},
+                  },
+                },
+              ),
+            );
+          },
+        ),
+      );
+      final homeRepo = HomeOverviewRepository(
+        ApiClient(baseUrl: 'http://localhost/api/v1', dio: dio),
+        localCore: localCore,
+        dataMode: LiflyDataMode.api,
+      );
+
+      final overview = await homeRepo.load();
+
+      expect(requestedPath, '/home/overview');
+      expect(overview.sourceMode, 'api');
+      expect(overview.todayMetrics.memoTotal, 1);
+    },
+  );
+
+  test('HomeOverview parses cloud home overview schema', () {
+    final overview = HomeOverview.fromDashboardJson({
+      'schema_version': 'home_overview.v1',
+      'generated_at': '2026-07-07T12:00:00Z',
+      'user_timezone': 'UTC',
+      'source_mode': 'api',
+      'today_metrics': {
+        'memo_total': 2,
+        'task_todo': 1,
+        'task_total': 3,
+        'task_overdue': 1,
+        'task_due_today': 1,
+      },
+      'finance_overview': {
+        'month_income': 200,
+        'month_expense': 18.5,
+        'transaction_count': 1,
+        'budget_state': 'not_configured',
+      },
+      'daily_trend': [
+        {'day': '2026-07-07', 'total': 18.5},
+      ],
+      'recent_activity': [
+        {
+          'id': 'ledger_transaction_tx_1',
+          'entity_type': 'ledger_transaction',
+          'entity_id': 'tx_1',
+          'title': '食堂',
+          'occurred_at': '2026-07-07T12:00:00Z',
+          'amount': 18.5,
+          'direction': 'expense',
+        },
+      ],
+      'sync_summary': {'status': 'api_available'},
+      'import_summary': {'status': 'idle'},
+      'settings_summary': {'status': 'ok'},
+    });
+
+    expect(overview.schemaVersion, 'home_overview.v1');
+    expect(overview.sourceMode, 'api');
+    expect(overview.todayMetrics.memoTotal, 2);
+    expect(overview.todayMetrics.taskOverdue, 1);
+    expect(overview.financeOverview.monthExpense, 18.5);
+    expect(overview.dailyTrend.single.total, 18.5);
+    expect(overview.recentActivity.single.entityType, 'ledger_transaction');
+    expect(overview.syncStatus, 'api_available');
+  });
 
   test(
     'HomeOverviewRepository falls back to Local Core when cloud load fails',

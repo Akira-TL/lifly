@@ -32,7 +32,7 @@ Flutter 真实 API 接入和导入导出体验层
 
 ### LC-0701 Local Home Overview read model
 
-状态：基础本地链路已完成，服务端同构 API 和完整状态摘要待补。
+状态：云端 /api/v1/home/overview 与本地 fallback 基础链路已完成，完整状态摘要待补。
 
 目标：新增云端同步优先、本地失败兜底的产品化首页 read model，支撑今日关注、紧急事项、混合最近内容流和数据状态摘要。
 
@@ -42,7 +42,7 @@ Flutter 真实 API 接入和导入导出体验层
 LocalCoreBridge.getHomeOverview 可基于本地 PowerSync 数据返回 schema_version、source_mode、attention_items、today_metrics、finance_overview、recent_activity 等结构
 HomeOverviewRepository 已接入云端优先读取，失败后 Local Core fallback
 HomePage 已改为消费 HomeOverview repository
-/api/v1/home/overview 提供同构兜底
+/api/v1/home/overview 已提供云端正常读取入口
 /dashboard 保留兼容
 Local Core tests 覆盖主要聚合规则
 Flutter repository/entity 可消费同构真实字段

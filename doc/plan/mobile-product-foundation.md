@@ -6,7 +6,7 @@
 状态：执行中
 当前分支：develop/v0.7.0
 平台范围：Flutter Local Core / 本地 SQLite / PowerSync schema / repository / 服务端同构 API / 手机端 UI / Web 与桌面端适配原则
-当前动作：阶段一已完成基础本地 Home Overview fallback read model，后续继续补服务端同构 API、同步状态和更完整的产品字段
+当前动作：阶段一已完成基础 Home Overview 云端正常入口与本地 fallback 链路，后续继续补同步状态和更完整的产品字段
 完成规则：计划内能力实现并回写固定正式文档后，删除本文档
 ```
 
@@ -222,8 +222,7 @@ repository_local_mode_test 覆盖本地 Home Overview
 仍待补齐：
 
 ```text
-服务端 /api/v1/home/overview 同构兜底
-sync_summary / import_summary / settings_summary 的真实本地状态
+sync_summary / import_summary / settings_summary 的真实业务状态
 预算、分类占比、消费洞察接入后扩展 finance_overview
 任务预警策略模型接入后扩展 attention_items
 ```
@@ -547,4 +546,4 @@ Flutter analyze/test 通过
 本地 Home Overview read model
 ```
 
-原因：首页是手机端第一入口，也是最容易诱发 Flutter 客户端临时拼接和假数据的地方。先保证 Home Overview 在云端失败或断网时可以由 Local Core 本地 read model 兜底，再补 `/api/v1/home/overview` 正常云端入口，后面的备忘、记账、任务、AI Capture UI 才能同时满足在线新鲜度和离线可用。
+原因：首页是手机端第一入口，也是最容易诱发 Flutter 客户端临时拼接和假数据的地方。Home Overview 已具备云端正常入口和 Local Core 本地 read model 兜底，后续继续补预算、分类、洞察和任务预警字段，后面的备忘、记账、任务、AI Capture UI 才能同时满足在线新鲜度和离线可用。

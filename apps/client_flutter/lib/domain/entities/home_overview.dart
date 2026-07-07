@@ -29,25 +29,50 @@ class HomeOverview {
 
   factory HomeOverview.fromDashboardJson(Map<String, dynamic> json) {
     final generatedAt = DateTime.now().toUtc();
+    final todayMetricsJson = _mapValue(json['today_metrics']);
+    final financeOverviewJson = _mapValue(json['finance_overview']);
+    final syncSummaryJson = _mapValue(json['sync_summary']);
+    final importSummaryJson = _mapValue(json['import_summary']);
+    final settingsSummaryJson = _mapValue(json['settings_summary']);
+
     return HomeOverview(
       schemaVersion: json['schema_version'] as String? ?? 'dashboard.v1',
       generatedAt: _dateTime(json['generated_at']) ?? generatedAt,
       userTimezone: json['user_timezone'] as String? ?? 'api',
       sourceMode: json['source_mode'] as String? ?? 'api',
       todayMetrics: HomeTodayMetrics(
-        memoTotal: _intValue(json['memo_total']),
-        taskTodo: _intValue(json['task_todo']),
-        taskTotal: _intValue(json['task_total']),
-        taskOverdue: _intValue(json['task_overdue']),
-        taskDueToday: _intValue(json['task_due_today']),
+        memoTotal: _intValue(
+          todayMetricsJson['memo_total'] ?? json['memo_total'],
+        ),
+        taskTodo: _intValue(todayMetricsJson['task_todo'] ?? json['task_todo']),
+        taskTotal: _intValue(
+          todayMetricsJson['task_total'] ?? json['task_total'],
+        ),
+        taskOverdue: _intValue(
+          todayMetricsJson['task_overdue'] ?? json['task_overdue'],
+        ),
+        taskDueToday: _intValue(
+          todayMetricsJson['task_due_today'] ?? json['task_due_today'],
+        ),
       ),
       financeOverview: HomeFinanceOverview(
-        monthIncome: _numValue(json['month_income'] ?? json['monthly_income']),
-        monthExpense: _numValue(
-          json['month_expense'] ?? json['monthly_expense'],
+        monthIncome: _numValue(
+          financeOverviewJson['month_income'] ??
+              json['month_income'] ??
+              json['monthly_income'],
         ),
-        transactionCount: _intValue(json['transaction_count']),
-        budgetState: json['budget_state'] as String? ?? 'not_configured',
+        monthExpense: _numValue(
+          financeOverviewJson['month_expense'] ??
+              json['month_expense'] ??
+              json['monthly_expense'],
+        ),
+        transactionCount: _intValue(
+          financeOverviewJson['transaction_count'] ?? json['transaction_count'],
+        ),
+        budgetState:
+            financeOverviewJson['budget_state'] as String? ??
+            json['budget_state'] as String? ??
+            'not_configured',
       ),
       attentionItems: _listOfMaps(
         json['attention_items'],
@@ -56,9 +81,18 @@ class HomeOverview {
         json['daily_trend'] ?? json['weekly_trend'],
       ).map(HomeDailyTrendItem.fromJson).toList(growable: false),
       recentActivity: _recentActivityFromJson(json),
-      syncStatus: json['sync_status'] as String? ?? 'api_available',
-      importStatus: json['import_status'] as String? ?? 'idle',
-      settingsStatus: json['settings_status'] as String? ?? 'ok',
+      syncStatus:
+          syncSummaryJson['status'] as String? ??
+          json['sync_status'] as String? ??
+          'api_available',
+      importStatus:
+          importSummaryJson['status'] as String? ??
+          json['import_status'] as String? ??
+          'idle',
+      settingsStatus:
+          settingsSummaryJson['status'] as String? ??
+          json['settings_status'] as String? ??
+          'ok',
     );
   }
 
@@ -84,6 +118,11 @@ class HomeOverview {
           }),
         )
         .toList(growable: false);
+  }
+
+  static Map<String, dynamic> _mapValue(Object? value) {
+    if (value is Map) return value.cast<String, dynamic>();
+    return const {};
   }
 
   static List<Map<String, dynamic>> _listOfMaps(Object? value) {

@@ -1,27 +1,246 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select, func, extract
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.db.models import Memo, LedgerTransaction, Task
+from app.db.models import LedgerTransaction, Memo, Task
 from app.schemas.common import ApiResponse
 
 router = APIRouter()
 
+DEFAULT_LOCAL_USER_ID = "local-dev"
+HOME_OVERVIEW_SCHEMA_VERSION = "home_overview.v1"
 
-def _week_range():
+
+def _week_range() -> tuple[datetime, datetime]:
     now = datetime.now(timezone.utc)
     start = now - timedelta(days=now.weekday())
     return start.replace(hour=0, minute=0, second=0, microsecond=0), now
 
 
-def _month_range():
+def _month_range() -> tuple[datetime, datetime]:
     now = datetime.now(timezone.utc)
     return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0), now
+
+
+def _to_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _iso(value: datetime | None) -> str | None:
+    normalized = _to_utc(value)
+    return normalized.isoformat() if normalized else None
+
+
+def _same_utc_day(left: datetime | None, right: datetime) -> bool:
+    normalized = _to_utc(left)
+    if normalized is None:
+        return False
+    baseline = _to_utc(right) or right
+    return normalized.date() == baseline.date()
+
+
+def _build_attention_items(tasks: list[Task], now: datetime) -> list[dict[str, object | None]]:
+    todo_tasks = [task for task in tasks if task.task_status == "todo"]
+    overdue_tasks = [
+        task for task in todo_tasks if _to_utc(task.due_at) is not None and _to_utc(task.due_at) < now
+    ]
+    today_tasks = [task for task in todo_tasks if _same_utc_day(task.due_at, now)]
+
+    items: list[dict[str, object | None]] = []
+    for task in overdue_tasks[:3]:
+        items.append({
+            "id": f"overdue_task_{task.id}",
+            "type": "task_overdue",
+            "level": "critical",
+            "title": task.title,
+            "description": "任务已逾期",
+            "entity_type": "task",
+            "entity_id": task.id,
+            "occurred_at": _iso(task.due_at),
+        })
+
+    overdue_ids = {task.id for task in overdue_tasks}
+    for task in today_tasks:
+        if len(items) >= 3:
+            break
+        if task.id in overdue_ids:
+            continue
+        items.append({
+            "id": f"today_task_{task.id}",
+            "type": "task_due_today",
+            "level": "warning" if task.priority == "high" else "normal",
+            "title": task.title,
+            "description": "今天截止",
+            "entity_type": "task",
+            "entity_id": task.id,
+            "occurred_at": _iso(task.due_at),
+        })
+
+    return items
+
+
+def _build_daily_trend(transactions: list[LedgerTransaction], now: datetime) -> list[dict[str, object]]:
+    week_start = (now - timedelta(days=now.weekday())).replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+    trend: list[dict[str, object]] = []
+    for index in range(7):
+        day = week_start + timedelta(days=index)
+        total = sum(
+            float(tx.amount)
+            for tx in transactions
+            if tx.direction == "expense" and _same_utc_day(tx.occurred_at, day)
+        )
+        trend.append({"day": day.date().isoformat(), "total": round(total, 2)})
+    return trend
+
+
+def _build_recent_activity(
+    memos: list[Memo],
+    tasks: list[Task],
+    transactions: list[LedgerTransaction],
+) -> list[dict[str, object | None]]:
+    items: list[dict[str, object | None]] = []
+    for memo in memos:
+        content = (memo.content_markdown or "").strip()
+        items.append({
+            "id": f"memo_{memo.id}",
+            "entity_type": "memo",
+            "entity_id": memo.id,
+            "title": memo.title or "无标题备忘",
+            "subtitle": content or None,
+            "occurred_at": _iso(memo.updated_at),
+            "amount": None,
+            "direction": None,
+        })
+
+    for task in tasks:
+        items.append({
+            "id": f"task_{task.id}",
+            "entity_type": "task",
+            "entity_id": task.id,
+            "title": task.title,
+            "subtitle": "已完成" if task.task_status == "done" else "待处理",
+            "occurred_at": _iso(task.due_at or task.updated_at),
+            "amount": None,
+            "direction": None,
+        })
+
+    for tx in transactions:
+        items.append({
+            "id": f"ledger_transaction_{tx.id}",
+            "entity_type": "ledger_transaction",
+            "entity_id": tx.id,
+            "title": tx.merchant or "账单记录",
+            "subtitle": tx.note,
+            "occurred_at": _iso(tx.occurred_at),
+            "amount": float(tx.amount),
+            "direction": tx.direction,
+        })
+
+    items.sort(key=lambda item: str(item.get("occurred_at") or ""), reverse=True)
+    return items[:10]
+
+
+async def _active_memo_count(db: AsyncSession, user_id: str) -> int:
+    return int(await db.scalar(
+        select(func.count()).select_from(
+            select(Memo).where(Memo.user_id == user_id, Memo.status == "active").subquery()
+        )
+    ) or 0)
+
+
+async def _active_tasks(db: AsyncSession, user_id: str, limit: int = 100) -> list[Task]:
+    result = await db.execute(
+        select(Task)
+        .where(Task.user_id == user_id, Task.status == "active")
+        .order_by(Task.updated_at.desc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+async def _active_memos(db: AsyncSession, user_id: str, limit: int = 20) -> list[Memo]:
+    result = await db.execute(
+        select(Memo)
+        .where(Memo.user_id == user_id, Memo.status == "active")
+        .order_by(Memo.updated_at.desc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+async def _active_transactions(
+    db: AsyncSession,
+    user_id: str,
+    limit: int = 100,
+) -> list[LedgerTransaction]:
+    result = await db.execute(
+        select(LedgerTransaction)
+        .where(LedgerTransaction.user_id == user_id, LedgerTransaction.status == "active")
+        .order_by(LedgerTransaction.occurred_at.desc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+async def build_home_overview(db: AsyncSession, user_id: str = DEFAULT_LOCAL_USER_ID) -> dict[str, object]:
+    now = datetime.now(timezone.utc)
+    month_start, _ = _month_range()
+    memos = await _active_memos(db, user_id)
+    memo_total = await _active_memo_count(db, user_id)
+    tasks = await _active_tasks(db, user_id)
+    transactions = await _active_transactions(db, user_id)
+    month_transactions = [
+        tx for tx in transactions if (_to_utc(tx.occurred_at) or now) >= month_start
+    ]
+    task_todo = [task for task in tasks if task.task_status == "todo"]
+    task_overdue = [
+        task for task in task_todo if _to_utc(task.due_at) is not None and _to_utc(task.due_at) < now
+    ]
+    task_due_today = [task for task in task_todo if _same_utc_day(task.due_at, now)]
+
+    month_expense = sum(float(tx.amount) for tx in month_transactions if tx.direction == "expense")
+    month_income = sum(float(tx.amount) for tx in month_transactions if tx.direction == "income")
+
+    return {
+        "schema_version": HOME_OVERVIEW_SCHEMA_VERSION,
+        "generated_at": now.isoformat(),
+        "user_timezone": "UTC",
+        "source_mode": "api",
+        "attention_items": _build_attention_items(tasks, now),
+        "today_metrics": {
+            "memo_total": memo_total,
+            "task_todo": len(task_todo),
+            "task_total": len(tasks),
+            "task_overdue": len(task_overdue),
+            "task_due_today": len(task_due_today),
+        },
+        "finance_overview": {
+            "month_income": round(month_income, 2),
+            "month_expense": round(month_expense, 2),
+            "transaction_count": len(month_transactions),
+            "budget_state": "not_configured",
+        },
+        "finance_insights": [],
+        "daily_trend": _build_daily_trend(transactions, now),
+        "recent_activity": _build_recent_activity(memos, tasks, transactions),
+        "sync_summary": {"status": "api_available"},
+        "import_summary": {"status": "idle"},
+        "settings_summary": {"status": "ok"},
+    }
 
 
 # ─── 跨模块搜索 ──────────────────────────────────────────────────────────────
@@ -38,7 +257,7 @@ async def search_all(
     # 搜索备忘
     if not entity_type or entity_type == "memo":
         memo_query = select(Memo).where(
-            Memo.user_id == "local-dev",
+            Memo.user_id == DEFAULT_LOCAL_USER_ID,
             Memo.status == "active",
             Memo.title.ilike(f"%{q}%") | Memo.content_markdown.ilike(f"%{q}%"),
         ).order_by(Memo.created_at.desc()).limit(limit)
@@ -55,7 +274,7 @@ async def search_all(
     # 搜索账单
     if not entity_type or entity_type == "ledger":
         tx_query = select(LedgerTransaction).where(
-            LedgerTransaction.user_id == "local-dev",
+            LedgerTransaction.user_id == DEFAULT_LOCAL_USER_ID,
             LedgerTransaction.status == "active",
             LedgerTransaction.merchant.ilike(f"%{q}%") | LedgerTransaction.note.ilike(f"%{q}%"),
         ).order_by(LedgerTransaction.occurred_at.desc()).limit(limit)
@@ -72,7 +291,7 @@ async def search_all(
     # 搜索任务
     if not entity_type or entity_type == "task":
         task_query = select(Task).where(
-            Task.user_id == "local-dev",
+            Task.user_id == DEFAULT_LOCAL_USER_ID,
             Task.status == "active",
             Task.title.ilike(f"%{q}%") | Task.description.ilike(f"%{q}%"),
         ).order_by(Task.created_at.desc()).limit(limit)
@@ -92,90 +311,36 @@ async def search_all(
 
 # ─── 首页统计 ─────────────────────────────────────────────────────────────────
 
+@router.get("/home/overview", response_model=ApiResponse)
+async def home_overview(db: AsyncSession = Depends(get_db)):
+    return ApiResponse(data=await build_home_overview(db))
+
+
 @router.get("/dashboard", response_model=ApiResponse)
 async def dashboard(db: AsyncSession = Depends(get_db)):
-    user_id = "local-dev"
-
-    # 备忘计数
-    memo_total = await db.scalar(
-        select(func.count()).select_from(
-            select(Memo).where(Memo.user_id == user_id, Memo.status == "active").subquery()
-        )
-    )
-
-    # 任务计数
-    task_todo = await db.scalar(
-        select(func.count()).select_from(
-            select(Task).where(Task.user_id == user_id, Task.status == "active", Task.task_status == "todo").subquery()
-        )
-    )
-    task_total = await db.scalar(
-        select(func.count()).select_from(
-            select(Task).where(Task.user_id == user_id, Task.status == "active").subquery()
-        )
-    )
-
-    # 本月账单汇总
-    month_start, _ = _month_range()
-    expense_total = await db.scalar(
-        select(func.sum(LedgerTransaction.amount)).where(
-            LedgerTransaction.user_id == user_id,
-            LedgerTransaction.status == "active",
-            LedgerTransaction.direction == "expense",
-            LedgerTransaction.occurred_at >= month_start,
-        )
-    )
-    income_total = await db.scalar(
-        select(func.sum(LedgerTransaction.amount)).where(
-            LedgerTransaction.user_id == user_id,
-            LedgerTransaction.status == "active",
-            LedgerTransaction.direction == "income",
-            LedgerTransaction.occurred_at >= month_start,
-        )
-    )
-
-    # 本周账单趋势（按天）
-    week_start, _ = _week_range()
-    daily_result = await db.execute(
-        select(
-            func.date(LedgerTransaction.occurred_at).label("day"),
-            func.sum(LedgerTransaction.amount).label("total"),
-        ).where(
-            LedgerTransaction.user_id == user_id,
-            LedgerTransaction.status == "active",
-            LedgerTransaction.direction == "expense",
-            LedgerTransaction.occurred_at >= week_start,
-        ).group_by("day").order_by("day")
-    )
-    daily_trend = [
-        {"day": str(row.day), "total": float(row.total or 0)}
-        for row in daily_result.all()
-    ]
-
-    # 最近交易
-    recent_result = await db.execute(
-        select(LedgerTransaction).where(
-            LedgerTransaction.user_id == user_id,
-            LedgerTransaction.status == "active",
-        ).order_by(LedgerTransaction.occurred_at.desc()).limit(5)
-    )
-    recent_tx = [
+    overview = await build_home_overview(db)
+    today_metrics = overview["today_metrics"]
+    finance_overview = overview["finance_overview"]
+    daily_trend = overview["daily_trend"]
+    recent_activity = overview["recent_activity"]
+    recent_transactions = [
         {
-            "id": tx.id,
-            "merchant": tx.merchant,
-            "amount": float(tx.amount),
-            "direction": tx.direction,
-            "occurred_at": tx.occurred_at.isoformat() if tx.occurred_at else None,
+            "id": item["entity_id"],
+            "merchant": item["title"],
+            "amount": item["amount"],
+            "direction": item["direction"],
+            "occurred_at": item["occurred_at"],
         }
-        for tx in recent_result.scalars().all()
-    ]
+        for item in recent_activity
+        if item.get("entity_type") == "ledger_transaction"
+    ][:5]
 
     return ApiResponse(data={
-        "memo_total": memo_total or 0,
-        "task_todo": task_todo or 0,
-        "task_total": task_total or 0,
-        "month_expense": float(expense_total or 0),
-        "month_income": float(income_total or 0),
+        "memo_total": today_metrics["memo_total"],
+        "task_todo": today_metrics["task_todo"],
+        "task_total": today_metrics["task_total"],
+        "month_expense": finance_overview["month_expense"],
+        "month_income": finance_overview["month_income"],
         "daily_trend": daily_trend,
-        "recent_transactions": recent_tx,
+        "recent_transactions": recent_transactions,
     })

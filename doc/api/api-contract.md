@@ -347,7 +347,7 @@ import_summary
 settings_summary
 ```
 
-`/dashboard` 保留为轻量统计兼容接口，产品化首页 read model 优先本地计算；`/home/overview` 只提供同构 API 兜底。
+`/home/overview` 是产品化首页云端正常读取入口；`/dashboard` 保留为轻量统计兼容接口。客户端云端读取失败时再 fallback 到本地同构 read model。
 
 ### 13.2 Ledger Overview
 
