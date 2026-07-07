@@ -33,13 +33,19 @@ class LocalTaskCreateInput {
 
 class LocalTaskListInput {
   final String? taskStatus;
+  final String group;
   final int limit;
 
-  const LocalTaskListInput({required this.taskStatus, required this.limit});
+  const LocalTaskListInput({
+    required this.taskStatus,
+    required this.group,
+    required this.limit,
+  });
 
   factory LocalTaskListInput.fromMap(Map<String, Object?> input) {
     return LocalTaskListInput(
       taskStatus: _readOptionalString(input, 'task_status'),
+      group: _readOptionalString(input, 'group') ?? 'all',
       limit: _readPositiveInt(input, 'limit', defaultValue: 20, maxValue: 100),
     );
   }

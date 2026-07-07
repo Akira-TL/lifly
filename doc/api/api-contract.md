@@ -402,7 +402,7 @@ LocalCoreBridge.confirmTaskReminderStrategy(taskId)
 LocalCoreBridge.dismissTaskReminderStrategy(taskId)
 ```
 
-云端同构兜底：
+云端正常读取入口：
 
 ```text
 GET  /api/v1/tasks?group=today|urgent|warning|all
@@ -410,6 +410,8 @@ GET  /api/v1/tasks/{task_id}/reminder-strategy
 POST /api/v1/tasks/{task_id}/reminder-strategy/confirm
 POST /api/v1/tasks/{task_id}/reminder-strategy/dismiss
 ```
+
+边界：没有策略时返回 null，不伪造 AI 预警；策略确认后才更新 Task.remind_at；dismissed 策略不参与任务分组。
 
 ### 13.5 Capture Sessions
 

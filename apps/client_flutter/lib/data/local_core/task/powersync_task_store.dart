@@ -74,11 +74,20 @@ class PowerSyncTaskStore {
     LocalCoreContext context,
   ) async {
     final listInput = LocalTaskListInput.fromMap(input);
-    final rows = await _listRows(
-      taskStatus: listInput.taskStatus,
-      limit: listInput.limit,
-    );
-    return rows.map(LocalTaskMapper.fromRow).toList(growable: false);
+    final rows = await _listRows(taskStatus: listInput.taskStatus, limit: 100);
+    final strategies = await _strategyMap();
+    final tasks = rows
+        .map(LocalTaskMapper.fromRow)
+        .where((task) {
+          return _matchesTaskGroup(
+            task,
+            listInput.group,
+            context.effectiveNow,
+            strategies[task.id],
+          );
+        })
+        .take(listInput.limit);
+    return tasks.toList(growable: false);
   }
 
   Future<LocalTaskRecord> deleteTask(
@@ -233,6 +242,185 @@ class PowerSyncTaskStore {
     });
 
     return updatedTask;
+  }
+
+  Future<LocalTaskReminderStrategy?> getTaskReminderStrategy(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final taskId = input['task_id'] as String? ?? input['id'] as String?;
+    if (taskId == null || taskId.trim().isEmpty) {
+      throw ArgumentError('task_id is required');
+    }
+    await syncService.ensureInitialized();
+    final row = await syncService.db.getOptional(
+      'SELECT id, task_id, warning_level, warning_reason, preparation_window_days, '
+      'ai_suggested_remind_at, strategy_status, source, confirmed_at, dismissed_at, created_at, updated_at '
+      'FROM task_reminder_strategies '
+      'WHERE task_id = ? AND strategy_status != ? '
+      'ORDER BY updated_at DESC LIMIT 1',
+      [taskId, 'dismissed'],
+    );
+    return row == null ? null : _strategyFromRow(row);
+  }
+
+  Future<LocalTaskReminderStrategy> confirmTaskReminderStrategy(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final strategy = await _upsertStrategy(input, context, 'confirmed');
+    final remindAt = strategy.aiSuggestedRemindAt;
+    if (remindAt != null) {
+      await updateTask({
+        'task_id': strategy.taskId,
+        'remind_at': remindAt.toIso8601String(),
+      }, context);
+    }
+    return strategy;
+  }
+
+  Future<LocalTaskReminderStrategy> dismissTaskReminderStrategy(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    return _upsertStrategy(input, context, 'dismissed');
+  }
+
+  Future<LocalTaskReminderStrategy> _upsertStrategy(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+    String status,
+  ) async {
+    final strategyId =
+        input['strategy_id'] as String? ?? input['id'] as String?;
+    final taskId = input['task_id'] as String?;
+    if (strategyId == null && (taskId == null || taskId.trim().isEmpty)) {
+      throw ArgumentError(
+        'task_id is required when strategy_id is not provided',
+      );
+    }
+    await syncService.ensureInitialized();
+    final now = context.effectiveNow.toUtc().toIso8601String();
+    final id = strategyId ?? policy.nextEntityId('task_strategy');
+    await syncService.db.execute(
+      'INSERT OR REPLACE INTO task_reminder_strategies('
+      'id, user_id, task_id, warning_level, warning_reason, preparation_window_days, '
+      'ai_suggested_remind_at, strategy_status, source, confirmed_at, dismissed_at, created_at, updated_at'
+      ') VALUES (?, ?, coalesce((SELECT task_id FROM task_reminder_strategies WHERE id = ?), ?), '
+      'coalesce(?, (SELECT warning_level FROM task_reminder_strategies WHERE id = ?), ?), '
+      'coalesce(?, (SELECT warning_reason FROM task_reminder_strategies WHERE id = ?)), '
+      'coalesce(?, (SELECT preparation_window_days FROM task_reminder_strategies WHERE id = ?)), '
+      'coalesce(?, (SELECT ai_suggested_remind_at FROM task_reminder_strategies WHERE id = ?)), ?, '
+      'coalesce(?, (SELECT source FROM task_reminder_strategies WHERE id = ?), ?), ?, ?, '
+      'coalesce((SELECT created_at FROM task_reminder_strategies WHERE id = ?), ?), ?)',
+      [
+        id,
+        context.userId,
+        id,
+        taskId,
+        input['warning_level'] as String?,
+        id,
+        'normal',
+        input['warning_reason'] as String?,
+        id,
+        input['preparation_window_days'] as int?,
+        id,
+        input['ai_suggested_remind_at'] as String?,
+        id,
+        status,
+        input['source'] as String?,
+        id,
+        'user',
+        status == 'confirmed' ? now : null,
+        status == 'dismissed' ? now : null,
+        id,
+        now,
+        now,
+      ],
+    );
+    final row = await syncService.db.get(
+      'SELECT id, task_id, warning_level, warning_reason, preparation_window_days, '
+      'ai_suggested_remind_at, strategy_status, source, confirmed_at, dismissed_at, created_at, updated_at '
+      'FROM task_reminder_strategies WHERE id = ?',
+      [id],
+    );
+    return _strategyFromRow(row);
+  }
+
+  Future<Map<String, LocalTaskReminderStrategy>> _strategyMap() async {
+    await syncService.ensureInitialized();
+    final rows = await syncService.db.getAll(
+      'SELECT id, task_id, warning_level, warning_reason, preparation_window_days, '
+      'ai_suggested_remind_at, strategy_status, source, confirmed_at, dismissed_at, created_at, updated_at '
+      'FROM task_reminder_strategies WHERE strategy_status != ? ORDER BY updated_at DESC',
+      ['dismissed'],
+    );
+    final result = <String, LocalTaskReminderStrategy>{};
+    for (final row in rows) {
+      final strategy = _strategyFromRow(row);
+      result.putIfAbsent(strategy.taskId, () => strategy);
+    }
+    return result;
+  }
+
+  bool _matchesTaskGroup(
+    LocalTaskRecord task,
+    String group,
+    DateTime now,
+    LocalTaskReminderStrategy? strategy,
+  ) {
+    if (group == 'all') return true;
+    if (task.taskStatus != 'todo' && task.taskStatus != 'doing') return false;
+    final dueAt = task.dueAt;
+    if (group == 'urgent') {
+      return strategy?.warningLevel == 'critical' ||
+          task.priority == 'urgent' ||
+          (dueAt != null && dueAt.isBefore(now));
+    }
+    if (group == 'warning') {
+      return strategy?.warningLevel == 'warning' ||
+          task.priority == 'high' ||
+          (dueAt != null &&
+              dueAt.isAfter(now) &&
+              dueAt.difference(now).inDays <= 3);
+    }
+    if (group == 'today') {
+      if (dueAt == null) return false;
+      final left = dueAt.toUtc();
+      final right = now.toUtc();
+      return left.year == right.year &&
+          left.month == right.month &&
+          left.day == right.day;
+    }
+    return true;
+  }
+
+  LocalTaskReminderStrategy _strategyFromRow(Map<String, Object?> row) {
+    return LocalTaskReminderStrategy(
+      id: row['id'] as String,
+      taskId: row['task_id'] as String,
+      warningLevel: row['warning_level'] as String? ?? 'normal',
+      warningReason: row['warning_reason'] as String?,
+      preparationWindowDays: row['preparation_window_days'] as int?,
+      aiSuggestedRemindAt: _readDateTimeOrNull(row['ai_suggested_remind_at']),
+      strategyStatus: row['strategy_status'] as String? ?? 'suggested',
+      source: row['source'] as String? ?? 'ai',
+      confirmedAt: _readDateTimeOrNull(row['confirmed_at']),
+      dismissedAt: _readDateTimeOrNull(row['dismissed_at']),
+      createdAt: _readDateTime(row['created_at']),
+      updatedAt: _readDateTime(row['updated_at']),
+    );
+  }
+
+  DateTime _readDateTime(Object? value) {
+    if (value is DateTime) return value.toUtc();
+    if (value is String) return DateTime.parse(value).toUtc();
+    throw ArgumentError('Expected ISO datetime string, got $value');
+  }
+
+  DateTime? _readDateTimeOrNull(Object? value) {
+    if (value == null) return null;
+    return _readDateTime(value);
   }
 
   Future<List<Map<String, Object?>>> _listRows({

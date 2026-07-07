@@ -14,6 +14,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
   final List<LocalMemoClassification> _memoClassifications = [];
   final List<LocalLedgerTransactionRecord> _expenses = [];
   final List<LocalTaskRecord> _tasks = [];
+  final List<LocalTaskReminderStrategy> _taskReminderStrategies = [];
   final List<LocalAssetRecord> _assets = [];
   final Map<String, LocalCaptureSession> _captures = {};
   final Map<String, List<LocalCoreEntityRef>> _undoEntries = {};
@@ -442,10 +443,12 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
     LocalCoreContext context,
   ) async {
     final taskStatus = input['task_status'] as String?;
+    final group = input['group'] as String? ?? 'all';
     final limit = input['limit'] as int? ?? 20;
     return _tasks
         .where((task) => task.status == 'active')
         .where((task) => taskStatus == null || task.taskStatus == taskStatus)
+        .where((task) => _matchesTaskGroup(task, group, context.effectiveNow))
         .take(limit)
         .toList();
   }
@@ -545,6 +548,126 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
     );
     _tasks[index] = updated;
     return updated;
+  }
+
+  @override
+  Future<LocalTaskReminderStrategy?> getTaskReminderStrategy(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final taskId = input['task_id'] as String? ?? input['id'] as String?;
+    return _taskReminderStrategies
+        .cast<LocalTaskReminderStrategy?>()
+        .firstWhere(
+          (item) =>
+              item?.taskId == taskId && item?.strategyStatus != 'dismissed',
+          orElse: () => null,
+        );
+  }
+
+  @override
+  Future<LocalTaskReminderStrategy> confirmTaskReminderStrategy(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final item = _upsertTaskReminderStrategy(input, context, 'confirmed');
+    final remindAt = item.aiSuggestedRemindAt;
+    if (remindAt != null) {
+      await updateTask({
+        'task_id': item.taskId,
+        'remind_at': remindAt.toIso8601String(),
+      }, context);
+    }
+    return item;
+  }
+
+  @override
+  Future<LocalTaskReminderStrategy> dismissTaskReminderStrategy(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    return _upsertTaskReminderStrategy(input, context, 'dismissed');
+  }
+
+  LocalTaskReminderStrategy _upsertTaskReminderStrategy(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+    String status,
+  ) {
+    final strategyId =
+        input['strategy_id'] as String? ?? input['id'] as String?;
+    final taskId = input['task_id'] as String?;
+    final index = strategyId == null
+        ? -1
+        : _taskReminderStrategies.indexWhere((item) => item.id == strategyId);
+    final old = index < 0 ? null : _taskReminderStrategies[index];
+    if (old == null && taskId == null) {
+      throw ArgumentError(
+        'task_id is required when strategy_id is not provided',
+      );
+    }
+    final now = context.effectiveNow;
+    final item = LocalTaskReminderStrategy(
+      id: old?.id ?? _nextStableId('task_strategy'),
+      taskId: old?.taskId ?? taskId!,
+      warningLevel:
+          input['warning_level'] as String? ?? old?.warningLevel ?? 'normal',
+      warningReason: input['warning_reason'] as String? ?? old?.warningReason,
+      preparationWindowDays:
+          input['preparation_window_days'] as int? ??
+          old?.preparationWindowDays,
+      aiSuggestedRemindAt: input.containsKey('ai_suggested_remind_at')
+          ? DateTime.tryParse(input['ai_suggested_remind_at'] as String? ?? '')
+          : old?.aiSuggestedRemindAt,
+      strategyStatus: status,
+      source: input['source'] as String? ?? old?.source ?? 'user',
+      createdAt: old?.createdAt ?? now,
+      updatedAt: now,
+      confirmedAt: status == 'confirmed' ? now : old?.confirmedAt,
+      dismissedAt: status == 'dismissed' ? now : old?.dismissedAt,
+    );
+    if (index < 0) {
+      _taskReminderStrategies.add(item);
+    } else {
+      _taskReminderStrategies[index] = item;
+    }
+    return item;
+  }
+
+  bool _matchesTaskGroup(LocalTaskRecord task, String group, DateTime now) {
+    if (group == 'all') return true;
+    if (task.taskStatus != 'todo' && task.taskStatus != 'doing') return false;
+    final dueAt = task.dueAt;
+    final strategy = _taskReminderStrategies
+        .cast<LocalTaskReminderStrategy?>()
+        .firstWhere(
+          (item) =>
+              item?.taskId == task.id && item?.strategyStatus != 'dismissed',
+          orElse: () => null,
+        );
+    if (group == 'urgent') {
+      return strategy?.warningLevel == 'critical' ||
+          task.priority == 'urgent' ||
+          (dueAt != null && dueAt.isBefore(now));
+    }
+    if (group == 'warning') {
+      final warningDue =
+          dueAt != null &&
+          dueAt.isAfter(now) &&
+          dueAt.difference(now).inDays <= 3;
+      return strategy?.warningLevel == 'warning' ||
+          task.priority == 'high' ||
+          warningDue;
+    }
+    if (group == 'today') {
+      if (dueAt == null) return false;
+      final localDue = dueAt.toUtc();
+      final localNow = now.toUtc();
+      return localDue.year == localNow.year &&
+          localDue.month == localNow.month &&
+          localDue.day == localNow.day;
+    }
+    return true;
   }
 
   @override

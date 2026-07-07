@@ -86,15 +86,20 @@ rejected 分类不进入标签统计
 
 ### LC-0704 Task reminder strategies
 
+状态：基础链路已完成，AI 预警策略生成器、Reminder 表落地写入和 UI 消费待补。
+
 目标：补齐任务预警策略、AI 提醒建议、提前准备窗口和用户确认状态。
 
 验收：
 
 ```text
 task_reminder_strategies 模型明确
+PowerSync task_reminder_strategies schema 已接入
 本地任务列表 read model 可输出 urgent / warning / today 分组
-云端任务策略接口提供同构兜底
-策略确认后才更新 Task.remind_at / Reminder
+云端任务策略接口已提供正常读取入口
+没有策略时返回 null，不伪造 AI 预警
+策略确认后才更新 Task.remind_at
+Reminder 表落地写入待补
 ```
 
 ### LC-0705 Mobile five-tab shell

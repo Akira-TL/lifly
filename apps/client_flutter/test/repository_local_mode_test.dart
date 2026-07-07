@@ -52,6 +52,48 @@ void main() {
     expect(page.items.map((item) => item.id), contains(task.id));
   });
 
+  test('TaskRepository handles reminder strategy boundaries locally', () async {
+    final repo = TaskRepository(
+      api,
+      localCore: localCore,
+      dataMode: LiflyDataMode.local,
+    );
+    final task = await repo.create({
+      'title': '需要准备的任务',
+      'due_at': DateTime.now()
+          .toUtc()
+          .add(const Duration(days: 2))
+          .toIso8601String(),
+      'priority': 'normal',
+    });
+
+    expect(await repo.reminderStrategy(task.id), isNull);
+    final warningPageBefore = await repo.listPage(group: 'warning');
+    expect(warningPageBefore.items.map((item) => item.id), contains(task.id));
+
+    final confirmed = await repo.confirmReminderStrategy(task.id, {
+      'warning_level': 'critical',
+      'warning_reason': '需要提前准备材料',
+      'preparation_window_days': 2,
+      'ai_suggested_remind_at': DateTime.now()
+          .toUtc()
+          .add(const Duration(hours: 1))
+          .toIso8601String(),
+      'source': 'ai',
+    });
+    final urgentPage = await repo.listPage(group: 'urgent');
+
+    expect(confirmed['strategy_status'], 'confirmed');
+    expect(confirmed['warning_level'], 'critical');
+    expect(urgentPage.items.map((item) => item.id), contains(task.id));
+
+    final dismissed = await repo.dismissReminderStrategy(task.id, {
+      'strategy_id': confirmed['id'],
+    });
+    expect(dismissed['strategy_status'], 'dismissed');
+    expect(await repo.reminderStrategy(task.id), isNull);
+  });
+
   test(
     'MemoRepository handles local classifications and tag summary',
     () async {

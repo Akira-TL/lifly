@@ -16,16 +16,20 @@ class TaskRepository {
   bool get _useLocalCore =>
       dataMode == LiflyDataMode.local && localCore != null;
 
+  bool get _hasLocalCore => localCore != null;
+
   Future<PagedResult<Task>> listPage({
     int limit = 20,
     int offset = 0,
     String? taskStatus,
     bool overdue = false,
     bool today = false,
+    String group = 'all',
   }) async {
     if (_useLocalCore) {
       final records = await localCore!.listTasks({
         'task_status': taskStatus,
+        'group': group,
         'limit': limit + offset,
       }, LocalCoreContext.flutterUser());
       final pageItems = records
@@ -47,6 +51,7 @@ class TaskRepository {
     }
     if (overdue) params['overdue'] = true;
     if (today) params['today'] = true;
+    if (group != 'all') params['group'] = group;
 
     final res = await api.get('/tasks', params: params);
     return PagedResult.fromData(
@@ -61,6 +66,7 @@ class TaskRepository {
     String? taskStatus,
     bool overdue = false,
     bool today = false,
+    String group = 'all',
   }) async {
     final page = await listPage(
       limit: limit,
@@ -68,6 +74,7 @@ class TaskRepository {
       taskStatus: taskStatus,
       overdue: overdue,
       today: today,
+      group: group,
     );
     return page.items;
   }
@@ -125,6 +132,68 @@ class TaskRepository {
     return Task.fromJson(res['data'] as Map<String, dynamic>);
   }
 
+  Future<Map<String, dynamic>?> reminderStrategy(String taskId) async {
+    if (dataMode == LiflyDataMode.local) {
+      final item = await localCore!.getTaskReminderStrategy({
+        'task_id': taskId,
+      }, LocalCoreContext.flutterUser());
+      return item == null ? null : _strategyToMap(item);
+    }
+
+    try {
+      final res = await api.get('/tasks/$taskId/reminder-strategy');
+      return res['data'] == null
+          ? null
+          : Map<String, dynamic>.from(res['data'] as Map);
+    } catch (error) {
+      if (_hasLocalCore) {
+        final item = await localCore!.getTaskReminderStrategy({
+          'task_id': taskId,
+        }, LocalCoreContext.flutterUser());
+        return item == null ? null : _strategyToMap(item);
+      }
+      throw StateError('Task reminder strategy unavailable: $error');
+    }
+  }
+
+  Future<Map<String, dynamic>> confirmReminderStrategy(
+    String taskId,
+    Map<String, dynamic> data,
+  ) async {
+    if (dataMode == LiflyDataMode.local) {
+      final item = await localCore!.confirmTaskReminderStrategy({
+        ...data,
+        'task_id': taskId,
+      }, LocalCoreContext.flutterUser());
+      return _strategyToMap(item);
+    }
+
+    final res = await api.post(
+      '/tasks/$taskId/reminder-strategy/confirm',
+      data: data,
+    );
+    return Map<String, dynamic>.from(res['data'] as Map);
+  }
+
+  Future<Map<String, dynamic>> dismissReminderStrategy(
+    String taskId,
+    Map<String, dynamic> data,
+  ) async {
+    if (dataMode == LiflyDataMode.local) {
+      final item = await localCore!.dismissTaskReminderStrategy({
+        ...data,
+        'task_id': taskId,
+      }, LocalCoreContext.flutterUser());
+      return _strategyToMap(item);
+    }
+
+    final res = await api.post(
+      '/tasks/$taskId/reminder-strategy/dismiss',
+      data: data,
+    );
+    return Map<String, dynamic>.from(res['data'] as Map);
+  }
+
   Future<void> delete(String id) async {
     if (_useLocalCore) {
       await localCore!.deleteTask({
@@ -148,5 +217,22 @@ class TaskRepository {
       completedAt: record.completedAt,
       createdAt: record.createdAt,
     );
+  }
+
+  Map<String, dynamic> _strategyToMap(LocalTaskReminderStrategy item) {
+    return {
+      'id': item.id,
+      'task_id': item.taskId,
+      'warning_level': item.warningLevel,
+      'warning_reason': item.warningReason,
+      'preparation_window_days': item.preparationWindowDays,
+      'ai_suggested_remind_at': item.aiSuggestedRemindAt?.toIso8601String(),
+      'strategy_status': item.strategyStatus,
+      'source': item.source,
+      'confirmed_at': item.confirmedAt?.toIso8601String(),
+      'dismissed_at': item.dismissedAt?.toIso8601String(),
+      'created_at': item.createdAt.toIso8601String(),
+      'updated_at': item.updatedAt.toIso8601String(),
+    };
   }
 }

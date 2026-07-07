@@ -224,6 +224,22 @@ class Task(Base, TimestampMixin, SoftDeleteMixin, RevisionMixin):
     source: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
+class TaskReminderStrategy(Base, TimestampMixin):
+    __tablename__ = "task_reminder_strategies"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    task_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    warning_level: Mapped[str] = mapped_column(String(16), nullable=False, default="normal")
+    warning_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    preparation_window_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ai_suggested_remind_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    strategy_status: Mapped[str] = mapped_column(String(20), nullable=False, default="suggested")
+    source: Mapped[str] = mapped_column(String(16), nullable=False, default="ai")
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class Reminder(Base):
     __tablename__ = "reminders"
 

@@ -155,6 +155,36 @@ class LocalTaskRecord {
   });
 }
 
+class LocalTaskReminderStrategy {
+  final String id;
+  final String taskId;
+  final String warningLevel;
+  final String? warningReason;
+  final int? preparationWindowDays;
+  final DateTime? aiSuggestedRemindAt;
+  final String strategyStatus;
+  final String source;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? confirmedAt;
+  final DateTime? dismissedAt;
+
+  const LocalTaskReminderStrategy({
+    required this.id,
+    required this.taskId,
+    required this.warningLevel,
+    required this.warningReason,
+    required this.preparationWindowDays,
+    required this.aiSuggestedRemindAt,
+    required this.strategyStatus,
+    required this.source,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.confirmedAt,
+    required this.dismissedAt,
+  });
+}
+
 class LocalAssetRecord {
   final String id;
   final String kind;

@@ -418,7 +418,34 @@ doc/requirements/memo-doc-system.md
 doc/design/ui-information-architecture.md
 ```
 
-### 阶段四：本地 Task reminder strategies
+### 阶段四：Task reminder strategies
+
+状态：基础链路已落地。
+
+已完成：
+
+```text
+服务端 TaskReminderStrategy 模型
+PowerSync task_reminder_strategies schema
+GET /api/v1/tasks?group=today|urgent|warning|all
+GET /api/v1/tasks/{task_id}/reminder-strategy
+POST /api/v1/tasks/{task_id}/reminder-strategy/confirm
+POST /api/v1/tasks/{task_id}/reminder-strategy/dismiss
+LocalCoreBridge task reminder strategy 读取、确认、dismiss
+TaskRepository reminderStrategy / confirmReminderStrategy / dismissReminderStrategy
+没有策略时返回 null，不伪造 AI 预警
+策略确认后才写入 Task.remind_at
+dismissed 策略不参与任务分组
+```
+
+仍待补齐：
+
+```text
+AI 预警策略自动生成器
+Reminder 表落地写入
+任务页 UI 消费策略状态
+首页 attention_items 接入策略增强
+```
 
 平台重点：本地数据模型 / PowerSync schema / Local Core strategy service / reminder 边界 / Flutter repository / 服务端同构 API。
 
