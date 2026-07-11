@@ -34,6 +34,8 @@ UI
 
 首页同步状态必须区分观察位置：服务端只能报告 PowerSync 配置是否可用以及服务端可验证的附件同步统计，不能推断具体客户端在线；客户端 Local Core 读取 PowerSync `currentStatus`，报告连接、连接中、下载、上传、最近同步时间和错误。最新导入状态通过同步到本地的 `import_batches` 计算，不保存不可验证的固定占位状态。
 
+PowerSync 运行配置通常按环境管理并可被 Git 忽略，但同步范围不能依赖人工记忆。`infra/powersync-required-tables.txt` 是当前最低同步表清单，部署或本地配置必须通过 `scripts/check-powersync-sync-scope.sh` 校验。
+
 ## 3. 同步范围
 
 同步范围包括：

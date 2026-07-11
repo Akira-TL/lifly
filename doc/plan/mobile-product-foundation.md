@@ -222,7 +222,7 @@ sync_summary 已接入客户端 PowerSync currentStatus、上传错误与附件�
 服务端 sync_summary 已接入 PowerSync 配置状态与附件同步统计，不伪造客户端在线状态
 import_summary 已接入本地与服务端最新 import_batches
 settings_summary 已接入本地数据库和服务端配置完整性，且不暴露敏感配置
-PowerSync schema 已补入 import_batches；各部署环境的 sync rules 必须同步包含该表
+PowerSync schema 已补入 import_batches；infra/powersync-required-tables.txt 与 scripts/check-powersync-sync-scope.sh 用于约束各部署环境同步范围
 ```
 
 仍待补齐：
