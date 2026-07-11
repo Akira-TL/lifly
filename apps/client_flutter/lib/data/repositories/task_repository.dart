@@ -217,21 +217,155 @@ class TaskRepository {
   }
 
   Future<List<Map<String, dynamic>>> reminders({
-    String status = 'pending',
+    String? status = 'pending',
+    DateTime? dueBefore,
+    int limit = 100,
   }) async {
     if (dataMode == LiflyDataMode.local) {
       final items = await localCore!.listTaskReminders({
         'status': status,
+        'due_before': dueBefore?.toUtc().toIso8601String(),
+        'limit': limit,
       }, LocalCoreContext.flutterUser());
       return items.map(_reminderToMap).toList(growable: false);
     }
 
-    final res = await api.get('/tasks/reminders', params: {'reminder_status': status});
+    try {
+      final res = await api.get(
+        '/tasks/reminders',
+        params: {
+          'reminder_status': ?status,
+          if (dueBefore != null)
+            'due_before': dueBefore.toUtc().toIso8601String(),
+          'limit': limit,
+        },
+      );
+      final items = res['data'] as List? ?? const [];
+      return items
+          .whereType<Map>()
+          .map((item) => item.cast<String, dynamic>())
+          .toList(growable: false);
+    } catch (error) {
+      if (_hasLocalCore) {
+        final items = await localCore!.listTaskReminders({
+          'status': status,
+          'due_before': dueBefore?.toUtc().toIso8601String(),
+          'limit': limit,
+        }, LocalCoreContext.flutterUser());
+        return items.map(_reminderToMap).toList(growable: false);
+      }
+      throw StateError('Task reminders unavailable: $error');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> claimDueReminders({
+    int limit = 20,
+    DateTime? now,
+    int leaseSeconds = 120,
+  }) async {
+    if (_useLocalCore) {
+      final items = await localCore!.claimDueTaskReminders({
+        'limit': limit,
+        'now': now?.toUtc().toIso8601String(),
+        'lease_seconds': leaseSeconds,
+      }, LocalCoreContext.flutterUser(now: now));
+      return items.map(_reminderToMap).toList(growable: false);
+    }
+    final res = await api.post(
+      '/tasks/reminders/claim',
+      data: {
+        'limit': limit,
+        'now': now?.toUtc().toIso8601String(),
+        'lease_seconds': leaseSeconds,
+      },
+    );
     final items = res['data'] as List? ?? const [];
     return items
         .whereType<Map>()
         .map((item) => item.cast<String, dynamic>())
         .toList(growable: false);
+  }
+
+  Future<Map<String, dynamic>> markReminderDelivered(
+    String reminderId, {
+    required String dispatchToken,
+    String? externalId,
+  }) async {
+    if (_useLocalCore) {
+      return _reminderToMap(
+        await localCore!.markTaskReminderDelivered({
+          'reminder_id': reminderId,
+          'dispatch_token': dispatchToken,
+          'external_id': externalId,
+        }, LocalCoreContext.flutterUser()),
+      );
+    }
+    final res = await api.post(
+      '/tasks/reminders/$reminderId/delivered',
+      data: {
+        'dispatch_token': dispatchToken,
+        'external_id': externalId,
+      },
+    );
+    return Map<String, dynamic>.from(res['data'] as Map);
+  }
+
+  Future<Map<String, dynamic>> markReminderFailed(
+    String reminderId, {
+    required String dispatchToken,
+    required String error,
+    int? retryAfterSeconds,
+  }) async {
+    if (_useLocalCore) {
+      return _reminderToMap(
+        await localCore!.markTaskReminderFailed({
+          'reminder_id': reminderId,
+          'dispatch_token': dispatchToken,
+          'error': error,
+          'retry_after_seconds': retryAfterSeconds,
+        }, LocalCoreContext.flutterUser()),
+      );
+    }
+    final res = await api.post(
+      '/tasks/reminders/$reminderId/failed',
+      data: {
+        'dispatch_token': dispatchToken,
+        'error': error,
+        'retry_after_seconds': retryAfterSeconds,
+      },
+    );
+    return Map<String, dynamic>.from(res['data'] as Map);
+  }
+
+  Future<Map<String, dynamic>> retryReminder(
+    String reminderId, {
+    bool resetAttempts = true,
+  }) async {
+    if (_useLocalCore) {
+      return _reminderToMap(
+        await localCore!.retryTaskReminder({
+          'reminder_id': reminderId,
+          'reset_attempts': resetAttempts,
+        }, LocalCoreContext.flutterUser()),
+      );
+    }
+    final res = await api.post(
+      '/tasks/reminders/$reminderId/retry',
+      data: {'reset_attempts': resetAttempts},
+    );
+    return Map<String, dynamic>.from(res['data'] as Map);
+  }
+
+  Future<Map<String, dynamic>> cancelReminder(String reminderId) async {
+    if (_useLocalCore) {
+      return _reminderToMap(
+        await localCore!.cancelTaskReminder({
+          'reminder_id': reminderId,
+        }, LocalCoreContext.flutterUser()),
+      );
+    }
+    final res = await api.post('/tasks/reminders/$reminderId/cancel');
+    return Map<String, dynamic>.from(res['data'] as Map);
   }
 
   Future<void> delete(String id) async {
@@ -267,7 +401,22 @@ class TaskRepository {
       'remind_at': item.remindAt.toIso8601String(),
       'channel': item.channel,
       'reminder_status': item.status,
+      'attempt_count': item.attemptCount,
+      'max_attempts': item.maxAttempts,
+      'next_attempt_at': item.nextAttemptAt?.toIso8601String(),
+      'last_attempt_at': item.lastAttemptAt?.toIso8601String(),
+      'delivered_at': item.deliveredAt?.toIso8601String(),
+      'failed_at': item.failedAt?.toIso8601String(),
+      'cancelled_at': item.cancelledAt?.toIso8601String(),
+      'last_error': item.lastError,
+      'external_id': item.externalId,
+      'dispatch_token': item.dispatchToken,
+      'lease_until': item.leaseUntil?.toIso8601String(),
+      'revision': item.revision,
       'created_at': item.createdAt.toIso8601String(),
+      'updated_at': item.updatedAt.toIso8601String(),
+      'title': item.title,
+      'body': item.body,
     };
   }
 

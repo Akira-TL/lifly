@@ -216,7 +216,22 @@ class LocalReminderRecord {
   final DateTime remindAt;
   final String channel;
   final String status;
+  final int attemptCount;
+  final int maxAttempts;
+  final DateTime? nextAttemptAt;
+  final DateTime? lastAttemptAt;
+  final DateTime? deliveredAt;
+  final DateTime? failedAt;
+  final DateTime? cancelledAt;
+  final String? lastError;
+  final String? externalId;
+  final String? dispatchToken;
+  final DateTime? leaseUntil;
+  final int revision;
   final DateTime createdAt;
+  final DateTime updatedAt;
+  final String? title;
+  final String? body;
 
   const LocalReminderRecord({
     required this.id,
@@ -225,7 +240,22 @@ class LocalReminderRecord {
     required this.remindAt,
     required this.channel,
     required this.status,
+    required this.attemptCount,
+    required this.maxAttempts,
+    required this.nextAttemptAt,
+    required this.lastAttemptAt,
+    required this.deliveredAt,
+    required this.failedAt,
+    required this.cancelledAt,
+    required this.lastError,
+    required this.externalId,
+    required this.dispatchToken,
+    required this.leaseUntil,
+    required this.revision,
     required this.createdAt,
+    required this.updatedAt,
+    this.title,
+    this.body,
   });
 }
 

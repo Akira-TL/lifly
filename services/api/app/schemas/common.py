@@ -223,6 +223,27 @@ class TaskReminderStrategyGenerateRequest(BaseModel):
     replace_suggested: bool = True
 
 
+class ReminderClaimRequest(BaseModel):
+    limit: int = Field(default=20, ge=1, le=50)
+    now: datetime | None = None
+    lease_seconds: int = Field(default=120, ge=15, le=600)
+
+
+class ReminderDeliverySuccessRequest(BaseModel):
+    dispatch_token: str = Field(min_length=1, max_length=64)
+    external_id: str | None = Field(default=None, max_length=256)
+
+
+class ReminderDeliveryFailureRequest(BaseModel):
+    dispatch_token: str = Field(min_length=1, max_length=64)
+    error: str = Field(min_length=1, max_length=4096)
+    retry_after_seconds: int | None = Field(default=None, ge=0, le=86400)
+
+
+class ReminderRetryRequest(BaseModel):
+    reset_attempts: bool = True
+
+
 # ─── Asset ───────────────────────────────────────────────────────────────────
 
 class AssetCreateUploadUrl(BaseModel):

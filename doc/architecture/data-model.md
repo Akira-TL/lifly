@@ -196,10 +196,25 @@ CREATE TABLE reminders (
   target_id UUID NOT NULL,
   remind_at TIMESTAMPTZ NOT NULL,
   channel TEXT NOT NULL, -- app / push / email / bot
-  reminder_status TEXT NOT NULL, -- pending / sent / cancelled / failed
-  created_at TIMESTAMPTZ NOT NULL
+  reminder_status TEXT NOT NULL, -- pending / delivered / failed / cancelled
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 3,
+  next_attempt_at TIMESTAMPTZ,
+  last_attempt_at TIMESTAMPTZ,
+  delivered_at TIMESTAMPTZ,
+  failed_at TIMESTAMPTZ,
+  cancelled_at TIMESTAMPTZ,
+  last_error TEXT,
+  external_id TEXT,
+  dispatch_token TEXT,
+  lease_until TIMESTAMPTZ,
+  revision BIGINT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
 );
 ```
+
+`reminder_status` 是业务状态，认领中的并发控制不增加第五种状态，而是使用短期 `dispatch_token / lease_until`。同一个 Reminder ID 同时作为平台通知幂等键；lease 过期后允许再次认领，但平台适配器必须对相同幂等键去重。失败状态通过 `next_attempt_at` 和指数退避自动重试，达到 `max_attempts` 后等待用户手动 retry。现有数据库通过 additive schema compatibility 补齐新增字段，正式 migration runner 落地后迁入版本化迁移。
 
 ## 12. calendar_events 预留
 

@@ -96,6 +96,50 @@ void main() {
     expect(await repo.reminderStrategy(task.id), isNull);
   });
 
+  test('TaskRepository manages reminder dispatch lifecycle locally', () async {
+    final repo = TaskRepository(
+      api,
+      localCore: localCore,
+      dataMode: LiflyDataMode.local,
+    );
+    final now = DateTime.now().toUtc();
+    final task = await repo.create({
+      'title': '本地派发任务',
+      'description': '验证 repository 提醒状态接口',
+      'due_at': now.add(const Duration(hours: 2)).toIso8601String(),
+    });
+    await repo.confirmReminderStrategy(task.id, {
+      'warning_level': 'warning',
+      'ai_suggested_remind_at': now.toIso8601String(),
+    });
+
+    final claimed = await repo.claimDueReminders(
+      now: now.add(const Duration(seconds: 1)),
+    );
+    expect(claimed, hasLength(1));
+    expect(claimed.single['attempt_count'], 1);
+    final reminderId = claimed.single['id'] as String;
+    final dispatchToken = claimed.single['dispatch_token'] as String;
+
+    final failed = await repo.markReminderFailed(
+      reminderId,
+      dispatchToken: dispatchToken,
+      error: 'temporary notification failure',
+      retryAfterSeconds: 0,
+    );
+    expect(failed['reminder_status'], 'failed');
+    expect(failed['last_error'], 'temporary notification failure');
+
+    final retried = await repo.retryReminder(reminderId);
+    expect(retried['reminder_status'], 'pending');
+    expect(retried['attempt_count'], 0);
+
+    final cancelled = await repo.cancelReminder(reminderId);
+    expect(cancelled['reminder_status'], 'cancelled');
+    final cancelledItems = await repo.reminders(status: 'cancelled');
+    expect(cancelledItems.map((item) => item['id']), contains(reminderId));
+  });
+
   test(
     'MemoRepository handles local classifications and tag summary',
     () async {

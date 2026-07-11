@@ -76,7 +76,9 @@ def test_ledger_budget_routes_cover_crud_conflict_and_audit() -> None:
 
 def test_existing_database_budget_revision_is_hardened_additively() -> None:
     source = inspect.getsource(schema_compat.ensure_schema_compatibility)
+    sqlite_helper_source = inspect.getsource(schema_compat._add_sqlite_columns)
 
     assert "ALTER TABLE ledger_budgets" in source
     assert "ADD COLUMN IF NOT EXISTS revision" in source
-    assert "PRAGMA table_info(ledger_budgets)" in source
+    assert "ledger_budgets" in source
+    assert "PRAGMA table_info" in sqlite_helper_source

@@ -8,6 +8,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.db.models import Reminder, Task, TaskReminderStrategy
+from app.modules.tasks.reminder_delivery_service import (
+    ReminderNotFoundError,
+    ReminderStateError,
+    cancel_active_reminders_for_task,
+    cancel_reminder,
+    claim_due_reminders,
+    mark_reminder_delivered,
+    mark_reminder_failed,
+    reminder_to_dict,
+    retry_reminder,
+)
 from app.modules.tasks.reminder_strategy_engine import (
     ensure_reminder_for_strategy,
     ensure_task_reminder_strategy,
@@ -20,6 +31,10 @@ from app.modules.tasks.service import (
     write_task_audit,
 )
 from app.schemas.common import (
+    ReminderClaimRequest,
+    ReminderDeliveryFailureRequest,
+    ReminderDeliverySuccessRequest,
+    ReminderRetryRequest,
     TaskCreate,
     TaskReminderStrategyGenerateRequest,
     TaskUpdate,
@@ -61,15 +76,13 @@ def _strategy_data(strategy: TaskReminderStrategy) -> dict:
 
 
 def _reminder_data(reminder: Reminder) -> dict:
-    return {
-        "id": reminder.id,
-        "target_type": reminder.target_type,
-        "target_id": reminder.target_id,
-        "remind_at": reminder.remind_at.isoformat() if reminder.remind_at else None,
-        "channel": reminder.channel,
-        "reminder_status": reminder.reminder_status,
-        "created_at": reminder.created_at.isoformat() if reminder.created_at else None,
-    }
+    return reminder_to_dict(reminder)
+
+
+def _reminder_http_error(error: Exception) -> HTTPException:
+    if isinstance(error, ReminderNotFoundError):
+        return HTTPException(status_code=404, detail=str(error))
+    return HTTPException(status_code=409, detail=str(error))
 
 
 async def _load_task(db: AsyncSession, task_id: str) -> Task:
@@ -132,6 +145,12 @@ async def _upsert_strategy(
             await ensure_reminder_for_strategy(db, task=task, strategy=strategy)
     elif status == "dismissed":
         strategy.dismissed_at = datetime.now(timezone.utc)
+        await cancel_active_reminders_for_task(
+            db,
+            task_id=task_id,
+            user_id=DEFAULT_LOCAL_USER_ID,
+            source_channel="strategy",
+        )
     await db.commit()
     await db.refresh(strategy)
     return strategy
@@ -245,19 +264,119 @@ async def list_tasks(
 
 @router.get("/reminders", response_model=ApiResponse)
 async def list_task_reminders(
-    reminder_status: str = Query(default="pending"),
+    reminder_status: str | None = Query(
+        default="pending",
+        pattern=r"^(pending|delivered|failed|cancelled)$",
+    ),
+    due_before: datetime | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
+    query = select(Reminder).where(
+        Reminder.user_id == DEFAULT_LOCAL_USER_ID,
+        Reminder.target_type == "task",
+    )
+    if reminder_status:
+        query = query.where(Reminder.reminder_status == reminder_status)
+    if due_before:
+        query = query.where(Reminder.remind_at <= due_before)
     result = await db.execute(
-        select(Reminder)
-        .where(
-            Reminder.user_id == DEFAULT_LOCAL_USER_ID,
-            Reminder.target_type == "task",
-            Reminder.reminder_status == reminder_status,
-        )
-        .order_by(Reminder.remind_at.asc())
+        query.order_by(Reminder.remind_at.asc(), Reminder.created_at.asc()).limit(limit)
     )
     return ApiResponse(data=[_reminder_data(item) for item in result.scalars().all()])
+
+
+@router.post("/reminders/claim", response_model=ApiResponse)
+async def claim_task_reminders(
+    data: ReminderClaimRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    reminders = await claim_due_reminders(
+        db,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        limit=data.limit,
+        now=data.now,
+        lease_seconds=data.lease_seconds,
+    )
+    await db.commit()
+    return ApiResponse(data=[_reminder_data(item) for item in reminders])
+
+
+@router.post("/reminders/{reminder_id}/delivered", response_model=ApiResponse)
+async def deliver_task_reminder(
+    reminder_id: str,
+    data: ReminderDeliverySuccessRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        reminder = await mark_reminder_delivered(
+            db,
+            reminder_id=reminder_id,
+            user_id=DEFAULT_LOCAL_USER_ID,
+            dispatch_token=data.dispatch_token,
+            external_id=data.external_id,
+        )
+    except (ReminderNotFoundError, ReminderStateError) as error:
+        raise _reminder_http_error(error) from error
+    await db.commit()
+    return ApiResponse(data=_reminder_data(reminder))
+
+
+@router.post("/reminders/{reminder_id}/failed", response_model=ApiResponse)
+async def fail_task_reminder(
+    reminder_id: str,
+    data: ReminderDeliveryFailureRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        reminder = await mark_reminder_failed(
+            db,
+            reminder_id=reminder_id,
+            user_id=DEFAULT_LOCAL_USER_ID,
+            dispatch_token=data.dispatch_token,
+            error=data.error,
+            retry_after_seconds=data.retry_after_seconds,
+        )
+    except (ReminderNotFoundError, ReminderStateError) as error:
+        raise _reminder_http_error(error) from error
+    await db.commit()
+    return ApiResponse(data=_reminder_data(reminder))
+
+
+@router.post("/reminders/{reminder_id}/retry", response_model=ApiResponse)
+async def retry_task_reminder(
+    reminder_id: str,
+    data: ReminderRetryRequest = Body(default_factory=ReminderRetryRequest),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        reminder = await retry_reminder(
+            db,
+            reminder_id=reminder_id,
+            user_id=DEFAULT_LOCAL_USER_ID,
+            reset_attempts=data.reset_attempts,
+        )
+    except (ReminderNotFoundError, ReminderStateError) as error:
+        raise _reminder_http_error(error) from error
+    await db.commit()
+    return ApiResponse(data=_reminder_data(reminder))
+
+
+@router.post("/reminders/{reminder_id}/cancel", response_model=ApiResponse)
+async def cancel_task_reminder(
+    reminder_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        reminder = await cancel_reminder(
+            db,
+            reminder_id=reminder_id,
+            user_id=DEFAULT_LOCAL_USER_ID,
+        )
+    except (ReminderNotFoundError, ReminderStateError) as error:
+        raise _reminder_http_error(error) from error
+    await db.commit()
+    return ApiResponse(data=_reminder_data(reminder))
 
 
 @router.get("/{task_id}/reminder-strategy", response_model=ApiResponse)
@@ -332,6 +451,13 @@ async def update_task(task_id: str, data: TaskUpdate, db: AsyncSession = Depends
     for key, value in update_data.items():
         setattr(task, key, value)
     task.revision += 1
+    if task.task_status in {"done", "cancelled"}:
+        await cancel_active_reminders_for_task(
+            db,
+            task_id=task.id,
+            user_id=DEFAULT_LOCAL_USER_ID,
+            source_channel="task-update",
+        )
 
     await write_task_audit(
         db,
@@ -376,6 +502,12 @@ async def delete_task(task_id: str, db: AsyncSession = Depends(get_db)):
     task.status = "user_trashed"
     task.deleted_at = datetime.now(timezone.utc)
     task.revision += 1
+    await cancel_active_reminders_for_task(
+        db,
+        task_id=task.id,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        source_channel="task-delete",
+    )
 
     await write_task_audit(
         db,

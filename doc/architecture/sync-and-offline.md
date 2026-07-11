@@ -34,6 +34,8 @@ UI
 
 预算写入在 Local Core 中形成 `ledger_budget` CRUD 变更，经 PowerSync 上传到服务端；服务端按 `revision` 拒绝陈旧版本，并按用户、月份和分类范围拒绝重复 active 预算。云端写请求出现结果不确定时，repository 不自动重复写入本地，避免一笔操作形成 API 与 Local Core 双写；明确离线模式下才直接写入 Local Core。
 
+Reminder 派发状态同样通过 PowerSync 同步。客户端认领到期提醒时写入 `dispatch_token / lease_until / attempt_count`，平台通知成功或失败后写回 `delivered / failed` 及时间、错误和 external ID；服务端按 `revision` 拒绝陈旧状态。lease 过期允许其他执行器重新认领，但所有平台适配器必须使用 reminder ID 作为幂等键，避免重连或崩溃恢复造成重复通知。任务完成、取消、删除或策略 dismiss 会把尚未送达的提醒同步为 cancelled。
+
 首页同步状态必须区分观察位置：服务端只能报告 PowerSync 配置是否可用以及服务端可验证的附件同步统计，不能推断具体客户端在线；客户端 Local Core 读取 PowerSync `currentStatus`，报告连接、连接中、下载、上传、最近同步时间和错误。最新导入状态通过同步到本地的 `import_batches` 计算，不保存不可验证的固定占位状态。
 
 PowerSync 运行配置通常按环境管理并可被 Git 忽略，但同步范围不能依赖人工记忆。`infra/powersync-required-tables.txt` 是当前最低同步表清单，部署或本地配置必须通过 `scripts/check-powersync-sync-scope.sh` 校验。

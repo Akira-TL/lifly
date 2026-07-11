@@ -6,6 +6,8 @@ import 'package:client_flutter/data/local_core/local_home_overview_builder.dart'
 import 'package:client_flutter/data/local_core/memo/local_memo_classification_engine.dart';
 import 'package:client_flutter/data/local_core/task/local_task_reminder_strategy_engine.dart';
 
+const Object _fakeReminderUnchanged = Object();
+
 class FakeLocalCoreBridge implements LocalCoreBridge {
   final LocalCoreIdGenerator _idGenerator;
 
@@ -765,6 +767,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
       updatedAt: now,
     );
     _tasks[index] = updated;
+    _cancelFakeReminders(updated.id, context);
     return updated;
   }
 
@@ -801,6 +804,9 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
       updatedAt: context.effectiveNow,
     );
     _tasks[index] = updated;
+    if (updated.taskStatus == 'done' || updated.taskStatus == 'cancelled') {
+      _cancelFakeReminders(updated.id, context);
+    }
     return updated;
   }
 
@@ -831,6 +837,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
       updatedAt: context.effectiveNow,
     );
     _tasks[index] = updated;
+    _cancelFakeReminders(updated.id, context);
     return updated;
   }
 
@@ -909,7 +916,9 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   ) async {
-    return _upsertTaskReminderStrategy(input, context, 'dismissed');
+    final strategy = _upsertTaskReminderStrategy(input, context, 'dismissed');
+    _cancelFakeReminders(strategy.taskId, context);
+    return strategy;
   }
 
   @override
@@ -917,11 +926,185 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   ) async {
-    final status = input['status'] as String? ?? input['reminder_status'] as String? ?? 'pending';
-    return _reminders
-        .where((item) => item.targetType == 'task' && item.status == status)
-        .toList(growable: false)
+    final status = input.containsKey('status')
+        ? input['status'] as String?
+        : input['reminder_status'] as String? ?? 'pending';
+    final dueBefore = DateTime.tryParse(input['due_before'] as String? ?? '');
+    final limit = input['limit'] as int? ?? 100;
+    final items = _reminders
+        .where((item) => item.targetType == 'task')
+        .where((item) => status == null || item.status == status)
+        .where(
+          (item) => dueBefore == null || !item.remindAt.isAfter(dueBefore),
+        )
+        .toList()
       ..sort((a, b) => a.remindAt.compareTo(b.remindAt));
+    return items.take(limit).toList(growable: false);
+  }
+
+  @override
+  Future<List<LocalReminderRecord>> claimDueTaskReminders(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final now = DateTime.tryParse(input['now'] as String? ?? '') ??
+        context.effectiveNow;
+    final limit = input['limit'] as int? ?? 20;
+    final leaseSeconds = input['lease_seconds'] as int? ?? 120;
+    final candidates = _reminders
+        .asMap()
+        .entries
+        .where(
+          (entry) =>
+              const {'pending', 'failed'}.contains(entry.value.status) &&
+              !entry.value.remindAt.isAfter(now) &&
+              entry.value.attemptCount < entry.value.maxAttempts &&
+              (entry.value.nextAttemptAt == null ||
+                  !entry.value.nextAttemptAt!.isAfter(now)) &&
+              (entry.value.leaseUntil == null ||
+                  !entry.value.leaseUntil!.isAfter(now)),
+        )
+        .take(limit)
+        .toList();
+    final claimed = <LocalReminderRecord>[];
+    for (final entry in candidates) {
+      final old = entry.value;
+      final task = _tasks.cast<LocalTaskRecord?>().firstWhere(
+            (item) =>
+                item?.id == old.targetId &&
+                item?.status == 'active' &&
+                const {'todo', 'doing'}.contains(item?.taskStatus),
+            orElse: () => null,
+          );
+      if (task == null) continue;
+      final updated = _copyFakeReminder(
+        old,
+        status: 'pending',
+        attemptCount: old.attemptCount + 1,
+        nextAttemptAt: null,
+        lastAttemptAt: now,
+        dispatchToken: _nextStableId('reminder_claim'),
+        leaseUntil: now.add(Duration(seconds: leaseSeconds)),
+        revision: old.revision + 1,
+        updatedAt: now,
+        title: task.title,
+        body: task.description,
+      );
+      _reminders[entry.key] = updated;
+      claimed.add(updated);
+    }
+    return claimed;
+  }
+
+  @override
+  Future<LocalReminderRecord> markTaskReminderDelivered(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final index = _fakeReminderIndex(input);
+    final old = _reminders[index];
+    if (old.status == 'delivered') return old;
+    _requireFakeClaim(old, input['dispatch_token'] as String?);
+    final updated = _copyFakeReminder(
+      old,
+      status: 'delivered',
+      deliveredAt: context.effectiveNow,
+      failedAt: null,
+      cancelledAt: null,
+      lastError: null,
+      externalId: input['external_id'] as String? ?? old.externalId,
+      dispatchToken: null,
+      leaseUntil: null,
+      nextAttemptAt: null,
+      revision: old.revision + 1,
+      updatedAt: context.effectiveNow,
+    );
+    _reminders[index] = updated;
+    return updated;
+  }
+
+  @override
+  Future<LocalReminderRecord> markTaskReminderFailed(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final index = _fakeReminderIndex(input);
+    final old = _reminders[index];
+    _requireFakeClaim(old, input['dispatch_token'] as String?);
+    final error = (input['error'] as String? ?? '').trim();
+    if (error.isEmpty) throw ArgumentError('error is required');
+    final now = context.effectiveNow;
+    final retryAfterSeconds = input['retry_after_seconds'] as int? ??
+        _fakeRetryDelaySeconds(old.attemptCount);
+    final updated = _copyFakeReminder(
+      old,
+      status: 'failed',
+      failedAt: now,
+      lastError: error,
+      nextAttemptAt: old.attemptCount >= old.maxAttempts
+          ? null
+          : now.add(Duration(seconds: retryAfterSeconds)),
+      dispatchToken: null,
+      leaseUntil: null,
+      revision: old.revision + 1,
+      updatedAt: now,
+    );
+    _reminders[index] = updated;
+    return updated;
+  }
+
+  @override
+  Future<LocalReminderRecord> retryTaskReminder(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final index = _fakeReminderIndex(input);
+    final old = _reminders[index];
+    if (old.status == 'pending') return old;
+    if (old.status != 'failed') {
+      throw StateError('Reminder ${old.id} cannot retry from ${old.status}');
+    }
+    final updated = _copyFakeReminder(
+      old,
+      status: 'pending',
+      attemptCount: (input['reset_attempts'] as bool? ?? true)
+          ? 0
+          : old.attemptCount,
+      nextAttemptAt: context.effectiveNow,
+      failedAt: null,
+      lastError: null,
+      dispatchToken: null,
+      leaseUntil: null,
+      revision: old.revision + 1,
+      updatedAt: context.effectiveNow,
+    );
+    _reminders[index] = updated;
+    return updated;
+  }
+
+  @override
+  Future<LocalReminderRecord> cancelTaskReminder(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final index = _fakeReminderIndex(input);
+    final old = _reminders[index];
+    if (old.status == 'cancelled') return old;
+    if (old.status == 'delivered') {
+      throw StateError('Delivered reminder ${old.id} cannot be cancelled');
+    }
+    final updated = _copyFakeReminder(
+      old,
+      status: 'cancelled',
+      cancelledAt: context.effectiveNow,
+      nextAttemptAt: null,
+      dispatchToken: null,
+      leaseUntil: null,
+      revision: old.revision + 1,
+      updatedAt: context.effectiveNow,
+    );
+    _reminders[index] = updated;
+    return updated;
   }
 
   void _upsertFakeReminder(
@@ -931,16 +1114,39 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
     final remindAt = strategy.aiSuggestedRemindAt;
     if (remindAt == null) return;
     final index = _reminders.indexWhere(
-      (item) => item.targetType == 'task' && item.targetId == strategy.taskId && item.status == 'pending',
+      (item) =>
+          item.targetType == 'task' &&
+          item.targetId == strategy.taskId &&
+          const {'pending', 'failed'}.contains(item.status),
     );
+    final old = index < 0 ? null : _reminders[index];
+    final task = _tasks.cast<LocalTaskRecord?>().firstWhere(
+          (item) => item?.id == strategy.taskId,
+          orElse: () => null,
+        );
     final item = LocalReminderRecord(
-      id: index < 0 ? _nextStableId('reminder') : _reminders[index].id,
+      id: old?.id ?? _nextStableId('reminder'),
       targetType: 'task',
       targetId: strategy.taskId,
       remindAt: remindAt,
       channel: 'app',
       status: 'pending',
-      createdAt: index < 0 ? context.effectiveNow : _reminders[index].createdAt,
+      attemptCount: 0,
+      maxAttempts: old?.maxAttempts ?? 3,
+      nextAttemptAt: remindAt,
+      lastAttemptAt: old?.lastAttemptAt,
+      deliveredAt: null,
+      failedAt: null,
+      cancelledAt: null,
+      lastError: null,
+      externalId: old?.externalId,
+      dispatchToken: null,
+      leaseUntil: null,
+      revision: (old?.revision ?? 0) + 1,
+      createdAt: old?.createdAt ?? context.effectiveNow,
+      updatedAt: context.effectiveNow,
+      title: task?.title,
+      body: task?.description,
     );
     if (index < 0) {
       _reminders.add(item);
@@ -1028,6 +1234,122 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
           localDue.day == localNow.day;
     }
     return true;
+  }
+
+  int _fakeReminderIndex(Map<String, Object?> input) {
+    final reminderId = input['reminder_id'] as String? ?? input['id'] as String?;
+    final index = _reminders.indexWhere((item) => item.id == reminderId);
+    if (index < 0) throw StateError('Reminder not found: $reminderId');
+    return index;
+  }
+
+  void _requireFakeClaim(
+    LocalReminderRecord reminder,
+    String? dispatchToken,
+  ) {
+    if (reminder.status == 'delivered' || reminder.status == 'cancelled') {
+      throw StateError(
+        'Reminder ${reminder.id} cannot transition from ${reminder.status}',
+      );
+    }
+    if (dispatchToken == null || reminder.dispatchToken != dispatchToken) {
+      throw StateError('Reminder ${reminder.id} dispatch token is stale');
+    }
+  }
+
+  int _fakeRetryDelaySeconds(int attemptCount) {
+    final exponent = attemptCount <= 1 ? 0 : attemptCount - 1;
+    final clamped = exponent > 5 ? 5 : exponent;
+    final seconds = 60 * (1 << clamped);
+    return seconds > 3600 ? 3600 : seconds;
+  }
+
+  void _cancelFakeReminders(String taskId, LocalCoreContext context) {
+    for (var index = 0; index < _reminders.length; index += 1) {
+      final old = _reminders[index];
+      if (old.targetType != 'task' ||
+          old.targetId != taskId ||
+          !const {'pending', 'failed'}.contains(old.status)) {
+        continue;
+      }
+      _reminders[index] = _copyFakeReminder(
+        old,
+        status: 'cancelled',
+        cancelledAt: context.effectiveNow,
+        nextAttemptAt: null,
+        dispatchToken: null,
+        leaseUntil: null,
+        revision: old.revision + 1,
+        updatedAt: context.effectiveNow,
+      );
+    }
+  }
+
+  LocalReminderRecord _copyFakeReminder(
+    LocalReminderRecord old, {
+    String? status,
+    int? attemptCount,
+    int? maxAttempts,
+    Object? nextAttemptAt = _fakeReminderUnchanged,
+    Object? lastAttemptAt = _fakeReminderUnchanged,
+    Object? deliveredAt = _fakeReminderUnchanged,
+    Object? failedAt = _fakeReminderUnchanged,
+    Object? cancelledAt = _fakeReminderUnchanged,
+    Object? lastError = _fakeReminderUnchanged,
+    Object? externalId = _fakeReminderUnchanged,
+    Object? dispatchToken = _fakeReminderUnchanged,
+    Object? leaseUntil = _fakeReminderUnchanged,
+    int? revision,
+    DateTime? updatedAt,
+    Object? title = _fakeReminderUnchanged,
+    Object? body = _fakeReminderUnchanged,
+  }) {
+    return LocalReminderRecord(
+      id: old.id,
+      targetType: old.targetType,
+      targetId: old.targetId,
+      remindAt: old.remindAt,
+      channel: old.channel,
+      status: status ?? old.status,
+      attemptCount: attemptCount ?? old.attemptCount,
+      maxAttempts: maxAttempts ?? old.maxAttempts,
+      nextAttemptAt: identical(nextAttemptAt, _fakeReminderUnchanged)
+          ? old.nextAttemptAt
+          : nextAttemptAt as DateTime?,
+      lastAttemptAt: identical(lastAttemptAt, _fakeReminderUnchanged)
+          ? old.lastAttemptAt
+          : lastAttemptAt as DateTime?,
+      deliveredAt: identical(deliveredAt, _fakeReminderUnchanged)
+          ? old.deliveredAt
+          : deliveredAt as DateTime?,
+      failedAt: identical(failedAt, _fakeReminderUnchanged)
+          ? old.failedAt
+          : failedAt as DateTime?,
+      cancelledAt: identical(cancelledAt, _fakeReminderUnchanged)
+          ? old.cancelledAt
+          : cancelledAt as DateTime?,
+      lastError: identical(lastError, _fakeReminderUnchanged)
+          ? old.lastError
+          : lastError as String?,
+      externalId: identical(externalId, _fakeReminderUnchanged)
+          ? old.externalId
+          : externalId as String?,
+      dispatchToken: identical(dispatchToken, _fakeReminderUnchanged)
+          ? old.dispatchToken
+          : dispatchToken as String?,
+      leaseUntil: identical(leaseUntil, _fakeReminderUnchanged)
+          ? old.leaseUntil
+          : leaseUntil as DateTime?,
+      revision: revision ?? old.revision,
+      createdAt: old.createdAt,
+      updatedAt: updatedAt ?? old.updatedAt,
+      title: identical(title, _fakeReminderUnchanged)
+          ? old.title
+          : title as String?,
+      body: identical(body, _fakeReminderUnchanged)
+          ? old.body
+          : body as String?,
+    );
   }
 
   @override

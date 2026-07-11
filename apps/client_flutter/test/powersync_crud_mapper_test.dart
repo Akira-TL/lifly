@@ -112,6 +112,44 @@ void main() {
     expect((change['data'] as Map<String, Object?>), containsPair('category_id', 'food'));
   });
 
+  test('maps reminder delivery state into sync payloads', () {
+    final entry = CrudEntry(
+      9,
+      UpdateType.patch,
+      'reminders',
+      'reminder-1',
+      null,
+      {
+        'user_id': 'local-dev',
+        'target_type': 'task',
+        'target_id': 'task-1',
+        'remind_at': '2026-07-11T10:00:00Z',
+        'channel': 'app',
+        'reminder_status': 'failed',
+        'attempt_count': 1,
+        'max_attempts': 3,
+        'next_attempt_at': '2026-07-11T10:01:00Z',
+        'last_error': 'permission denied',
+        'revision': 2,
+        'created_at': '2026-07-11T09:00:00Z',
+        'updated_at': '2026-07-11T10:00:00Z',
+      },
+    );
+
+    final request = mapper.mapBatch(
+      [entry],
+      clientId: 'lifly-flutter-9-9',
+      fallbackNow: fallbackNow,
+    );
+    final change = request.changes.single.toJson();
+
+    expect(change['entity_type'], 'reminder');
+    expect(change['operation'], 'upsert');
+    expect(change['revision'], 2);
+    expect((change['data'] as Map<String, Object?>), containsPair('reminder_status', 'failed'));
+    expect((change['data'] as Map<String, Object?>), containsPair('attempt_count', 1));
+  });
+
   test('ignores unsupported PowerSync CRUD tables', () {
     final auditEntry = CrudEntry(
       8,

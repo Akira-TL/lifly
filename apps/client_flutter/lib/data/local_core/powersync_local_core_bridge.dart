@@ -378,6 +378,46 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
+  Future<List<LocalReminderRecord>> claimDueTaskReminders(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _taskStore.claimDueTaskReminders(input, context);
+  }
+
+  @override
+  Future<LocalReminderRecord> markTaskReminderDelivered(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _taskStore.markTaskReminderDelivered(input, context);
+  }
+
+  @override
+  Future<LocalReminderRecord> markTaskReminderFailed(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _taskStore.markTaskReminderFailed(input, context);
+  }
+
+  @override
+  Future<LocalReminderRecord> retryTaskReminder(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _taskStore.retryTaskReminder(input, context);
+  }
+
+  @override
+  Future<LocalReminderRecord> cancelTaskReminder(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _taskStore.cancelTaskReminder(input, context);
+  }
+
+  @override
   Future<LocalAssetRecord> registerExternalAsset(
     Map<String, Object?> input,
     LocalCoreContext context,

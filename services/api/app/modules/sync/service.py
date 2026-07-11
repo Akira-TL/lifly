@@ -14,6 +14,7 @@ from app.db.models import (
     LedgerCategory,
     LedgerTransaction,
     Memo,
+    Reminder,
     Task,
 )
 from app.modules.ledger.service import ledger_budget_to_dict, ledger_transaction_to_dict
@@ -25,6 +26,7 @@ from app.modules.sync.schemas import (
     SyncPushRequest,
     SyncPushResponse,
 )
+from app.modules.tasks.reminder_delivery_service import reminder_to_dict
 from app.modules.tasks.service import task_to_dict
 from app.schemas.common import json_serialize
 
@@ -54,6 +56,8 @@ async def apply_sync_push(db: AsyncSession, request: SyncPushRequest) -> SyncPus
             result = await _apply_task_change(db, change, request.client_id)
         elif change.entity_type == "ledger_budget":
             result = await _apply_budget_change(db, change, request.client_id)
+        elif change.entity_type == "reminder":
+            result = await _apply_reminder_change(db, change, request.client_id)
         else:
             result = await _apply_expense_change(db, change, request.client_id)
         results.append(result)
@@ -272,6 +276,103 @@ async def _apply_budget_change(
         client_id,
         before=before,
         after=ledger_budget_to_dict(budget),
+    )
+    return _applied(change)
+
+
+async def _apply_reminder_change(
+    db: AsyncSession,
+    change: SyncChange,
+    client_id: str,
+) -> SyncApplyResult:
+    reminder = await _find_entity(db, Reminder, change)
+    if _is_stale(reminder, change):
+        return _skipped(change, "stale_revision", reminder.revision)
+
+    data = change.data
+    if change.operation == "delete":
+        if reminder is None:
+            return _skipped(change, "missing_entity", None)
+        before = reminder_to_dict(reminder)
+        reminder.reminder_status = "cancelled"
+        reminder.cancelled_at = change.deleted_at or change.updated_at
+        reminder.next_attempt_at = None
+        reminder.dispatch_token = None
+        reminder.lease_until = None
+        reminder.updated_at = change.updated_at
+        reminder.revision = change.revision
+        await db.flush()
+        await _write_sync_audit(
+            db,
+            change,
+            client_id,
+            before=before,
+            after=reminder_to_dict(reminder),
+        )
+        return _applied(change)
+
+    target_type = data.get("target_type") or "task"
+    target_id = data.get("target_id")
+    remind_at = _datetime_value(data.get("remind_at"))
+    status = data.get("reminder_status") or "pending"
+    attempt_count = int(data.get("attempt_count") or 0)
+    max_attempts = int(data.get("max_attempts") or 3)
+    if target_type != "task" or not target_id:
+        return _skipped(
+            change,
+            "invalid_target",
+            reminder.revision if reminder is not None else None,
+        )
+    if remind_at is None:
+        return _skipped(
+            change,
+            "invalid_remind_at",
+            reminder.revision if reminder is not None else None,
+        )
+    if status not in {"pending", "delivered", "failed", "cancelled"}:
+        return _skipped(
+            change,
+            "invalid_status",
+            reminder.revision if reminder is not None else None,
+        )
+    if attempt_count < 0 or max_attempts < 1 or attempt_count > max_attempts:
+        return _skipped(
+            change,
+            "invalid_attempts",
+            reminder.revision if reminder is not None else None,
+        )
+
+    if reminder is None:
+        reminder = Reminder(id=change.entity_id, user_id=change.user_id)
+        db.add(reminder)
+    before = reminder_to_dict(reminder) if reminder.created_at is not None else None
+    reminder.target_type = target_type
+    reminder.target_id = str(target_id)
+    reminder.remind_at = remind_at
+    reminder.channel = data.get("channel") or "app"
+    reminder.reminder_status = status
+    reminder.attempt_count = attempt_count
+    reminder.max_attempts = max_attempts
+    reminder.next_attempt_at = _datetime_value(data.get("next_attempt_at"))
+    reminder.last_attempt_at = _datetime_value(data.get("last_attempt_at"))
+    reminder.delivered_at = _datetime_value(data.get("delivered_at"))
+    reminder.failed_at = _datetime_value(data.get("failed_at"))
+    reminder.cancelled_at = _datetime_value(data.get("cancelled_at"))
+    reminder.last_error = data.get("last_error")
+    reminder.external_id = data.get("external_id")
+    reminder.dispatch_token = data.get("dispatch_token")
+    reminder.lease_until = _datetime_value(data.get("lease_until"))
+    reminder.revision = change.revision
+    if reminder.created_at is None:
+        reminder.created_at = change.created_at or change.updated_at
+    reminder.updated_at = change.updated_at
+    await db.flush()
+    await _write_sync_audit(
+        db,
+        change,
+        client_id,
+        before=before,
+        after=reminder_to_dict(reminder),
     )
     return _applied(change)
 

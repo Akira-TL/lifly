@@ -93,7 +93,7 @@ rejected 分类不进入标签统计
 
 ### LC-0704 Task reminder strategies
 
-状态：基础链路已完成，AI 预警策略生成器和 Reminder 表落地写入已补齐，UI 消费待补。
+状态：策略与 Reminder 派发状态机已完成，平台适配边界已建立；具体 Android/桌面/Web 通知插件接入和任务页 UI 消费待补。
 
 目标：补齐任务预警策略、AI 提醒建议、提前准备窗口和用户确认状态。
 
@@ -107,6 +107,12 @@ PowerSync task_reminder_strategies schema 已接入
 没有策略时返回 null，不伪造 AI 预警
 策略确认后才更新 Task.remind_at
 策略确认后写入 reminders pending 记录
+Reminder 支持 pending / delivered / failed / cancelled 状态
+到期提醒通过 dispatch token + lease 幂等认领
+失败按 next_attempt_at 指数退避并支持手动 retry
+任务完成、取消、删除或策略 dismiss 会取消未送达提醒
+Reminder 状态通过 PowerSync revision 同步并拒绝陈旧写入
+平台通知通过 ReminderNotificationAdapter 接入，不绑定单一插件
 任务创建/更新会触发本地与云端同构的策略建议生成
 ```
 

@@ -72,6 +72,7 @@ class PowerSyncCrudMapper {
     'tasks': 'task',
     'ledger_transactions': 'expense',
     'ledger_budgets': 'ledger_budget',
+    'reminders': 'reminder',
   };
 
   static const Set<String> _metadataKeys = {

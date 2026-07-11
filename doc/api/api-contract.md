@@ -452,6 +452,11 @@ LocalCoreBridge.getTaskReminderStrategy(taskId)
 LocalCoreBridge.confirmTaskReminderStrategy(taskId)
 LocalCoreBridge.dismissTaskReminderStrategy(taskId)
 LocalCoreBridge.listTaskReminders(status)
+LocalCoreBridge.claimDueTaskReminders(limit, now, leaseSeconds)
+LocalCoreBridge.markTaskReminderDelivered(reminderId, dispatchToken, externalId)
+LocalCoreBridge.markTaskReminderFailed(reminderId, dispatchToken, error, retryAfterSeconds)
+LocalCoreBridge.retryTaskReminder(reminderId)
+LocalCoreBridge.cancelTaskReminder(reminderId)
 ```
 
 云端正常读取入口：
@@ -459,13 +464,18 @@ LocalCoreBridge.listTaskReminders(status)
 ```text
 GET  /api/v1/tasks?group=today|urgent|warning|all
 GET  /api/v1/tasks/reminders
+POST /api/v1/tasks/reminders/claim
+POST /api/v1/tasks/reminders/{reminder_id}/delivered
+POST /api/v1/tasks/reminders/{reminder_id}/failed
+POST /api/v1/tasks/reminders/{reminder_id}/retry
+POST /api/v1/tasks/reminders/{reminder_id}/cancel
 GET  /api/v1/tasks/{task_id}/reminder-strategy
 POST /api/v1/tasks/{task_id}/reminder-strategy/generate
 POST /api/v1/tasks/{task_id}/reminder-strategy/confirm
 POST /api/v1/tasks/{task_id}/reminder-strategy/dismiss
 ```
 
-边界：没有策略时返回 null，不伪造 AI 预警；任务创建/更新会生成 suggested 策略；策略确认后才更新 Task.remind_at，并写入 pending reminders；dismissed 策略不参与任务分组。
+边界：没有策略时返回 null，不伪造 AI 预警；任务创建/更新会生成 suggested 策略；策略确认后才更新 Task.remind_at，并写入 pending reminders；dismissed 策略不参与任务分组。Reminder 状态只使用 `pending / delivered / failed / cancelled`；派发前通过 claim 生成短期 `dispatch_token + lease_until`，平台适配器使用 reminder ID 作为幂等键，送达或失败回写时必须携带当前 token。失败按指数退避写入 `next_attempt_at`，耗尽 `max_attempts` 后停止自动重试，手动 retry 可重置次数。任务完成、取消、删除或策略 dismiss 会取消尚未送达的提醒。
 
 ### 13.5 Capture Sessions
 

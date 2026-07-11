@@ -121,15 +121,19 @@ async def ensure_reminder_for_strategy(
     if remind_at is None:
         return None
     result = await db.execute(
-        select(Reminder).where(
+        select(Reminder)
+        .where(
             Reminder.user_id == task.user_id,
             Reminder.target_type == "task",
             Reminder.target_id == task.id,
             Reminder.channel == "app",
-            Reminder.reminder_status == "pending",
+            Reminder.reminder_status.in_(["pending", "failed"]),
         )
+        .order_by(Reminder.created_at.desc())
+        .limit(1)
     )
     reminder = result.scalar_one_or_none()
+    now = datetime.now(timezone.utc)
     if reminder is None:
         reminder = Reminder(
             user_id=task.user_id,
@@ -138,10 +142,20 @@ async def ensure_reminder_for_strategy(
             remind_at=remind_at,
             channel="app",
             reminder_status="pending",
+            next_attempt_at=remind_at,
         )
         db.add(reminder)
     else:
         reminder.remind_at = remind_at
+        reminder.reminder_status = "pending"
+        reminder.attempt_count = 0
+        reminder.next_attempt_at = remind_at
+        reminder.failed_at = None
+        reminder.last_error = None
+        reminder.dispatch_token = None
+        reminder.lease_until = None
+        reminder.updated_at = now
+        reminder.revision += 1
     await db.flush()
     return reminder
 

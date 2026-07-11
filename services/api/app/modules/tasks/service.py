@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import AuditLog, Task
+from app.modules.tasks.reminder_delivery_service import cancel_active_reminders_for_task
 from app.modules.tasks.reminder_strategy_engine import ensure_task_reminder_strategy
 from app.schemas.common import TaskCreate, TaskResponse, json_serialize
 
@@ -128,6 +129,13 @@ async def complete_task_record(
     task.completed_at = completed_at
     task.updated_at = completed_at
     task.revision += 1
+    await cancel_active_reminders_for_task(
+        db,
+        task_id=task.id,
+        user_id=user_id,
+        now=completed_at,
+        source_channel=source_channel,
+    )
     await db.flush()
     await db.refresh(task)
 

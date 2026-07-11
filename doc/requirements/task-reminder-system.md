@@ -50,7 +50,14 @@ target_type
 target_id
 remind_at
 channel
-reminder_status
+reminder_status: pending / delivered / failed / cancelled
+attempt_count / max_attempts
+next_attempt_at / last_attempt_at
+delivered_at / failed_at / cancelled_at
+last_error
+external_id
+dispatch_token / lease_until
+revision
 ```
 
 ## 5. 提醒通道
@@ -60,6 +67,8 @@ MVP：
 - App 内提醒；
 - 系统通知，视平台能力实现；
 - 任务列表提醒。
+
+平台通知实现必须通过 `ReminderNotificationAdapter` 边界接入，业务层不直接依赖 Android、桌面端或 Web 的某个通知插件。适配器接收稳定的 reminder ID 作为幂等键，并返回平台 external ID、失败原因和建议重试间隔。
 
 后续：
 
@@ -138,6 +147,16 @@ created_by: ai / user / rule
 ```
 
 策略确认后，才写入或更新 `Task.remind_at` 和 `Reminder`。
+
+Reminder 派发状态机：
+
+```text
+pending -> delivered
+pending -> failed -> pending（自动或手动重试）
+pending / failed -> cancelled
+```
+
+派发前先认领到期提醒，写入 `dispatch_token`、`lease_until`、`last_attempt_at` 并增加 `attempt_count`。同一 reminder ID 在多次认领和重试中保持不变，平台适配器必须据此去重。失败默认指数退避，并在达到 `max_attempts` 后停止自动认领；用户手动 retry 可重置尝试次数。任务完成、任务取消、任务删除或策略 dismissed 时，尚未 delivered 的 Reminder 必须转为 cancelled。
 
 任务列表 read model 可以按以下分组输出：
 

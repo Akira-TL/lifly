@@ -444,7 +444,7 @@ doc/design/ui-information-architecture.md
 
 ### 阶段四：Task reminder strategies
 
-状态：基础链路已落地。
+状态：策略生成与 Reminder 派发状态机已落地，具体平台通知插件和 UI 消费待补。
 
 已完成：
 
@@ -459,8 +459,21 @@ GET /api/v1/tasks/{task_id}/reminder-strategy
 POST /api/v1/tasks/{task_id}/reminder-strategy/generate
 POST /api/v1/tasks/{task_id}/reminder-strategy/confirm
 POST /api/v1/tasks/{task_id}/reminder-strategy/dismiss
+POST /api/v1/tasks/reminders/claim
+POST /api/v1/tasks/reminders/{reminder_id}/delivered
+POST /api/v1/tasks/reminders/{reminder_id}/failed
+POST /api/v1/tasks/reminders/{reminder_id}/retry
+POST /api/v1/tasks/reminders/{reminder_id}/cancel
 LocalCoreBridge task reminder strategy 生成、读取、确认、dismiss、reminders 读取
-TaskRepository generateReminderStrategy / reminders / reminderStrategy / confirmReminderStrategy / dismissReminderStrategy
+LocalCoreBridge Reminder claim / delivered / failed / retry / cancel
+TaskRepository 策略和 Reminder 状态操作
+Reminder pending / delivered / failed / cancelled 状态机
+派发认领 dispatch token + lease 边界
+失败指数退避、最大尝试次数和手动 retry
+任务完成、取消、删除或策略 dismiss 自动取消未送达提醒
+PowerSync reminder revision 与派发状态同步
+ReminderDispatcher 与 ReminderNotificationAdapter 平台无关适配边界
+reminder ID 作为平台通知稳定幂等键
 没有策略时返回 null，不伪造 AI 预警
 策略确认后才写入 Task.remind_at
 策略确认后写入 pending reminders
@@ -472,7 +485,10 @@ dismissed 策略不参与任务分组
 ```text
 任务页 UI 消费策略状态和 reminders 队列
 首页 attention_items 继续增强未来几天准备事项排序
-系统通知 / App 内提醒派发
+Android 系统通知插件适配器
+桌面端系统通知插件适配器
+Web Notification API 适配器
+前后台调度与操作系统权限交互
 ```
 
 平台重点：本地数据模型 / PowerSync schema / Local Core strategy service / reminder 边界 / Flutter repository / 服务端同构 API。
@@ -500,6 +516,11 @@ LocalCoreBridge.getTaskReminderStrategy(taskId)
 LocalCoreBridge.confirmTaskReminderStrategy(taskId)
 LocalCoreBridge.dismissTaskReminderStrategy(taskId)
 LocalCoreBridge.listTaskReminders(status)
+LocalCoreBridge.claimDueTaskReminders(limit, now, leaseSeconds)
+LocalCoreBridge.markTaskReminderDelivered(reminderId, dispatchToken, externalId)
+LocalCoreBridge.markTaskReminderFailed(reminderId, dispatchToken, error)
+LocalCoreBridge.retryTaskReminder(reminderId)
+LocalCoreBridge.cancelTaskReminder(reminderId)
 ```
 
 云端正常读取入口：
@@ -507,6 +528,11 @@ LocalCoreBridge.listTaskReminders(status)
 ```text
 GET /api/v1/tasks?group=today|urgent|warning|all
 GET /api/v1/tasks/reminders
+POST /api/v1/tasks/reminders/claim
+POST /api/v1/tasks/reminders/{reminder_id}/delivered
+POST /api/v1/tasks/reminders/{reminder_id}/failed
+POST /api/v1/tasks/reminders/{reminder_id}/retry
+POST /api/v1/tasks/reminders/{reminder_id}/cancel
 GET /api/v1/tasks/{task_id}/reminder-strategy
 POST /api/v1/tasks/{task_id}/reminder-strategy/generate
 POST /api/v1/tasks/{task_id}/reminder-strategy/confirm
@@ -696,7 +722,7 @@ Flutter analyze/test 通过
 下一步进入：
 
 ```text
-Reminder 派发状态与平台通知适配边界
+Capture Session 生命周期与附件解析边界
 ```
 
-原因：首页状态摘要与预算完整写入闭环已经具备云端、Local Core 和 PowerSync 同构能力；当前任务策略虽然能生成并写入 pending reminders，但尚未形成 pending / delivered / failed / cancelled 状态流转，也没有与 Android、桌面端和 Web 通知实现解耦的派发适配边界。先补齐平台无关的 Reminder dispatcher 与状态机，才能在后续 UI 阶段安全接入各端通知。
+原因：首页状态摘要、预算写入和 Reminder 派发状态机已经具备服务端、Local Core、PowerSync 与平台适配同构边界。当前最明显的产品地基缺口转为 Capture Session 只能完成单次 parse / commit / undo，缺少会话列表、读取、恢复、取消、多轮 append turn，以及 asset_ids 真正参与解析的接口边界。先补齐会话生命周期，聊天式 AI Capture 后续 UI 才能稳定恢复历史、追加上下文并处理附件。

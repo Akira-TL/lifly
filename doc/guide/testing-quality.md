@@ -148,6 +148,12 @@ scripts/smoke-mcp-v0.1.sh
 客户端不伪造消费洞察
 客户端不根据字符串猜测 AI 已分类状态
 客户端不写死任务提前提醒策略
+Reminder 状态只使用 pending / delivered / failed / cancelled
+到期认领必须生成 dispatch token 和短期 lease，重复认领继续使用 reminder ID 作为平台幂等键
+送达和失败回写必须校验当前 dispatch token，陈旧 token 不得覆盖新状态
+失败提醒必须覆盖指数退避、最大尝试次数和手动 retry
+任务完成、取消、删除和策略 dismiss 必须取消未送达提醒
+平台通知必须通过 ReminderNotificationAdapter 接入，业务层不得直接依赖单一通知插件
 Local Core 可在断网状态计算首页 overview、预算统计、分类占比、任务预警和标签统计
 LedgerRepository 覆盖预算云端优先读取和失败后本地 fallback
 预算创建 / 更新 / 删除必须覆盖总预算与分类预算
@@ -162,6 +168,7 @@ PowerSync 必须能上传 ledger_budget，服务端拒绝陈旧 revision 与重�
 首页 import_summary 必须来自最新 import_batches，不得固定返回 idle
 首页 settings_summary 不得暴露数据库连接串、JWT、对象存储密钥等敏感配置
 PowerSync 部署配置必须通过 scripts/check-powersync-sync-scope.sh，至少覆盖 infra/powersync-required-tables.txt
+PowerSync CRUD mapper 和服务端 sync push 必须覆盖 reminder revision 与派发状态字段
 repository 读取支持 cloudPreferred，云端失败或断网时才降级 Local Core
 开发期 Local Core 默认 user_id 必须与 PowerSync 凭据的 local-dev 对齐
 断网手动验收首页、记账统计、任务预警、备忘分类状态

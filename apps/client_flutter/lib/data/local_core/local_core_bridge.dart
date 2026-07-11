@@ -142,6 +142,26 @@ abstract class LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   );
+  Future<List<LocalReminderRecord>> claimDueTaskReminders(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
+  Future<LocalReminderRecord> markTaskReminderDelivered(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
+  Future<LocalReminderRecord> markTaskReminderFailed(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
+  Future<LocalReminderRecord> retryTaskReminder(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
+  Future<LocalReminderRecord> cancelTaskReminder(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
 
   Future<LocalAssetRecord> registerExternalAsset(
     Map<String, Object?> input,
