@@ -40,7 +40,7 @@ void main() {
       'VALUES (?, ?, ?, ?, ?, ?)',
       [
         'asset-failed',
-        'local_user',
+        'local-dev',
         'failed',
         'active',
         '2026-07-11T10:00:00Z',
@@ -54,7 +54,7 @@ void main() {
       ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         'batch-1',
-        'local_user',
+        'local-dev',
         'alipay',
         'alipay.csv',
         'committed',

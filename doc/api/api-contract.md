@@ -386,6 +386,31 @@ GET /api/v1/ledger/insights?period=YYYY-MM
 
 预算进度、分类占比和基础消费洞察正常由云端接口拉取；同步后本地也可计算，并在云端失败时由 repository fallback。客户端只渲染 repository 返回的同构 DTO，不关心数据来自 api 还是 fallback。
 
+预算管理接口：
+
+```text
+GET    /api/v1/ledger/budgets?period=YYYY-MM&status=active|deleted|all&category_id=
+POST   /api/v1/ledger/budgets
+GET    /api/v1/ledger/budgets/{budget_id}
+PUT    /api/v1/ledger/budgets/{budget_id}
+DELETE /api/v1/ledger/budgets/{budget_id}
+```
+
+预算写入字段：
+
+```text
+period_type: 当前固定 month
+period_key: YYYY-MM
+category_id: null 表示总预算；非 null 表示支出分类预算
+amount: 必须大于 0
+currency: 默认 CNY
+alert_threshold: 大于 0 且不超过 1
+status: active / deleted
+revision: 用于 PowerSync 陈旧写入判定
+```
+
+同一用户、月份和分类范围只能存在一个 active 预算；分类预算只能绑定 active 的 expense 分类。删除使用软删除并写入 `budget.delete` 审计，恢复通过更新 `status=active` 并写入 `budget.restore`。Local Core 与服务端返回同构预算实体；预算列表云端读取失败时可 fallback 到本地。写操作不在不确定的云端失败后自动重复落地本地，避免一次请求形成双写，离线写入应明确使用 Local Core / PowerSync 路径。
+
 ### 13.3 Memo Classifications
 
 本地主路径：

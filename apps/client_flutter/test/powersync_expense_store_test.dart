@@ -88,4 +88,125 @@ void main() {
       expect(auditCount['count'], 3);
     },
   );
+
+  test(
+    'PowerSync budget CRUD persists overall and category budgets',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'lifly_budget_store_',
+      );
+      final service = SyncService();
+      addTearDown(() async {
+        service.dispose();
+        await tempDir.delete(recursive: true);
+      });
+
+      try {
+        await service.initialize(dbPath: '${tempDir.path}/lifly-test.db');
+      } catch (_) {
+        return;
+      }
+
+      await service.db.execute(
+        'INSERT INTO ledger_categories('
+        'id, user_id, name, type, status, created_at, updated_at'
+        ') VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [
+          'category-food',
+          'local-dev',
+          '餐饮',
+          'expense',
+          'active',
+          '2026-07-08T09:00:00.000Z',
+          '2026-07-08T09:00:00.000Z',
+        ],
+      );
+
+      final context = LocalCoreContext.flutterUser(
+        now: DateTime.utc(2026, 7, 8, 9),
+      );
+      final bridge = PowerSyncLocalCoreBridge(syncService: service);
+      final overall = await bridge.createLedgerBudget({
+        'period_key': '2026-07',
+        'amount': 3000,
+        'currency': 'CNY',
+        'alert_threshold': 0.75,
+      }, context);
+      final category = await bridge.createLedgerBudget({
+        'period_key': '2026-07',
+        'category_id': 'category-food',
+        'amount': 1200,
+        'currency': 'CNY',
+      }, context);
+
+      expect(overall.revision, 1);
+      expect(category.categoryId, 'category-food');
+      expect(
+        () => bridge.createLedgerBudget({
+          'period_key': '2026-07',
+          'amount': 1000,
+        }, context),
+        throwsStateError,
+      );
+
+      final budgets = await bridge.listLedgerBudgets({
+        'period': '2026-07',
+      }, context);
+      expect(budgets, hasLength(2));
+
+      final updated = await bridge.updateLedgerBudget({
+        'budget_id': overall.id,
+        'amount': 3500,
+        'alert_threshold': 0.85,
+      }, context);
+      expect(updated.amount, 3500);
+      expect(updated.revision, 2);
+
+      final overview = await bridge.getLedgerOverview({
+        'period': '2026-07',
+      }, context);
+      expect(overview.budgetState, 'configured');
+      expect(overview.budgetAmount, 3500);
+
+      final deletedByUpdate = await bridge.updateLedgerBudget({
+        'budget_id': category.id,
+        'status': 'deleted',
+      }, context);
+      expect(deletedByUpdate.status, 'deleted');
+      expect(deletedByUpdate.revision, 2);
+
+      final restored = await bridge.updateLedgerBudget({
+        'budget_id': category.id,
+        'status': 'active',
+      }, context);
+      expect(restored.status, 'active');
+      expect(restored.revision, 3);
+
+      final deleted = await bridge.deleteLedgerBudget({
+        'budget_id': category.id,
+      }, context);
+      expect(deleted.status, 'deleted');
+      expect(deleted.revision, 4);
+
+      final activeBudgets = await bridge.listLedgerBudgets({
+        'period': '2026-07',
+      }, context);
+      expect(activeBudgets.map((item) => item.id), [overall.id]);
+
+      final auditRows = await service.db.getAll(
+        'SELECT action, entity_type FROM audit_logs '
+        'WHERE entity_type = ? ORDER BY created_at',
+        ['ledger_budget'],
+      );
+      expect(auditRows, hasLength(6));
+      expect(auditRows.map((row) => row['action']), [
+        'budget.create',
+        'budget.create',
+        'budget.update',
+        'budget.delete',
+        'budget.restore',
+        'budget.delete',
+      ]);
+    },
+  );
 }

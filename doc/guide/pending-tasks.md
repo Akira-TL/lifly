@@ -54,18 +54,21 @@ settings_summary 只返回本地数据库与服务端配置完整性，不泄露
 
 ### LC-0702 Ledger budgets and category aggregation
 
-状态：基础链路已完成，本地月份 period 聚合已修正，预算 CRUD、分类预算、月环比和更细洞察待补。
+状态：预算完整写入闭环与分类预算已完成；月环比、更细消费洞察和页面消费待补。
 
 目标：补齐预算、分类占比、月环比和消费洞察地基。
 
 验收：
 
 ```text
-ledger_budgets 模型明确
-PowerSync ledger_budgets schema 已接入
+ledger_budgets 模型明确，并带 revision
+PowerSync ledger_budgets schema、CRUD 上传和云端陈旧版本判定已接入
+服务端与 Local Core 支持总预算、支出分类预算的列表、创建、更新、软删除和恢复
+同一用户、月份和分类范围只允许一个 active 预算
+预算写入记录 ledger_budget 审计快照
 Local Core ledger overview/category summary/insights 可本地计算
 云端 ledger overview/category summary/insights 接口已提供正常读取入口
-LedgerRepository 支持云端优先、失败后本地 fallback
+LedgerRepository 预算读取支持云端优先、失败后本地 fallback
 没有预算时返回 not_configured，而不是客户端假造默认预算
 ```
 

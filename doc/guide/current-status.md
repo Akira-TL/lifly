@@ -113,7 +113,7 @@ Local Chat-style AI Capture
 
 ```text
 Home Overview 基础链路已落地：服务端 /api/v1/home/overview、LocalCoreBridge.getHomeOverview、LocalHomeOverviewBuilder、HomeOverviewRepository 云端优先/失败 fallback、HomePage repository 消费、云端/本地混合最近活动流；finance_overview 已扩展预算金额、预算使用、预算进度、预算剩余、分类占比和财务洞察字段；sync_summary 已接入客户端 PowerSync currentStatus 与服务端附件同步统计，import_summary 已接入最新 import_batches，settings_summary 已接入本地数据库与服务端配置完整性
-Ledger budgets 与分类聚合基础链路已落地：LedgerBudget、PowerSync ledger_budgets schema、/ledger/overview、/ledger/categories/summary、/ledger/insights、LedgerRepository 云端优先/失败 fallback；本地 ledger overview/category summary/summary 已按月份 period 过滤
+Ledger budgets 与分类聚合写入闭环已落地：服务端与 Local Core 支持总预算和支出分类预算的列表、创建、更新、软删除、恢复与审计；PowerSync ledger_budgets 已接入 revision、CRUD 上传和服务端陈旧版本判定；LedgerRepository 预算读取云端优先/失败后本地 fallback，离线写入走 Local Core；/ledger/overview、/ledger/categories/summary、/ledger/insights 与本地月份聚合继续保持同构
 Memo AI 分类与标签元数据基础链路已落地：MemoClassification、TagMetadata、PowerSync memo_classifications/tag_metadata schema、备忘分类生成/确认/拒绝接口、/tags/summary、/tags/metadata 管理接口、服务端与本地创建/更新自动生成分类建议、MemoRepository 分类生成/标签统计/标签元数据管理
 Task reminder strategies 基础链路已落地：TaskReminderStrategy、Reminder、PowerSync task_reminder_strategies/reminders schema、任务分组 group、策略生成/读取/确认/dismiss 接口、策略确认后写入 pending reminders、TaskRepository 策略生成/读写和提醒队列读取
 手机端 5 底部导航 Shell 基础链路已落地：AppShell 收敛为首页 / 备忘 / AI / 记账 / 任务，AI 为居中主按钮，搜索/设置降级到首页入口，宽屏 Flutter 使用 NavigationRail

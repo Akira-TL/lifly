@@ -5,7 +5,14 @@ from typing import Any
 
 import pytest
 
-from app.db.models import AuditLog, LedgerTransaction, Memo, Task
+from app.db.models import (
+    AuditLog,
+    LedgerBudget,
+    LedgerCategory,
+    LedgerTransaction,
+    Memo,
+    Task,
+)
 from app.modules.sync import service as sync_service
 from app.modules.sync.schemas import SyncChange, SyncPushRequest
 
@@ -14,19 +21,25 @@ class FakeAsyncSession:
     def __init__(self) -> None:
         self.entities: dict[tuple[type[Any], str, str], Any] = {}
         self.audit_logs: list[AuditLog] = []
+        self.scalar_results: list[Any | None] = []
         self.flush_count = 0
 
     def add(self, item: Any) -> None:
         if isinstance(item, AuditLog):
             self.audit_logs.append(item)
             return
-        if isinstance(item, (Memo, Task, LedgerTransaction)):
+        if isinstance(item, (Memo, Task, LedgerTransaction, LedgerBudget)):
             self.entities[(type(item), item.id, item.user_id)] = item
             return
         raise TypeError(f"Unsupported fake session item: {type(item)!r}")
 
     async def flush(self) -> None:
         self.flush_count += 1
+
+    async def scalar(self, query: Any) -> Any | None:
+        if self.scalar_results:
+            return self.scalar_results.pop(0)
+        return None
 
 
 async def fake_find_entity(
@@ -187,3 +200,115 @@ async def test_sync_push_applies_expense_upsert() -> None:
     assert tx.revision == 1
     assert session.audit_logs[0].entity_type == "expense"
     assert session.audit_logs[0].action == "sync.upsert"
+
+
+@pytest.mark.anyio
+async def test_sync_push_applies_budget_upsert() -> None:
+    session = FakeAsyncSession()
+    now = datetime(2026, 7, 8, 9, tzinfo=timezone.utc)
+    request = SyncPushRequest(
+        client_id="client-budget",
+        changes=[
+            {
+                "entity_type": "ledger_budget",
+                "operation": "upsert",
+                "entity_id": "budget-sync-1",
+                "revision": 1,
+                "created_at": now,
+                "updated_at": now,
+                "data": {
+                    "period_type": "month",
+                    "period_key": "2026-07",
+                    "category_id": None,
+                    "amount": 1200,
+                    "currency": "CNY",
+                    "alert_threshold": 0.8,
+                    "status": "active",
+                },
+            }
+        ],
+    )
+
+    response = await sync_service.apply_sync_push(session, request)  # type: ignore[arg-type]
+
+    budget = session.entities[(LedgerBudget, "budget-sync-1", "local-dev")]
+    assert response.applied == 1
+    assert float(budget.amount) == 1200
+    assert budget.category_id is None
+    assert budget.revision == 1
+    assert session.audit_logs[0].entity_type == "ledger_budget"
+    assert session.audit_logs[0].action == "sync.upsert"
+
+
+@pytest.mark.anyio
+async def test_sync_push_rejects_invalid_budget_threshold() -> None:
+    session = FakeAsyncSession()
+    now = datetime(2026, 7, 8, 9, tzinfo=timezone.utc)
+    request = SyncPushRequest(
+        client_id="client-budget",
+        changes=[
+            {
+                "entity_type": "ledger_budget",
+                "operation": "upsert",
+                "entity_id": "budget-invalid-threshold",
+                "revision": 1,
+                "created_at": now,
+                "updated_at": now,
+                "data": {
+                    "period_type": "month",
+                    "period_key": "2026-07",
+                    "amount": 1200,
+                    "alert_threshold": 1.2,
+                    "status": "active",
+                },
+            }
+        ],
+    )
+
+    response = await sync_service.apply_sync_push(session, request)  # type: ignore[arg-type]
+
+    assert response.applied == 0
+    assert response.results[0].reason == "invalid_alert_threshold"
+    assert not session.audit_logs
+
+
+@pytest.mark.anyio
+async def test_sync_push_rejects_non_expense_budget_category() -> None:
+    session = FakeAsyncSession()
+    session.scalar_results.append(
+        LedgerCategory(
+            id="salary",
+            user_id="local-dev",
+            name="工资",
+            type="income",
+            status="active",
+        )
+    )
+    now = datetime(2026, 7, 8, 9, tzinfo=timezone.utc)
+    request = SyncPushRequest(
+        client_id="client-budget",
+        changes=[
+            {
+                "entity_type": "ledger_budget",
+                "operation": "upsert",
+                "entity_id": "budget-income-category",
+                "revision": 1,
+                "created_at": now,
+                "updated_at": now,
+                "data": {
+                    "period_type": "month",
+                    "period_key": "2026-07",
+                    "category_id": "salary",
+                    "amount": 1200,
+                    "alert_threshold": 0.8,
+                    "status": "active",
+                },
+            }
+        ],
+    )
+
+    response = await sync_service.apply_sync_push(session, request)  # type: ignore[arg-type]
+
+    assert response.applied == 0
+    assert response.results[0].reason == "invalid_budget_category_type"
+    assert not session.audit_logs

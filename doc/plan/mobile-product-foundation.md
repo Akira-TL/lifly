@@ -288,18 +288,24 @@ doc/guide/testing-quality.md
 
 ### 阶段二：Ledger budgets 与分类聚合
 
-状态：基础链路已落地。
+状态：预算写入与分类预算闭环已落地，聚合增强和 UI 消费待补。
 
 已完成：
 
 ```text
-服务端 LedgerBudget 模型
-PowerSync ledger_budgets schema
+服务端 LedgerBudget 模型与 revision
+PowerSync ledger_budgets schema、CRUD 上传和云端陈旧版本判定
 GET /api/v1/ledger/overview
 GET /api/v1/ledger/categories/summary
 GET /api/v1/ledger/insights
+GET / POST / PUT / DELETE /api/v1/ledger/budgets
 LocalCoreBridge ledger overview / category summary / insights
-LedgerRepository 云端优先读取，失败后本地 fallback
+LocalCoreBridge budget list / create / update / delete
+LedgerRepository 预算读取云端优先，失败后本地 fallback
+总预算和支出分类预算
+active 预算唯一性、分类校验、金额与阈值校验
+预算软删除、恢复和 ledger_budget 审计快照
+Local Core 与 PowerSync 开发期 user_id 统一为 local-dev
 category_id 在本地账单记录中保留
 本地 ledger overview/category summary/summary 已按月份 period 过滤
 没有预算时返回 not_configured，不伪造默认预算
@@ -308,11 +314,9 @@ category_id 在本地账单记录中保留
 仍待补齐：
 
 ```text
-预算创建 / 更新 / 删除 API
-分类预算
 月环比
 更细消费洞察
-首页 UI 消费预算进度、分类占比和洞察
+首页与记账页 UI 消费预算进度、分类占比和洞察
 ```
 
 平台重点：本地数据模型 / PowerSync schema / Local Core query service / repository / 服务端同构 API。
@@ -335,6 +339,10 @@ budget_state: configured / not_configured
 LocalCoreBridge.getLedgerOverview(period)
 LocalCoreBridge.getLedgerCategorySummary(period, direction)
 LocalCoreBridge.getLedgerInsights(period)
+LocalCoreBridge.listLedgerBudgets(period)
+LocalCoreBridge.createLedgerBudget(input)
+LocalCoreBridge.updateLedgerBudget(input)
+LocalCoreBridge.deleteLedgerBudget(input)
 ```
 
 云端正常读取入口：
@@ -343,6 +351,7 @@ LocalCoreBridge.getLedgerInsights(period)
 GET /api/v1/ledger/overview?period=YYYY-MM
 GET /api/v1/ledger/categories/summary?period=YYYY-MM&direction=expense
 GET /api/v1/ledger/insights?period=YYYY-MM
+GET / POST / PUT / DELETE /api/v1/ledger/budgets
 ```
 
 完成后回写：
@@ -687,7 +696,7 @@ Flutter analyze/test 通过
 下一步进入：
 
 ```text
-Ledger budget 完整写入闭环
+Reminder 派发状态与平台通知适配边界
 ```
 
-原因：首页概览和真实状态摘要已经具备云端正常入口与 Local Core 本地兜底；当前最明显的数据地基缺口是预算只能读取和聚合，尚不能创建、更新、删除或维护分类预算。先补齐预算写入闭环，首页和记账页后续 UI 才能消费真实可管理的预算数据。
+原因：首页状态摘要与预算完整写入闭环已经具备云端、Local Core 和 PowerSync 同构能力；当前任务策略虽然能生成并写入 pending reminders，但尚未形成 pending / delivered / failed / cancelled 状态流转，也没有与 Android、桌面端和 Web 通知实现解耦的派发适配边界。先补齐平台无关的 Reminder dispatcher 与状态机，才能在后续 UI 阶段安全接入各端通知。

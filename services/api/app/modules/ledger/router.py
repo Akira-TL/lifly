@@ -11,11 +11,15 @@ from app.db.models import LedgerBudget, LedgerCategory, LedgerTransaction
 from app.modules.ledger.service import (
     DEFAULT_LOCAL_USER_ID,
     create_ledger_transaction_record,
+    ledger_budget_to_dict,
+    ledger_budget_to_response,
     ledger_transaction_to_response,
     write_ledger_audit,
 )
 from app.schemas.common import (
     ApiResponse,
+    LedgerBudgetCreate,
+    LedgerBudgetUpdate,
     LedgerTransactionCreate,
     LedgerTransactionUpdate,
     PaginatedResponse,
@@ -117,6 +121,221 @@ async def build_ledger_overview(
         "budget_progress": budget_progress,
         "currency": budget.currency if budget else "CNY",
     }
+
+
+async def _get_budget(db: AsyncSession, budget_id: str) -> LedgerBudget:
+    budget = await db.scalar(
+        select(LedgerBudget).where(
+            LedgerBudget.id == budget_id,
+            LedgerBudget.user_id == DEFAULT_LOCAL_USER_ID,
+        )
+    )
+    if budget is None:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    return budget
+
+
+async def _validate_budget_category(
+    db: AsyncSession,
+    category_id: str | None,
+) -> LedgerCategory | None:
+    if category_id is None:
+        return None
+    category = await db.scalar(
+        select(LedgerCategory).where(
+            LedgerCategory.id == category_id,
+            LedgerCategory.user_id == DEFAULT_LOCAL_USER_ID,
+            LedgerCategory.status == "active",
+        )
+    )
+    if category is None:
+        raise HTTPException(status_code=404, detail="Budget category not found")
+    if category.type != "expense":
+        raise HTTPException(status_code=422, detail="Budget category must be an expense category")
+    return category
+
+
+async def _ensure_budget_identity_available(
+    db: AsyncSession,
+    *,
+    period_type: str,
+    period_key: str,
+    category_id: str | None,
+    exclude_id: str | None = None,
+) -> None:
+    query = select(LedgerBudget).where(
+        LedgerBudget.user_id == DEFAULT_LOCAL_USER_ID,
+        LedgerBudget.status == "active",
+        LedgerBudget.period_type == period_type,
+        LedgerBudget.period_key == period_key,
+    )
+    query = query.where(
+        LedgerBudget.category_id.is_(None)
+        if category_id is None
+        else LedgerBudget.category_id == category_id
+    )
+    if exclude_id is not None:
+        query = query.where(LedgerBudget.id != exclude_id)
+    if await db.scalar(query) is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="An active budget already exists for this period and category",
+        )
+
+
+async def _budget_response_data(db: AsyncSession, budget: LedgerBudget) -> dict:
+    category_name = None
+    if budget.category_id is not None:
+        category_name = await db.scalar(
+            select(LedgerCategory.name).where(
+                LedgerCategory.id == budget.category_id,
+                LedgerCategory.user_id == DEFAULT_LOCAL_USER_ID,
+            )
+        )
+    return ledger_budget_to_response(
+        budget,
+        category_name=category_name,
+    ).model_dump()
+
+
+@router.get("/budgets", response_model=ApiResponse)
+async def list_budgets(
+    period: str | None = Query(default="current_month"),
+    category_id: str | None = Query(default=None),
+    status: str = Query(default="active", pattern=r"^(active|deleted|all)$"),
+    db: AsyncSession = Depends(get_db),
+):
+    period_key = _normalize_period(period)
+    query = select(LedgerBudget).where(
+        LedgerBudget.user_id == DEFAULT_LOCAL_USER_ID,
+        LedgerBudget.period_type == "month",
+        LedgerBudget.period_key == period_key,
+    )
+    if status != "all":
+        query = query.where(LedgerBudget.status == status)
+    if category_id is not None:
+        query = query.where(LedgerBudget.category_id == category_id)
+    result = await db.execute(
+        query.order_by(LedgerBudget.category_id.asc().nullsfirst(), LedgerBudget.updated_at.desc())
+    )
+    budgets = result.scalars().all()
+    return ApiResponse(data=[await _budget_response_data(db, item) for item in budgets])
+
+
+@router.post("/budgets", response_model=ApiResponse)
+async def create_budget(
+    data: LedgerBudgetCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    category = await _validate_budget_category(db, data.category_id)
+    await _ensure_budget_identity_available(
+        db,
+        period_type=data.period_type,
+        period_key=data.period_key,
+        category_id=data.category_id,
+    )
+    budget = LedgerBudget(
+        user_id=DEFAULT_LOCAL_USER_ID,
+        period_type=data.period_type,
+        period_key=data.period_key,
+        category_id=data.category_id,
+        amount=data.amount,
+        currency=data.currency.upper(),
+        alert_threshold=data.alert_threshold,
+        status="active",
+    )
+    db.add(budget)
+    await db.flush()
+    await write_ledger_audit(
+        db,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        action="budget.create",
+        entity_type="ledger_budget",
+        entity_id=budget.id,
+        after=ledger_budget_to_dict(
+            budget,
+            category_name=category.name if category else None,
+        ),
+    )
+    await db.commit()
+    await db.refresh(budget)
+    return ApiResponse(data=await _budget_response_data(db, budget))
+
+
+@router.get("/budgets/{budget_id}", response_model=ApiResponse)
+async def get_budget(budget_id: str, db: AsyncSession = Depends(get_db)):
+    return ApiResponse(data=await _budget_response_data(db, await _get_budget(db, budget_id)))
+
+
+@router.put("/budgets/{budget_id}", response_model=ApiResponse)
+async def update_budget(
+    budget_id: str,
+    data: LedgerBudgetUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    budget = await _get_budget(db, budget_id)
+    before = ledger_budget_to_dict(budget)
+    updates = data.model_dump(exclude_unset=True)
+    target_period_key = updates.get("period_key", budget.period_key)
+    target_category_id = updates.get("category_id", budget.category_id)
+    target_status = updates.get("status", budget.status)
+    category = await _validate_budget_category(db, target_category_id)
+    if target_status == "active":
+        await _ensure_budget_identity_available(
+            db,
+            period_type=budget.period_type,
+            period_key=target_period_key,
+            category_id=target_category_id,
+            exclude_id=budget.id,
+        )
+    for key, value in updates.items():
+        setattr(budget, key, value.upper() if key == "currency" and value else value)
+    budget.revision += 1
+    await db.flush()
+    if before["status"] == "deleted" and budget.status == "active":
+        audit_action = "budget.restore"
+    elif before["status"] == "active" and budget.status == "deleted":
+        audit_action = "budget.delete"
+    else:
+        audit_action = "budget.update"
+    await write_ledger_audit(
+        db,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        action=audit_action,
+        entity_type="ledger_budget",
+        entity_id=budget.id,
+        before=before,
+        after=ledger_budget_to_dict(
+            budget,
+            category_name=category.name if category else None,
+        ),
+    )
+    await db.commit()
+    await db.refresh(budget)
+    return ApiResponse(data=await _budget_response_data(db, budget))
+
+
+@router.delete("/budgets/{budget_id}", response_model=ApiResponse)
+async def delete_budget(budget_id: str, db: AsyncSession = Depends(get_db)):
+    budget = await _get_budget(db, budget_id)
+    if budget.status == "deleted":
+        return ApiResponse(data=await _budget_response_data(db, budget))
+    before = ledger_budget_to_dict(budget)
+    budget.status = "deleted"
+    budget.revision += 1
+    await db.flush()
+    await write_ledger_audit(
+        db,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        action="budget.delete",
+        entity_type="ledger_budget",
+        entity_id=budget.id,
+        before=before,
+        after=ledger_budget_to_dict(budget),
+    )
+    await db.commit()
+    await db.refresh(budget)
+    return ApiResponse(data=await _budget_response_data(db, budget))
 
 
 @router.post("/transactions", response_model=ApiResponse)

@@ -147,6 +147,130 @@ void main() {
     expect(summary['transaction_count'], 1);
   });
 
+  test('LedgerRepository manages budgets through Local Core', () async {
+    final repo = LedgerRepository(
+      api,
+      localCore: localCore,
+      dataMode: LiflyDataMode.local,
+    );
+    final now = DateTime.now().toUtc();
+    final period =
+        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}';
+
+    final overall = await repo.createBudget({
+      'period_key': period,
+      'amount': 3000,
+      'alert_threshold': 0.8,
+    });
+    final category = await repo.createBudget({
+      'period_key': period,
+      'category_id': 'food',
+      'amount': 1200,
+    });
+    final budgets = await repo.listBudgets(period: period);
+
+    expect(overall.isOverall, isTrue);
+    expect(category.categoryId, 'food');
+    expect(budgets, hasLength(2));
+    expect(
+      () => repo.createBudget({'period_key': period, 'amount': 1000}),
+      throwsStateError,
+    );
+
+    final updated = await repo.updateBudget(overall.id, {'amount': 3500});
+    expect(updated.amount, 3500);
+    expect(updated.revision, 2);
+
+    final deleted = await repo.deleteBudget(category.id);
+    expect(deleted.status, 'deleted');
+    expect(await repo.listBudgets(period: period), hasLength(1));
+  });
+
+  test('LedgerRepository prefers cloud budget reads', () async {
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost/api/v1'));
+    String? requestedPath;
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          requestedPath = options.path;
+          handler.resolve(
+            Response(
+              requestOptions: options,
+              statusCode: 200,
+              data: {
+                'success': true,
+                'data': [
+                  {
+                    'id': 'cloud-budget',
+                    'period_type': 'month',
+                    'period_key': '2026-07',
+                    'category_id': null,
+                    'category_name': null,
+                    'amount': 5000,
+                    'currency': 'CNY',
+                    'alert_threshold': 0.8,
+                    'status': 'active',
+                    'revision': 3,
+                    'created_at': '2026-07-01T00:00:00Z',
+                    'updated_at': '2026-07-08T00:00:00Z',
+                  },
+                ],
+              },
+            ),
+          );
+        },
+      ),
+    );
+    final repo = LedgerRepository(
+      ApiClient(baseUrl: 'http://localhost/api/v1', dio: dio),
+      localCore: localCore,
+      dataMode: LiflyDataMode.api,
+    );
+
+    final budgets = await repo.listBudgets(period: '2026-07');
+
+    expect(requestedPath, '/ledger/budgets');
+    expect(budgets.single.id, 'cloud-budget');
+    expect(budgets.single.amount, 5000);
+    expect(budgets.single.revision, 3);
+  });
+
+  test('LedgerRepository falls back to local budget reads', () async {
+    final now = DateTime.now().toUtc();
+    final period =
+        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}';
+    final localRepo = LedgerRepository(
+      api,
+      localCore: localCore,
+      dataMode: LiflyDataMode.local,
+    );
+    await localRepo.createBudget({'period_key': period, 'amount': 2600});
+
+    final failingDio = Dio(BaseOptions(baseUrl: 'http://localhost/api/v1'));
+    failingDio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          handler.reject(
+            DioException(
+              requestOptions: options,
+              type: DioExceptionType.connectionError,
+              error: 'offline',
+            ),
+          );
+        },
+      ),
+    );
+    final repo = LedgerRepository(
+      ApiClient(baseUrl: 'http://localhost/api/v1', dio: failingDio),
+      localCore: localCore,
+      dataMode: LiflyDataMode.api,
+    );
+
+    final budgets = await repo.listBudgets(period: period);
+
+    expect(budgets.single.amount, 2600);
+  });
+
   test(
     'HomeOverviewRepository computes overview from Local Core in local mode',
     () async {

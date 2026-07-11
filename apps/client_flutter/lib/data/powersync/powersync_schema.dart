@@ -249,6 +249,7 @@ const liflyPowerSyncSchema = Schema([
     Column.text('currency'),
     Column.real('alert_threshold'),
     Column.text('status'),
+    Column.integer('revision'),
     Column.text('created_at'),
     Column.text('updated_at'),
   ]),

@@ -76,6 +76,42 @@ void main() {
     expect((change['data'] as Map<String, Object?>)['status'], 'deleted');
   });
 
+  test('maps ledger budget changes into sync payloads', () {
+    final entry = CrudEntry(
+      9,
+      UpdateType.put,
+      'ledger_budgets',
+      'budget-1',
+      null,
+      {
+        'user_id': 'local-dev',
+        'period_type': 'month',
+        'period_key': '2026-07',
+        'category_id': 'food',
+        'amount': 1200.0,
+        'currency': 'CNY',
+        'alert_threshold': 0.8,
+        'status': 'active',
+        'revision': 1,
+        'created_at': '2026-07-08T09:00:00Z',
+        'updated_at': '2026-07-08T09:00:00Z',
+      },
+    );
+
+    final request = mapper.mapBatch(
+      [entry],
+      clientId: 'lifly-flutter-9-9',
+      fallbackNow: fallbackNow,
+    );
+    final change = request.changes.single.toJson();
+
+    expect(change['entity_type'], 'ledger_budget');
+    expect(change['operation'], 'upsert');
+    expect(change['revision'], 1);
+    expect((change['data'] as Map<String, Object?>), containsPair('period_key', '2026-07'));
+    expect((change['data'] as Map<String, Object?>), containsPair('category_id', 'food'));
+  });
+
   test('ignores unsupported PowerSync CRUD tables', () {
     final auditEntry = CrudEntry(
       8,

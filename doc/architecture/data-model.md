@@ -366,19 +366,20 @@ CREATE TABLE tag_metadata (
 CREATE TABLE ledger_budgets (
   id UUID PRIMARY KEY,
   user_id UUID NOT NULL,
-  period_type TEXT NOT NULL, -- month / week / year
+  period_type TEXT NOT NULL, -- 当前实现固定 month
   period_key TEXT NOT NULL,
   category_id UUID,
   amount NUMERIC(18, 2) NOT NULL,
   currency TEXT NOT NULL,
   alert_threshold NUMERIC(5, 4),
   status TEXT NOT NULL,
+  revision INTEGER NOT NULL DEFAULT 1,
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
 ```
 
-`category_id IS NULL` 表示总预算；`category_id IS NOT NULL` 表示分类预算。
+`category_id IS NULL` 表示总预算；`category_id IS NOT NULL` 表示分类预算。业务层保证 `(user_id, period_type, period_key, category_id)` 在 active 状态下唯一；`revision` 用于 PowerSync 陈旧写入判定。现有数据库通过 additive schema compatibility 补齐 `revision`，正式迁移框架落地后应迁入版本化 migration。
 
 ## 21. task_reminder_strategies
 

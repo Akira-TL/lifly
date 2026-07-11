@@ -16,6 +16,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
   final List<LocalMemoClassification> _memoClassifications = [];
   final List<LocalTagMetadata> _tagMetadata = [];
   final List<LocalLedgerTransactionRecord> _expenses = [];
+  final List<LocalLedgerBudget> _ledgerBudgets = [];
   final List<LocalTaskRecord> _tasks = [];
   final List<LocalTaskReminderStrategy> _taskReminderStrategies = [];
   final List<LocalReminderRecord> _reminders = [];
@@ -436,19 +437,34 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
     LocalCoreContext context,
   ) async {
     final summary = await summarizeExpenses(input, context);
+    final period = _fakeBudgetPeriod(
+      input['period'] as String? ?? 'current_month',
+      context.effectiveNow,
+    );
+    final matchingBudgets = _ledgerBudgets
+        .where(
+          (item) =>
+              item.status == 'active' &&
+              item.periodKey == period &&
+              item.categoryId == null,
+        )
+        .toList(growable: false);
+    final budget = matchingBudgets.isEmpty ? null : matchingBudgets.first;
     return LocalLedgerOverview(
       schemaVersion: 'ledger_overview.v1',
       generatedAt: context.effectiveNow.toUtc(),
-      period: summary.period,
+      period: period,
       sourceMode: input['source_mode'] as String? ?? 'local',
       monthIncome: summary.totalIncome,
       monthExpense: summary.totalExpense,
       transactionCount: summary.count,
-      budgetState: 'not_configured',
-      budgetAmount: null,
-      budgetUsed: null,
-      budgetProgress: null,
-      currency: 'CNY',
+      budgetState: budget == null ? 'not_configured' : 'configured',
+      budgetAmount: budget?.amount,
+      budgetUsed: budget == null ? null : summary.totalExpense,
+      budgetProgress: budget == null
+          ? null
+          : summary.totalExpense / budget.amount,
+      currency: budget?.currency ?? 'CNY',
     );
   }
 
@@ -497,6 +513,154 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
       ];
     }
     return const [];
+  }
+
+  @override
+  Future<List<LocalLedgerBudget>> listLedgerBudgets(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final period = _fakeBudgetPeriod(
+      input['period'] as String? ?? 'current_month',
+      context.effectiveNow,
+    );
+    final status = input['status'] as String? ?? 'active';
+    final categoryId = input['category_id'] as String?;
+    return _ledgerBudgets
+        .where((item) => item.periodKey == period)
+        .where((item) => status == 'all' || item.status == status)
+        .where((item) => categoryId == null || item.categoryId == categoryId)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<LocalLedgerBudget> createLedgerBudget(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final periodKey = _fakeBudgetPeriod(
+      input['period_key'] as String? ?? 'current_month',
+      context.effectiveNow,
+    );
+    final categoryId = input['category_id'] as String?;
+    final duplicate = _ledgerBudgets.any(
+      (item) =>
+          item.status == 'active' &&
+          item.periodKey == periodKey &&
+          item.categoryId == categoryId,
+    );
+    if (duplicate) {
+      throw StateError(
+        'An active budget already exists for this period and category',
+      );
+    }
+    final amount = (input['amount'] as num?)?.toDouble();
+    if (amount == null || amount <= 0) {
+      throw ArgumentError('amount must be greater than zero');
+    }
+    final threshold = (input['alert_threshold'] as num?)?.toDouble() ?? 0.8;
+    if (threshold <= 0 || threshold > 1) {
+      throw ArgumentError('alert_threshold must be greater than zero and at most one');
+    }
+    final now = context.effectiveNow;
+    final budget = LocalLedgerBudget(
+      id: _nextStableId('budget'),
+      periodType: 'month',
+      periodKey: periodKey,
+      categoryId: categoryId,
+      amount: amount,
+      currency: (input['currency'] as String? ?? 'CNY').toUpperCase(),
+      alertThreshold: threshold,
+      status: 'active',
+      revision: 1,
+      createdAt: now,
+      updatedAt: now,
+    );
+    _ledgerBudgets.add(budget);
+    return budget;
+  }
+
+  @override
+  Future<LocalLedgerBudget> updateLedgerBudget(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final budgetId = input['budget_id'] as String? ?? input['id'] as String?;
+    final index = _ledgerBudgets.indexWhere((item) => item.id == budgetId);
+    if (index < 0) throw StateError('Budget not found: $budgetId');
+    final old = _ledgerBudgets[index];
+    final periodKey = input.containsKey('period_key')
+        ? _fakeBudgetPeriod(input['period_key'] as String, context.effectiveNow)
+        : old.periodKey;
+    final categoryId = input.containsKey('category_id')
+        ? input['category_id'] as String?
+        : old.categoryId;
+    final amount = input.containsKey('amount')
+        ? (input['amount'] as num).toDouble()
+        : old.amount;
+    if (amount <= 0) throw ArgumentError('amount must be greater than zero');
+    final threshold = input.containsKey('alert_threshold')
+        ? (input['alert_threshold'] as num?)?.toDouble()
+        : old.alertThreshold;
+    if (threshold != null && (threshold <= 0 || threshold > 1)) {
+      throw ArgumentError('alert_threshold must be greater than zero and at most one');
+    }
+    final status = input['status'] as String? ?? old.status;
+    final duplicate = status == 'active' &&
+        _ledgerBudgets.any(
+          (item) =>
+              item.id != old.id &&
+              item.status == 'active' &&
+              item.periodKey == periodKey &&
+              item.categoryId == categoryId,
+        );
+    if (duplicate) {
+      throw StateError(
+        'An active budget already exists for this period and category',
+      );
+    }
+    final updated = LocalLedgerBudget(
+      id: old.id,
+      periodType: old.periodType,
+      periodKey: periodKey,
+      categoryId: categoryId,
+      amount: amount,
+      currency: (input['currency'] as String? ?? old.currency).toUpperCase(),
+      alertThreshold: threshold,
+      status: status,
+      revision: old.revision + 1,
+      createdAt: old.createdAt,
+      updatedAt: context.effectiveNow,
+    );
+    _ledgerBudgets[index] = updated;
+    return updated;
+  }
+
+  @override
+  Future<LocalLedgerBudget> deleteLedgerBudget(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final budgetId = input['budget_id'] as String? ?? input['id'] as String?;
+    final index = _ledgerBudgets.indexWhere((item) => item.id == budgetId);
+    if (index < 0) throw StateError('Budget not found: $budgetId');
+    final old = _ledgerBudgets[index];
+    if (old.status == 'deleted') return old;
+    final deleted = LocalLedgerBudget(
+      id: old.id,
+      periodType: old.periodType,
+      periodKey: old.periodKey,
+      categoryId: old.categoryId,
+      amount: old.amount,
+      currency: old.currency,
+      alertThreshold: old.alertThreshold,
+      status: 'deleted',
+      revision: old.revision + 1,
+      createdAt: old.createdAt,
+      updatedAt: context.effectiveNow,
+    );
+    _ledgerBudgets[index] = deleted;
+    return deleted;
   }
 
   @override
@@ -1023,6 +1187,17 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
       _tagMetadata[index] = resolved;
     }
     return resolved;
+  }
+
+  String _fakeBudgetPeriod(String period, DateTime now) {
+    if (period == 'current_month') {
+      final utc = now.toUtc();
+      return '${utc.year.toString().padLeft(4, '0')}-${utc.month.toString().padLeft(2, '0')}';
+    }
+    if (!RegExp(r'^\d{4}-(0[1-9]|1[0-2])$').hasMatch(period)) {
+      throw ArgumentError('period_key must use YYYY-MM');
+    }
+    return period;
   }
 
   String _nextStableId(String prefix) => _idGenerator.nextStable(prefix);

@@ -8,8 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.security import create_access_token
-from app.db.models import AuditLog, LedgerTransaction, Memo, Task
-from app.modules.ledger.service import ledger_transaction_to_dict
+from app.db.models import (
+    AuditLog,
+    LedgerBudget,
+    LedgerCategory,
+    LedgerTransaction,
+    Memo,
+    Task,
+)
+from app.modules.ledger.service import ledger_budget_to_dict, ledger_transaction_to_dict
 from app.modules.memos.service import memo_to_response
 from app.modules.sync.schemas import (
     PowerSyncCredentialsResponse,
@@ -45,6 +52,8 @@ async def apply_sync_push(db: AsyncSession, request: SyncPushRequest) -> SyncPus
             result = await _apply_memo_change(db, change, request.client_id)
         elif change.entity_type == "task":
             result = await _apply_task_change(db, change, request.client_id)
+        elif change.entity_type == "ledger_budget":
+            result = await _apply_budget_change(db, change, request.client_id)
         else:
             result = await _apply_expense_change(db, change, request.client_id)
         results.append(result)
@@ -144,6 +153,129 @@ async def _apply_task_change(
     return _applied(change)
 
 
+async def _apply_budget_change(
+    db: AsyncSession,
+    change: SyncChange,
+    client_id: str,
+) -> SyncApplyResult:
+    budget = await _find_entity(db, LedgerBudget, change)
+    if _is_stale(budget, change):
+        return _skipped(change, "stale_revision", budget.revision)
+
+    if change.operation == "delete":
+        if budget is None:
+            return _skipped(change, "missing_entity", None)
+        before = ledger_budget_to_dict(budget)
+        budget.status = change.data.get("status") or "deleted"
+        budget.updated_at = change.updated_at
+        budget.revision = change.revision
+        await db.flush()
+        await _write_sync_audit(
+            db,
+            change,
+            client_id,
+            before=before,
+            after=ledger_budget_to_dict(budget),
+        )
+        return _applied(change)
+
+    data = change.data
+    amount = data.get("amount")
+    period_type = data.get("period_type") or "month"
+    period_key = data.get("period_key")
+    category_id = data.get("category_id")
+    status = data.get("status") or "active"
+    threshold = data.get("alert_threshold")
+    if amount is None or float(amount) <= 0:
+        return _skipped(
+            change,
+            "invalid_amount",
+            budget.revision if budget is not None else None,
+        )
+    if period_type != "month" or not _valid_month_period(period_key):
+        return _skipped(
+            change,
+            "invalid_period",
+            budget.revision if budget is not None else None,
+        )
+    if status not in {"active", "deleted"}:
+        return _skipped(
+            change,
+            "invalid_status",
+            budget.revision if budget is not None else None,
+        )
+    if threshold is not None and not 0 < float(threshold) <= 1:
+        return _skipped(
+            change,
+            "invalid_alert_threshold",
+            budget.revision if budget is not None else None,
+        )
+    if category_id is not None:
+        category = await db.scalar(
+            select(LedgerCategory).where(
+                LedgerCategory.id == category_id,
+                LedgerCategory.user_id == change.user_id,
+                LedgerCategory.status == "active",
+            )
+        )
+        if category is None:
+            return _skipped(
+                change,
+                "missing_budget_category",
+                budget.revision if budget is not None else None,
+            )
+        if category.type != "expense":
+            return _skipped(
+                change,
+                "invalid_budget_category_type",
+                budget.revision if budget is not None else None,
+            )
+
+    conflict_query = select(LedgerBudget).where(
+        LedgerBudget.user_id == change.user_id,
+        LedgerBudget.status == "active",
+        LedgerBudget.period_type == period_type,
+        LedgerBudget.period_key == period_key,
+        LedgerBudget.id != change.entity_id,
+    )
+    conflict_query = conflict_query.where(
+        LedgerBudget.category_id.is_(None)
+        if category_id is None
+        else LedgerBudget.category_id == category_id
+    )
+    if status == "active" and await db.scalar(conflict_query) is not None:
+        return _skipped(
+            change,
+            "duplicate_budget",
+            budget.revision if budget is not None else None,
+        )
+
+    if budget is None:
+        budget = LedgerBudget(id=change.entity_id, user_id=change.user_id)
+        db.add(budget)
+    before = ledger_budget_to_dict(budget) if budget.created_at is not None else None
+    budget.period_type = period_type
+    budget.period_key = period_key
+    budget.category_id = category_id
+    budget.amount = float(amount)
+    budget.currency = (data.get("currency") or "CNY").upper()
+    budget.alert_threshold = threshold
+    budget.status = status
+    budget.revision = change.revision
+    if budget.created_at is None:
+        budget.created_at = change.created_at or change.updated_at
+    budget.updated_at = change.updated_at
+    await db.flush()
+    await _write_sync_audit(
+        db,
+        change,
+        client_id,
+        before=before,
+        after=ledger_budget_to_dict(budget),
+    )
+    return _applied(change)
+
+
 async def _apply_expense_change(
     db: AsyncSession,
     change: SyncChange,
@@ -231,6 +363,18 @@ def _skipped(change: SyncChange, reason: str, revision: int | None) -> SyncApply
 
 def _memo_snapshot(memo: Memo) -> dict:
     return json_serialize(memo_to_response(memo).model_dump())
+
+
+def _valid_month_period(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    parts = value.split("-")
+    if len(parts) != 2 or len(parts[0]) != 4 or len(parts[1]) != 2:
+        return False
+    if not parts[0].isdigit() or not parts[1].isdigit():
+        return False
+    month = int(parts[1])
+    return 1 <= month <= 12
 
 
 def _datetime_value(value: Any, *, fallback: datetime | None = None) -> datetime | None:

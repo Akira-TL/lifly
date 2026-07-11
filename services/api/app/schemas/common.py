@@ -149,6 +149,40 @@ class LedgerTransactionResponse(BaseModel):
     updated_at: datetime
 
 
+class LedgerBudgetCreate(BaseModel):
+    period_type: str = Field(default="month", pattern=r"^month$")
+    period_key: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+    category_id: str | None = None
+    amount: float = Field(gt=0)
+    currency: str = Field(default="CNY", min_length=3, max_length=8)
+    alert_threshold: float | None = Field(default=0.8, gt=0, le=1)
+
+
+class LedgerBudgetUpdate(BaseModel):
+    period_key: str | None = Field(default=None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+    category_id: str | None = None
+    amount: float | None = Field(default=None, gt=0)
+    currency: str | None = Field(default=None, min_length=3, max_length=8)
+    alert_threshold: float | None = Field(default=None, gt=0, le=1)
+    status: str | None = Field(default=None, pattern=r"^(active|deleted)$")
+
+
+class LedgerBudgetResponse(BaseModel):
+    id: str
+    user_id: str
+    period_type: str
+    period_key: str
+    category_id: str | None
+    category_name: str | None = None
+    amount: float
+    currency: str
+    alert_threshold: float | None
+    status: str
+    revision: int
+    created_at: datetime
+    updated_at: datetime
+
+
 # ─── Task ───────────────────────────────────────────────────────────────────
 
 class TaskCreate(BaseModel):

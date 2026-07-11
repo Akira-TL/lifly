@@ -148,12 +148,13 @@ month-over-month comparison
 预算模型：
 
 ```text
-period_type: month / week / year
-period_key
+period_type：当前实现固定 month，后续再扩展 week / year
+period_key：YYYY-MM
 category_id：为空表示总预算，不为空表示分类预算
-amount
+amount：必须大于 0
 currency
-alert_threshold
+alert_threshold：大于 0 且不超过 1
+revision：用于同步陈旧写入判定
 ```
 
 聚合 read model 应输出：
@@ -192,6 +193,18 @@ icon_token
 ```
 
 没有预算时，应返回明确的 `not_configured` 状态，客户端展示“未设置预算”，不能伪造默认预算。
+
+预算管理必须满足：
+
+```text
+支持总预算和支出分类预算的创建、更新、软删除和恢复
+同一用户、月份、分类范围只能有一个 active 预算
+分类预算只能绑定 active 的 expense 分类
+所有写入必须记录 ledger_budget 审计快照
+Local Core 写入通过 PowerSync 上传，云端按 revision 拒绝陈旧版本
+预算读取支持云端优先、本地失败兜底
+云端写入结果不确定时不得自动再写本地，避免双写
+```
 
 ## 12. 暂不做功能
 

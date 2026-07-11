@@ -178,7 +178,7 @@ class LedgerTransaction(Base, TimestampMixin, SoftDeleteMixin, RevisionMixin):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
 
 
-class LedgerBudget(Base, TimestampMixin):
+class LedgerBudget(Base, TimestampMixin, RevisionMixin):
     __tablename__ = "ledger_budgets"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)

@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.database import engine
 from app.core.config import settings
+from app.core.schema_compat import ensure_schema_compatibility
 from app.db.models import Base
 from app.modules.memos.router import router as memo_router
 from app.modules.ledger.router import router as ledger_router
@@ -29,6 +30,7 @@ async def lifespan(app: FastAPI):
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await ensure_schema_compatibility(conn)
     except Exception:
         print("WARN: Database unavailable, skipping table creation")
     # Start MCP session manager

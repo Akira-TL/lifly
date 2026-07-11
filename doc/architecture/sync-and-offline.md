@@ -32,9 +32,13 @@ UI
 
 云端 API 是正常联网状态下的读取入口；Local Core 提供同构 read model，在云端失败、断网或弱网时兜底，不能让首页、预算、分类占比、任务预警等能力被网络卡死。备忘分类建议、标签元数据、任务预警策略和 pending reminders 也必须在 PowerSync 本地库中完整落地。
 
+预算写入在 Local Core 中形成 `ledger_budget` CRUD 变更，经 PowerSync 上传到服务端；服务端按 `revision` 拒绝陈旧版本，并按用户、月份和分类范围拒绝重复 active 预算。云端写请求出现结果不确定时，repository 不自动重复写入本地，避免一笔操作形成 API 与 Local Core 双写；明确离线模式下才直接写入 Local Core。
+
 首页同步状态必须区分观察位置：服务端只能报告 PowerSync 配置是否可用以及服务端可验证的附件同步统计，不能推断具体客户端在线；客户端 Local Core 读取 PowerSync `currentStatus`，报告连接、连接中、下载、上传、最近同步时间和错误。最新导入状态通过同步到本地的 `import_batches` 计算，不保存不可验证的固定占位状态。
 
 PowerSync 运行配置通常按环境管理并可被 Git 忽略，但同步范围不能依赖人工记忆。`infra/powersync-required-tables.txt` 是当前最低同步表清单，部署或本地配置必须通过 `scripts/check-powersync-sync-scope.sh` 校验。
+
+开发环境的 Flutter Local Core、服务端 API 和 PowerSync 凭据统一使用 `local-dev` 作为默认 user_id，避免本地创建的数据同步后无法被云端同一用户查询。正式认证接入后，该固定身份必须替换为登录用户标识，而不是继续扩散开发期常量。
 
 ## 3. 同步范围
 

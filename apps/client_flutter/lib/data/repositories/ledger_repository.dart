@@ -4,6 +4,7 @@ import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_context.dart';
 import 'package:client_flutter/data/local_core/local_core_models.dart';
 import 'package:client_flutter/data/repositories/paged_result.dart';
+import 'package:client_flutter/domain/entities/ledger_budget.dart';
 import 'package:client_flutter/domain/entities/ledger_transaction.dart';
 
 class LedgerRepository {
@@ -130,6 +131,88 @@ class LedgerRepository {
     await api.delete('/ledger/transactions/$id');
   }
 
+  Future<List<LedgerBudget>> listBudgets({
+    String period = 'current_month',
+    String status = 'active',
+    String? categoryId,
+  }) async {
+    if (dataMode == LiflyDataMode.local) {
+      final items = await localCore!.listLedgerBudgets({
+        'period': period,
+        'status': status,
+        'category_id': ?categoryId,
+      }, LocalCoreContext.flutterUser());
+      return items.map(_budgetFromLocal).toList(growable: false);
+    }
+
+    try {
+      final response = await api.get(
+        '/ledger/budgets',
+        params: {
+          'period': period,
+          'status': status,
+          'category_id': ?categoryId,
+        },
+      );
+      final items = response['data'] as List? ?? const [];
+      return items
+          .whereType<Map>()
+          .map((item) => LedgerBudget.fromJson(item.cast<String, dynamic>()))
+          .toList(growable: false);
+    } catch (error) {
+      if (_hasLocalCore) {
+        final items = await localCore!.listLedgerBudgets({
+          'period': period,
+          'status': status,
+          'category_id': ?categoryId,
+        }, LocalCoreContext.flutterUser());
+        return items.map(_budgetFromLocal).toList(growable: false);
+      }
+      throw StateError('Ledger budgets unavailable: $error');
+    }
+  }
+
+  Future<LedgerBudget> createBudget(Map<String, dynamic> data) async {
+    if (_useLocalCore) {
+      return _budgetFromLocal(
+        await localCore!.createLedgerBudget(
+          data,
+          LocalCoreContext.flutterUser(),
+        ),
+      );
+    }
+    final response = await api.post('/ledger/budgets', data: data);
+    return LedgerBudget.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  Future<LedgerBudget> updateBudget(
+    String budgetId,
+    Map<String, dynamic> data,
+  ) async {
+    if (_useLocalCore) {
+      return _budgetFromLocal(
+        await localCore!.updateLedgerBudget({
+          ...data,
+          'budget_id': budgetId,
+        }, LocalCoreContext.flutterUser()),
+      );
+    }
+    final response = await api.put('/ledger/budgets/$budgetId', data: data);
+    return LedgerBudget.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  Future<LedgerBudget> deleteBudget(String budgetId) async {
+    if (_useLocalCore) {
+      return _budgetFromLocal(
+        await localCore!.deleteLedgerBudget({
+          'budget_id': budgetId,
+        }, LocalCoreContext.flutterUser()),
+      );
+    }
+    final response = await api.delete('/ledger/budgets/$budgetId');
+    return LedgerBudget.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
   Future<Map<String, dynamic>> overview({
     String period = 'current_month',
   }) async {
@@ -241,6 +324,23 @@ class LedgerRepository {
 
     final res = await api.get('/ledger/summary', params: params);
     return res['data'] as Map<String, dynamic>;
+  }
+
+  LedgerBudget _budgetFromLocal(LocalLedgerBudget budget) {
+    return LedgerBudget(
+      id: budget.id,
+      periodType: budget.periodType,
+      periodKey: budget.periodKey,
+      categoryId: budget.categoryId,
+      categoryName: null,
+      amount: budget.amount,
+      currency: budget.currency,
+      alertThreshold: budget.alertThreshold,
+      status: budget.status,
+      revision: budget.revision,
+      createdAt: budget.createdAt,
+      updatedAt: budget.updatedAt,
+    );
   }
 
   LedgerTransaction _transactionFromLocal(LocalLedgerTransactionRecord record) {
