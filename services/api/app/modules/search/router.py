@@ -6,8 +6,11 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.db.models import (
+    Asset,
+    ImportBatch,
     LedgerBudget,
     LedgerCategory,
     LedgerTransaction,
@@ -299,6 +302,88 @@ async def _category_breakdown(
     } for row in rows]
 
 
+async def _sync_summary(
+    db: AsyncSession,
+    user_id: str,
+) -> dict[str, object]:
+    result = await db.execute(
+        select(Asset.sync_status, func.count().label("count"))
+        .where(Asset.user_id == user_id, Asset.status == "active")
+        .group_by(Asset.sync_status)
+    )
+    counts = {str(row.sync_status): int(row.count or 0) for row in result.all()}
+    pending_count = counts.get("pending", 0)
+    failed_count = counts.get("failed", 0)
+    synced_count = counts.get("synced", 0)
+    powersync_configured = bool(settings.powersync_url.strip())
+
+    if failed_count > 0:
+        status = "error"
+    elif pending_count > 0:
+        status = "pending"
+    elif powersync_configured:
+        status = "ready"
+    else:
+        status = "not_configured"
+
+    return {
+        "status": status,
+        "mode": "server",
+        "powersync_configured": powersync_configured,
+        "pending_asset_count": pending_count,
+        "failed_asset_count": failed_count,
+        "synced_asset_count": synced_count,
+    }
+
+
+async def _import_summary(
+    db: AsyncSession,
+    user_id: str,
+) -> dict[str, object]:
+    batch = await db.scalar(
+        select(ImportBatch)
+        .where(ImportBatch.user_id == user_id)
+        .order_by(ImportBatch.created_at.desc())
+        .limit(1)
+    )
+    if batch is None:
+        return {"status": "idle"}
+
+    return {
+        "status": batch.status,
+        "latest_batch_id": batch.id,
+        "source_provider": batch.source_provider,
+        "filename": batch.filename,
+        "total_rows": batch.total_rows or 0,
+        "valid_rows": batch.valid_rows or 0,
+        "duplicate_rows": batch.duplicate_rows or 0,
+        "created_at": _iso(batch.created_at),
+        "committed_at": _iso(batch.committed_at),
+        "rolled_back_at": _iso(batch.rolled_back_at),
+    }
+
+
+def _settings_summary() -> dict[str, object]:
+    database_configured = bool(settings.database_url.strip())
+    powersync_configured = bool(settings.powersync_url.strip())
+    object_storage_configured = bool(
+        settings.minio_endpoint.strip() and settings.minio_bucket.strip()
+    )
+    configured = (
+        database_configured and powersync_configured and object_storage_configured
+    )
+    return {
+        "status": "ok" if configured else "attention",
+        "mode": "server",
+        "data_mode": "api",
+        "local_core_available": False,
+        "timezone": "UTC",
+        "database_configured": database_configured,
+        "powersync_configured": powersync_configured,
+        "object_storage_configured": object_storage_configured,
+    }
+
+
 def _finance_insights(
     *,
     budget_state: str,
@@ -355,6 +440,8 @@ async def build_home_overview(db: AsyncSession, user_id: str = DEFAULT_LOCAL_USE
         budget_state=budget_state,
         budget_progress=budget_progress,
     )
+    sync_summary = await _sync_summary(db, user_id)
+    import_summary = await _import_summary(db, user_id)
 
     return {
         "schema_version": HOME_OVERVIEW_SCHEMA_VERSION,
@@ -385,9 +472,9 @@ async def build_home_overview(db: AsyncSession, user_id: str = DEFAULT_LOCAL_USE
         "finance_insights": finance_insights,
         "daily_trend": _build_daily_trend(transactions, now),
         "recent_activity": _build_recent_activity(memos, tasks, transactions),
-        "sync_summary": {"status": "api_available"},
-        "import_summary": {"status": "idle"},
-        "settings_summary": {"status": "ok"},
+        "sync_summary": sync_summary,
+        "import_summary": import_summary,
+        "settings_summary": _settings_summary(),
     }
 
 

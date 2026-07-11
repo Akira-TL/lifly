@@ -347,11 +347,24 @@ finance_overview
 finance_insights[]
 recent_activity[]
 sync_summary
+  status / mode
+  connected / connecting / downloading / uploading / has_synced
+  last_synced_at / error
+  powersync_configured
+  pending_asset_count / failed_asset_count / synced_asset_count
 import_summary
+  status / latest_batch_id / source_provider / filename
+  total_rows / valid_rows / duplicate_rows
+  created_at / committed_at / rolled_back_at
 settings_summary
+  status / mode / data_mode / timezone
+  local_core_available / database_path
+  database_configured / powersync_configured / object_storage_configured
 ```
 
 `/home/overview` 是产品化首页云端正常读取入口；`/dashboard` 保留为轻量统计兼容接口。客户端云端读取失败时再 fallback 到本地同构 read model。
+
+服务端不能推断某台客户端是否在线，因此服务端 `sync_summary` 只返回可验证的 PowerSync 配置状态与附件同步统计；客户端本地 `sync_summary` 读取 PowerSync `currentStatus`，返回真实连接、上传、下载、最近同步和错误状态。`import_summary` 来自最新 `import_batches` 记录，不能固定返回 `idle`；`settings_summary` 只暴露配置是否完整，不返回连接串、密钥等敏感值。
 
 ### 13.2 Ledger Overview
 

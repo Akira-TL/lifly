@@ -150,6 +150,9 @@ scripts/smoke-mcp-v0.1.sh
 Local Core 可在断网状态计算首页 overview、预算统计、分类占比、任务预警和标签统计
 LedgerRepository 覆盖云端优先读取和失败后本地 fallback
 本地 read model 与云端 API 字段同构
+首页 sync_summary 必须来自 PowerSync currentStatus 或服务端可验证的配置与同步统计
+首页 import_summary 必须来自最新 import_batches，不得固定返回 idle
+首页 settings_summary 不得暴露数据库连接串、JWT、对象存储密钥等敏感配置
 repository 支持 cloudPreferred，云端失败或断网时才降级 Local Core
 断网手动验收首页、记账统计、任务预警、备忘分类状态
 API / repository / UI 的字段边界清楚

@@ -13,6 +13,9 @@ class LocalHomeOverviewBuilder {
     List<LocalLedgerCategorySummary> categoryBreakdown = const [],
     List<LocalLedgerInsight> financeInsights = const [],
     Map<String, LocalTaskReminderStrategy> taskStrategies = const {},
+    LocalHomeSyncSummary? syncSummary,
+    LocalHomeImportSummary? importSummary,
+    LocalHomeSettingsSummary? settingsSummary,
     String userTimezone = 'local',
     String sourceMode = 'local',
   }) {
@@ -66,9 +69,30 @@ class LocalHomeOverviewBuilder {
         tasks: activeTasks,
         transactions: activeTransactions,
       ),
-      syncStatus: 'local_available',
-      importStatus: 'idle',
-      settingsStatus: 'ok',
+      syncSummary:
+          syncSummary ??
+          const LocalHomeSyncSummary(
+            status: 'local_only',
+            connected: false,
+            connecting: false,
+            downloading: false,
+            uploading: false,
+            hasSynced: null,
+            lastSyncedAt: null,
+            error: null,
+            pendingAssetCount: 0,
+            failedAssetCount: 0,
+          ),
+      importSummary: importSummary ?? const LocalHomeImportSummary.idle(),
+      settingsSummary:
+          settingsSummary ??
+          LocalHomeSettingsSummary(
+            status: 'ok',
+            dataMode: sourceMode,
+            localCoreAvailable: true,
+            databasePath: null,
+            timezone: userTimezone,
+          ),
     );
   }
 

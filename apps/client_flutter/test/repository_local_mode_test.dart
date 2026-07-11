@@ -413,9 +413,35 @@ void main() {
           'direction': 'expense',
         },
       ],
-      'sync_summary': {'status': 'api_available'},
-      'import_summary': {'status': 'idle'},
-      'settings_summary': {'status': 'ok'},
+      'sync_summary': {
+        'status': 'ready',
+        'mode': 'server',
+        'powersync_configured': true,
+        'pending_asset_count': 2,
+        'failed_asset_count': 0,
+        'synced_asset_count': 4,
+      },
+      'import_summary': {
+        'status': 'committed',
+        'latest_batch_id': 'batch-1',
+        'source_provider': 'alipay',
+        'filename': 'alipay.csv',
+        'total_rows': 20,
+        'valid_rows': 18,
+        'duplicate_rows': 2,
+        'created_at': '2026-07-07T10:00:00Z',
+        'committed_at': '2026-07-07T10:05:00Z',
+      },
+      'settings_summary': {
+        'status': 'ok',
+        'mode': 'server',
+        'data_mode': 'api',
+        'local_core_available': false,
+        'timezone': 'UTC',
+        'database_configured': true,
+        'powersync_configured': true,
+        'object_storage_configured': true,
+      },
     });
 
     expect(overview.schemaVersion, 'home_overview.v1');
@@ -429,7 +455,13 @@ void main() {
     expect(overview.financeOverview.insights.single.id, 'budget_ok');
     expect(overview.dailyTrend.single.total, 18.5);
     expect(overview.recentActivity.single.entityType, 'ledger_transaction');
-    expect(overview.syncStatus, 'api_available');
+    expect(overview.syncStatus, 'ready');
+    expect(overview.syncSummary.pendingAssetCount, 2);
+    expect(overview.syncSummary.powerSyncConfigured, isTrue);
+    expect(overview.importStatus, 'committed');
+    expect(overview.importSummary.latestBatchId, 'batch-1');
+    expect(overview.importSummary.validRows, 18);
+    expect(overview.settingsSummary.databaseConfigured, isTrue);
   });
 
   test(

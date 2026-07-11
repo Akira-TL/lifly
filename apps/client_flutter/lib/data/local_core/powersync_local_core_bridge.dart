@@ -85,6 +85,10 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
       'period': period,
     }, context);
     final taskStrategies = await _taskStore.listTaskReminderStrategies();
+    final sourceMode = input['source_mode'] as String? ?? 'local';
+    final userTimezone = input['user_timezone'] as String? ?? 'local';
+    final syncSummary = await _buildSyncSummary();
+    final importSummary = await _buildImportSummary();
     return const LocalHomeOverviewBuilder().build(
       memos: memos,
       tasks: tasks,
@@ -95,7 +99,17 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
       categoryBreakdown: categoryBreakdown,
       financeInsights: financeInsights,
       taskStrategies: taskStrategies,
-      sourceMode: input['source_mode'] as String? ?? 'local',
+      syncSummary: syncSummary,
+      importSummary: importSummary,
+      settingsSummary: LocalHomeSettingsSummary(
+        status: 'ok',
+        dataMode: sourceMode,
+        localCoreAvailable: true,
+        databasePath: syncService.dbPath,
+        timezone: userTimezone,
+      ),
+      userTimezone: userTimezone,
+      sourceMode: sourceMode,
     );
   }
 
@@ -361,6 +375,105 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
     LocalCoreContext context,
   ) {
     return _captureStore.captureUndo(input, context);
+  }
+
+  Future<LocalHomeSyncSummary> _buildSyncSummary() async {
+    await syncService.ensureInitialized();
+    final status = syncService.db.currentStatus;
+    final uploadDiagnostics = syncService.uploadDiagnostics;
+    final assetCounts = await syncService.db.get(
+      'SELECT '
+      "SUM(CASE WHEN sync_status = 'pending' AND status = 'active' THEN 1 ELSE 0 END) AS pending_count, "
+      "SUM(CASE WHEN sync_status = 'failed' AND status = 'active' THEN 1 ELSE 0 END) AS failed_count "
+      'FROM assets',
+    );
+    final error = status.downloadError?.toString() ??
+        status.uploadError?.toString() ??
+        uploadDiagnostics.lastError;
+    final pendingAssetCount = _readInt(assetCounts['pending_count']);
+    final failedAssetCount = _readInt(assetCounts['failed_count']);
+    final syncStatus = _syncStatusLabel(
+      connected: status.connected,
+      connecting: status.connecting,
+      downloading: status.downloading,
+      uploading: status.uploading,
+      hasSynced: status.hasSynced,
+      lastSyncedAt: status.lastSyncedAt,
+      error: error,
+    );
+
+    return LocalHomeSyncSummary(
+      status: failedAssetCount > 0
+          ? 'error'
+          : pendingAssetCount > 0 && syncStatus == 'synced'
+              ? 'pending'
+              : syncStatus,
+      connected: status.connected,
+      connecting: status.connecting,
+      downloading: status.downloading,
+      uploading: status.uploading,
+      hasSynced: status.hasSynced,
+      lastSyncedAt: status.lastSyncedAt,
+      error: error,
+      pendingAssetCount: pendingAssetCount,
+      failedAssetCount: failedAssetCount,
+    );
+  }
+
+  Future<LocalHomeImportSummary> _buildImportSummary() async {
+    await syncService.ensureInitialized();
+    final row = await syncService.db.getOptional(
+      'SELECT id, source_provider, filename, status, total_rows, valid_rows, '
+      'duplicate_rows, created_at, committed_at, rolled_back_at '
+      'FROM import_batches ORDER BY created_at DESC LIMIT 1',
+    );
+    if (row == null) return const LocalHomeImportSummary.idle();
+
+    return LocalHomeImportSummary(
+      status: row['status'] as String? ?? 'idle',
+      latestBatchId: row['id'] as String?,
+      sourceProvider: row['source_provider'] as String?,
+      filename: row['filename'] as String?,
+      totalRows: _readInt(row['total_rows']),
+      validRows: _readInt(row['valid_rows']),
+      duplicateRows: _readInt(row['duplicate_rows']),
+      createdAt: _readDateTime(row['created_at']),
+      committedAt: _readDateTime(row['committed_at']),
+      rolledBackAt: _readDateTime(row['rolled_back_at']),
+    );
+  }
+
+  String _syncStatusLabel({
+    required bool connected,
+    required bool connecting,
+    required bool downloading,
+    required bool uploading,
+    required bool? hasSynced,
+    required DateTime? lastSyncedAt,
+    required String? error,
+  }) {
+    if (error != null) return 'error';
+    if (downloading) return 'downloading';
+    if (uploading) return 'uploading';
+    if (connecting) return 'connecting';
+    if (connected && hasSynced == true) return 'synced';
+    if (connected) return 'connected';
+    if (lastSyncedAt != null) return 'offline';
+    return 'local_only';
+  }
+
+  int _readInt(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return 0;
+  }
+
+  DateTime? _readDateTime(Object? value) {
+    if (value is DateTime) return value.toUtc();
+    if (value is String && value.trim().isNotEmpty) {
+      return DateTime.tryParse(value)?.toUtc();
+    }
+    return null;
   }
 
   Future<T> _unsupported<T>(String capability) {

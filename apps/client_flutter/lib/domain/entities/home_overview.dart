@@ -8,9 +8,9 @@ class HomeOverview {
   final List<HomeAttentionItem> attentionItems;
   final List<HomeDailyTrendItem> dailyTrend;
   final List<HomeActivityItem> recentActivity;
-  final String syncStatus;
-  final String importStatus;
-  final String settingsStatus;
+  final HomeSyncSummary syncSummary;
+  final HomeImportSummary importSummary;
+  final HomeSettingsSummary settingsSummary;
 
   const HomeOverview({
     required this.schemaVersion,
@@ -22,10 +22,16 @@ class HomeOverview {
     required this.attentionItems,
     required this.dailyTrend,
     required this.recentActivity,
-    required this.syncStatus,
-    required this.importStatus,
-    required this.settingsStatus,
+    required this.syncSummary,
+    required this.importSummary,
+    required this.settingsSummary,
   });
+
+  String get syncStatus => syncSummary.status;
+
+  String get importStatus => importSummary.status;
+
+  String get settingsStatus => settingsSummary.status;
 
   factory HomeOverview.fromDashboardJson(Map<String, dynamic> json) {
     final generatedAt = DateTime.now().toUtc();
@@ -92,18 +98,21 @@ class HomeOverview {
         json['daily_trend'] ?? json['weekly_trend'],
       ).map(HomeDailyTrendItem.fromJson).toList(growable: false),
       recentActivity: _recentActivityFromJson(json),
-      syncStatus:
-          syncSummaryJson['status'] as String? ??
-          json['sync_status'] as String? ??
-          'api_available',
-      importStatus:
-          importSummaryJson['status'] as String? ??
-          json['import_status'] as String? ??
-          'idle',
-      settingsStatus:
-          settingsSummaryJson['status'] as String? ??
-          json['settings_status'] as String? ??
-          'ok',
+      syncSummary: HomeSyncSummary.fromJson(
+        syncSummaryJson.isEmpty
+            ? {'status': json['sync_status'] ?? 'api_available'}
+            : syncSummaryJson,
+      ),
+      importSummary: HomeImportSummary.fromJson(
+        importSummaryJson.isEmpty
+            ? {'status': json['import_status'] ?? 'idle'}
+            : importSummaryJson,
+      ),
+      settingsSummary: HomeSettingsSummary.fromJson(
+        settingsSummaryJson.isEmpty
+            ? {'status': json['settings_status'] ?? 'ok'}
+            : settingsSummaryJson,
+      ),
     );
   }
 
@@ -154,6 +163,136 @@ class HomeOverview {
     if (value is DateTime) return value;
     if (value is String) return DateTime.tryParse(value);
     return null;
+  }
+}
+
+class HomeSyncSummary {
+  final String status;
+  final String mode;
+  final bool connected;
+  final bool connecting;
+  final bool downloading;
+  final bool uploading;
+  final bool? hasSynced;
+  final DateTime? lastSyncedAt;
+  final String? error;
+  final bool? powerSyncConfigured;
+  final int pendingAssetCount;
+  final int failedAssetCount;
+  final int syncedAssetCount;
+
+  const HomeSyncSummary({
+    required this.status,
+    required this.mode,
+    required this.connected,
+    required this.connecting,
+    required this.downloading,
+    required this.uploading,
+    required this.hasSynced,
+    required this.lastSyncedAt,
+    required this.error,
+    required this.powerSyncConfigured,
+    required this.pendingAssetCount,
+    required this.failedAssetCount,
+    required this.syncedAssetCount,
+  });
+
+  factory HomeSyncSummary.fromJson(Map<String, dynamic> json) {
+    return HomeSyncSummary(
+      status: json['status'] as String? ?? 'unknown',
+      mode: json['mode'] as String? ?? 'api',
+      connected: json['connected'] as bool? ?? false,
+      connecting: json['connecting'] as bool? ?? false,
+      downloading: json['downloading'] as bool? ?? false,
+      uploading: json['uploading'] as bool? ?? false,
+      hasSynced: json['has_synced'] as bool?,
+      lastSyncedAt: HomeOverview._dateTime(json['last_synced_at']),
+      error: json['error'] as String?,
+      powerSyncConfigured: json['powersync_configured'] as bool?,
+      pendingAssetCount: HomeOverview._intValue(json['pending_asset_count']),
+      failedAssetCount: HomeOverview._intValue(json['failed_asset_count']),
+      syncedAssetCount: HomeOverview._intValue(json['synced_asset_count']),
+    );
+  }
+}
+
+class HomeImportSummary {
+  final String status;
+  final String? latestBatchId;
+  final String? sourceProvider;
+  final String? filename;
+  final int totalRows;
+  final int validRows;
+  final int duplicateRows;
+  final DateTime? createdAt;
+  final DateTime? committedAt;
+  final DateTime? rolledBackAt;
+
+  const HomeImportSummary({
+    required this.status,
+    required this.latestBatchId,
+    required this.sourceProvider,
+    required this.filename,
+    required this.totalRows,
+    required this.validRows,
+    required this.duplicateRows,
+    required this.createdAt,
+    required this.committedAt,
+    required this.rolledBackAt,
+  });
+
+  factory HomeImportSummary.fromJson(Map<String, dynamic> json) {
+    return HomeImportSummary(
+      status: json['status'] as String? ?? 'idle',
+      latestBatchId:
+          json['latest_batch_id'] as String? ?? json['batch_id'] as String?,
+      sourceProvider: json['source_provider'] as String?,
+      filename: json['filename'] as String?,
+      totalRows: HomeOverview._intValue(json['total_rows']),
+      validRows: HomeOverview._intValue(json['valid_rows']),
+      duplicateRows: HomeOverview._intValue(json['duplicate_rows']),
+      createdAt: HomeOverview._dateTime(json['created_at']),
+      committedAt: HomeOverview._dateTime(json['committed_at']),
+      rolledBackAt: HomeOverview._dateTime(json['rolled_back_at']),
+    );
+  }
+}
+
+class HomeSettingsSummary {
+  final String status;
+  final String mode;
+  final String dataMode;
+  final bool localCoreAvailable;
+  final String? databasePath;
+  final String timezone;
+  final bool? databaseConfigured;
+  final bool? powerSyncConfigured;
+  final bool? objectStorageConfigured;
+
+  const HomeSettingsSummary({
+    required this.status,
+    required this.mode,
+    required this.dataMode,
+    required this.localCoreAvailable,
+    required this.databasePath,
+    required this.timezone,
+    required this.databaseConfigured,
+    required this.powerSyncConfigured,
+    required this.objectStorageConfigured,
+  });
+
+  factory HomeSettingsSummary.fromJson(Map<String, dynamic> json) {
+    return HomeSettingsSummary(
+      status: json['status'] as String? ?? 'unknown',
+      mode: json['mode'] as String? ?? 'api',
+      dataMode: json['data_mode'] as String? ?? 'api',
+      localCoreAvailable: json['local_core_available'] as bool? ?? false,
+      databasePath: json['database_path'] as String?,
+      timezone: json['timezone'] as String? ?? 'UTC',
+      databaseConfigured: json['database_configured'] as bool?,
+      powerSyncConfigured: json['powersync_configured'] as bool?,
+      objectStorageConfigured: json['object_storage_configured'] as bool?,
+    );
   }
 }
 

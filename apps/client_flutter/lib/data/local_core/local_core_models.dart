@@ -439,9 +439,9 @@ class LocalHomeOverview {
   final List<LocalHomeAttentionItem> attentionItems;
   final List<LocalHomeDailyTrendItem> dailyTrend;
   final List<LocalHomeActivityItem> recentActivity;
-  final String syncStatus;
-  final String importStatus;
-  final String settingsStatus;
+  final LocalHomeSyncSummary syncSummary;
+  final LocalHomeImportSummary importSummary;
+  final LocalHomeSettingsSummary settingsSummary;
 
   const LocalHomeOverview({
     required this.schemaVersion,
@@ -453,9 +453,95 @@ class LocalHomeOverview {
     required this.attentionItems,
     required this.dailyTrend,
     required this.recentActivity,
-    required this.syncStatus,
-    required this.importStatus,
-    required this.settingsStatus,
+    required this.syncSummary,
+    required this.importSummary,
+    required this.settingsSummary,
+  });
+
+  String get syncStatus => syncSummary.status;
+
+  String get importStatus => importSummary.status;
+
+  String get settingsStatus => settingsSummary.status;
+}
+
+class LocalHomeSyncSummary {
+  final String status;
+  final bool connected;
+  final bool connecting;
+  final bool downloading;
+  final bool uploading;
+  final bool? hasSynced;
+  final DateTime? lastSyncedAt;
+  final String? error;
+  final int pendingAssetCount;
+  final int failedAssetCount;
+
+  const LocalHomeSyncSummary({
+    required this.status,
+    required this.connected,
+    required this.connecting,
+    required this.downloading,
+    required this.uploading,
+    required this.hasSynced,
+    required this.lastSyncedAt,
+    required this.error,
+    required this.pendingAssetCount,
+    required this.failedAssetCount,
+  });
+}
+
+class LocalHomeImportSummary {
+  final String status;
+  final String? latestBatchId;
+  final String? sourceProvider;
+  final String? filename;
+  final int totalRows;
+  final int validRows;
+  final int duplicateRows;
+  final DateTime? createdAt;
+  final DateTime? committedAt;
+  final DateTime? rolledBackAt;
+
+  const LocalHomeImportSummary({
+    required this.status,
+    required this.latestBatchId,
+    required this.sourceProvider,
+    required this.filename,
+    required this.totalRows,
+    required this.validRows,
+    required this.duplicateRows,
+    required this.createdAt,
+    required this.committedAt,
+    required this.rolledBackAt,
+  });
+
+  const LocalHomeImportSummary.idle()
+      : status = 'idle',
+        latestBatchId = null,
+        sourceProvider = null,
+        filename = null,
+        totalRows = 0,
+        validRows = 0,
+        duplicateRows = 0,
+        createdAt = null,
+        committedAt = null,
+        rolledBackAt = null;
+}
+
+class LocalHomeSettingsSummary {
+  final String status;
+  final String dataMode;
+  final bool localCoreAvailable;
+  final String? databasePath;
+  final String timezone;
+
+  const LocalHomeSettingsSummary({
+    required this.status,
+    required this.dataMode,
+    required this.localCoreAvailable,
+    required this.databasePath,
+    required this.timezone,
   });
 }
 

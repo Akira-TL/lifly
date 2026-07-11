@@ -79,9 +79,58 @@ class HomeOverviewRepository {
       recentActivity: local.recentActivity
           .map(_activityItemFromLocal)
           .toList(growable: false),
-      syncStatus: local.syncStatus,
-      importStatus: local.importStatus,
-      settingsStatus: local.settingsStatus,
+      syncSummary: _syncSummaryFromLocal(local.syncSummary),
+      importSummary: _importSummaryFromLocal(local.importSummary),
+      settingsSummary: _settingsSummaryFromLocal(local.settingsSummary),
+    );
+  }
+
+  HomeSyncSummary _syncSummaryFromLocal(LocalHomeSyncSummary local) {
+    return HomeSyncSummary(
+      status: local.status,
+      mode: 'local',
+      connected: local.connected,
+      connecting: local.connecting,
+      downloading: local.downloading,
+      uploading: local.uploading,
+      hasSynced: local.hasSynced,
+      lastSyncedAt: local.lastSyncedAt,
+      error: local.error,
+      powerSyncConfigured: null,
+      pendingAssetCount: local.pendingAssetCount,
+      failedAssetCount: local.failedAssetCount,
+      syncedAssetCount: 0,
+    );
+  }
+
+  HomeImportSummary _importSummaryFromLocal(LocalHomeImportSummary local) {
+    return HomeImportSummary(
+      status: local.status,
+      latestBatchId: local.latestBatchId,
+      sourceProvider: local.sourceProvider,
+      filename: local.filename,
+      totalRows: local.totalRows,
+      validRows: local.validRows,
+      duplicateRows: local.duplicateRows,
+      createdAt: local.createdAt,
+      committedAt: local.committedAt,
+      rolledBackAt: local.rolledBackAt,
+    );
+  }
+
+  HomeSettingsSummary _settingsSummaryFromLocal(
+    LocalHomeSettingsSummary local,
+  ) {
+    return HomeSettingsSummary(
+      status: local.status,
+      mode: 'local',
+      dataMode: local.dataMode,
+      localCoreAvailable: local.localCoreAvailable,
+      databasePath: local.databasePath,
+      timezone: local.timezone,
+      databaseConfigured: null,
+      powerSyncConfigured: null,
+      objectStorageConfigured: null,
     );
   }
 

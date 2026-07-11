@@ -218,13 +218,17 @@ HomePage 消费 HomeOverview repository，不再直接写死调用 /dashboard
 本地 budget_state 返回 not_configured，不伪造预算
 finance_overview 已扩展预算金额、预算使用、预算进度、预算剩余、分类占比和财务洞察字段
 repository_local_mode_test 覆盖本地 Home Overview
+sync_summary 已接入客户端 PowerSync currentStatus、上传错误与附件同步统计
+服务端 sync_summary 已接入 PowerSync 配置状态与附件同步统计，不伪造客户端在线状态
+import_summary 已接入本地与服务端最新 import_batches
+settings_summary 已接入本地数据库和服务端配置完整性，且不暴露敏感配置
+PowerSync schema 已补入 import_batches；各部署环境的 sync rules 必须同步包含该表
 ```
 
 仍待补齐：
 
 ```text
-sync_summary / import_summary / settings_summary 的真实业务状态
-首页 UI 消费扩展后的 finance_overview.category_breakdown / insights
+首页 UI 消费扩展后的 finance_overview.category_breakdown / insights 与状态摘要
 任务预警策略未来几天 warning 事项继续增强 attention_items 排序
 ```
 
@@ -683,7 +687,7 @@ Flutter analyze/test 通过
 下一步进入：
 
 ```text
-本地 Home Overview read model
+Ledger budget 完整写入闭环
 ```
 
-原因：首页是手机端第一入口，也是最容易诱发 Flutter 客户端临时拼接和假数据的地方。Home Overview 已具备云端正常入口和 Local Core 本地 read model 兜底，后续继续补预算、分类、洞察和任务预警字段，后面的备忘、记账、任务、AI Capture UI 才能同时满足在线新鲜度和离线可用。
+原因：首页概览和真实状态摘要已经具备云端正常入口与 Local Core 本地兜底；当前最明显的数据地基缺口是预算只能读取和聚合，尚不能创建、更新、删除或维护分类预算。先补齐预算写入闭环，首页和记账页后续 UI 才能消费真实可管理的预算数据。
