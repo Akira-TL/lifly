@@ -150,6 +150,66 @@ void main() {
     expect((change['data'] as Map<String, Object?>), containsPair('attempt_count', 1));
   });
 
+  test('maps capture session and turn collections into sync payloads', () {
+    final sessionEntry = CrudEntry(
+      10,
+      UpdateType.patch,
+      'mcp_capture_sessions',
+      'capture-1',
+      null,
+      {
+        'user_id': 'local-dev',
+        'original_text': '连续会话',
+        'actions': '[{"type":"memo_create","payload":{"title":"A"},"confidence":0.8}]',
+        'committed': 1,
+        'session_status': 'active',
+        'revision': 3,
+        'updated_at': '2026-07-12T10:00:00Z',
+      },
+    );
+    final turnEntry = CrudEntry(
+      11,
+      UpdateType.patch,
+      'mcp_capture_turns',
+      'turn-1',
+      null,
+      {
+        'user_id': 'local-dev',
+        'capture_id': 'capture-1',
+        'turn_index': 3,
+        'role': 'assistant',
+        'asset_ids': '["asset-1"]',
+        'actions': '[{"type":"memo_create","payload":{"title":"B"},"confidence":0.9}]',
+        'selected_action_indexes': '[0]',
+        'result_entities': '[{"type":"memo","id":"memo-1"}]',
+        'undo_token': 'undo-1',
+        'turn_status': 'committed',
+        'revision': 4,
+        'updated_at': '2026-07-12T10:01:00Z',
+      },
+    );
+
+    final request = mapper.mapBatch(
+      [sessionEntry, turnEntry],
+      clientId: 'lifly-flutter-10-11',
+      fallbackNow: fallbackNow,
+    );
+
+    expect(request.changeCount, 2);
+    final session = request.changes.first.toJson();
+    final turn = request.changes.last.toJson();
+    expect(session['entity_type'], 'capture_session');
+    expect((session['data'] as Map<String, Object?>)['actions'], isA<List>());
+    expect(turn['entity_type'], 'capture_turn');
+    expect((turn['data'] as Map<String, Object?>)['asset_ids'], ['asset-1']);
+    expect(
+      (turn['data'] as Map<String, Object?>)['result_entities'],
+      [
+        {'type': 'memo', 'id': 'memo-1'},
+      ],
+    );
+  });
+
   test('ignores unsupported PowerSync CRUD tables', () {
     final auditEntry = CrudEntry(
       8,

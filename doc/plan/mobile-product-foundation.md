@@ -6,7 +6,7 @@
 状态：执行中
 当前分支：develop/v0.7.0
 平台范围：Flutter Local Core / 本地 SQLite / PowerSync schema / repository / 服务端同构 API / 手机端 UI / Web 与桌面端适配原则
-当前动作：阶段六已完成聊天式 AI Capture 数据地基，后续进入产品地基 release gate
+当前动作：阶段六已完成 AI Capture 连续会话、逐轮提交、修改与撤销地基，后续补附件内容提取边界并进入 release gate
 完成规则：计划内能力实现并回写固定正式文档后，删除本文档
 ```
 
@@ -599,7 +599,7 @@ doc/guide/current-status.md
 
 ### 阶段六：聊天式 AI Capture
 
-状态：基础数据链路已落地。
+状态：连续会话生命周期与撤销/修改地基已落地，UI 和附件内容提取待补。
 
 平台重点：Flutter AI 页面 / Local Capture Session / 附件输入边界 / 云端 AI 解析可选兜底。
 
@@ -619,14 +619,18 @@ CaptureTurn
 已完成：
 
 ```text
-服务端 McpCaptureSession 增强 session_status / committed_at / dismissed_at
-服务端新增 McpCaptureTurn，parse / commit / undo 会写入 turn 记录
-PowerSync schema 新增 mcp_capture_sessions / mcp_capture_turns
-PowerSyncCaptureStore 新增本地 captureParse / captureCommit / captureUndo
-PowerSyncLocalCoreBridge.captureParse / captureCommit / captureUndo 已接入本地持久化
-AiCaptureService 本地模式可走 Local Core，不再只能依赖 Cloud MCP
+服务端与 Local Core 支持 session 列表、读取、恢复、append turn 和 dismiss
+parse 分别写入 user turn 与 assistant action turn，同一 session 可持续追加多轮
+候选动作 revise 创建新 turn，并通过 supersedes_turn_id 保留修改版本链
+commit 只提交具体 assistant turn，result_entities 与 undo_token 写回该 turn，session 保持 active
+已 committed / partial 的 turn 必须先 undo，之后允许修改并重新提交
+PowerSync schema 与 Sync Push 支持 capture_session / capture_turn revision 和 PATCH 字段保留
+PowerSyncCaptureStore 与 PowerSyncLocalCoreBridge 已接入完整生命周期
+AiCaptureService 提供强类型 list/get/append/revise/commit/undo/dismiss 接口
 本地 commit 创建的 memo / task / ledger_transaction 会写入 source_capture_id
-本地 undo 通过 mcp_undo_actions 转为 ai_trashed，并写入 undo turn
+本地 undo 通过 mcp_undo_actions 转为 ai_trashed，原 turn 标记 undone 并追加 system undo turn
+asset_ids 按 turn 持久化，并进入 memo 候选引用边界
+回归测试覆盖连续第二轮、修改、提交、撤销、撤销后再次修改和关闭会话
 本地 capture_parse 已具备最小规则拆分，可从一句话生成 task_create / expense_create / memo_create 候选动作
 ```
 
@@ -634,26 +638,36 @@ AiCaptureService 本地模式可走 Local Core，不再只能依赖 Cloud MCP
 
 ```text
 LocalCoreBridge.captureParse(input, context)
+LocalCoreBridge.listCaptureSessions(input, context)
+LocalCoreBridge.getCaptureSession(input, context)
+LocalCoreBridge.appendCaptureTurn(input, context)
+LocalCoreBridge.reviseCaptureAction(input, context)
 LocalCoreBridge.captureCommit(input, context)
 LocalCoreBridge.captureUndo(input, context)
+LocalCoreBridge.dismissCaptureSession(input, context)
 ```
 
 当前云端入口：
 
 ```text
 POST /api/v1/mcp/capture/parse
+GET  /api/v1/mcp/capture/sessions
+GET  /api/v1/mcp/capture/sessions/{capture_id}
+POST /api/v1/mcp/capture/sessions/{capture_id}/turns
+POST /api/v1/mcp/capture/sessions/{capture_id}/turns/{turn_id}/revise
 POST /api/v1/mcp/capture/commit
 POST /api/v1/mcp/capture/undo
+POST /api/v1/mcp/capture/sessions/{capture_id}/dismiss
 ```
 
 仍待补齐：
 
 ```text
-真正聊天式多轮 append turn UI 与体验
-asset_ids 参与云端/本地解析规则，而不是只作为 payload 引用边界
+聊天界面消费历史 turns、已设置结果卡片、修改和撤销入口
+asset_ids 对应图片/PDF/音频内容提取，而不是只作为引用边界
 语音输入与 STT
-更完整的 capture session 列表、恢复和取消接口
 本地规则解析继续补充更多自然语言金额、日期、商户和任务拆分边界
+Capture Store 与 Fake Local Core 文件拆分，降低超大文件维护风险
 ```
 
 边界：
@@ -722,7 +736,7 @@ Flutter analyze/test 通过
 下一步进入：
 
 ```text
-Capture Session 生命周期与附件解析边界
+Capture 附件内容提取与会话 UI 消费边界
 ```
 
-原因：首页状态摘要、预算写入和 Reminder 派发状态机已经具备服务端、Local Core、PowerSync 与平台适配同构边界。当前最明显的产品地基缺口转为 Capture Session 只能完成单次 parse / commit / undo，缺少会话列表、读取、恢复、取消、多轮 append turn，以及 asset_ids 真正参与解析的接口边界。先补齐会话生命周期，聊天式 AI Capture 后续 UI 才能稳定恢复历史、追加上下文并处理附件。
+原因：Capture Session 已具备列表、读取、恢复、append turn、逐轮修改/提交/撤销和 dismiss，聊天历史与 AI 已设置结果能够云端/本地持久化。当前剩余缺口是 asset_ids 只保存引用，尚未形成图片/PDF/音频内容提取接口；聊天 UI 也尚未消费历史 turns、结果卡片、修改和撤销动作。下一步先稳定附件解析适配边界，再进入产品地基 release gate 与 UI 实现。

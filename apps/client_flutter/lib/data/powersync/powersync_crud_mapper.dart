@@ -73,6 +73,15 @@ class PowerSyncCrudMapper {
     'ledger_transactions': 'expense',
     'ledger_budgets': 'ledger_budget',
     'reminders': 'reminder',
+    'mcp_capture_sessions': 'capture_session',
+    'mcp_capture_turns': 'capture_turn',
+  };
+
+  static const Set<String> _jsonCollectionKeys = {
+    'actions',
+    'asset_ids',
+    'selected_action_indexes',
+    'result_entities',
   };
 
   static const Set<String> _metadataKeys = {
@@ -155,6 +164,8 @@ class PowerSyncCrudMapper {
       if (_metadataKeys.contains(entry.key)) continue;
       cleaned[entry.key] = entry.key == 'tags'
           ? _normalizeTags(entry.value)
+          : _jsonCollectionKeys.contains(entry.key)
+          ? _normalizeJsonCollection(entry.value)
           : entry.value;
     }
 
@@ -172,6 +183,20 @@ class PowerSyncCrudMapper {
   bool _isSoftDelete(Map<String, Object?> data) {
     final status = _readString(data['status']);
     return status == 'deleted' || data['deleted_at'] != null;
+  }
+
+  Object? _normalizeJsonCollection(Object? value) {
+    if (value == null) return const <Object?>[];
+    if (value is List) return value;
+    if (value is String && value.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(value);
+        if (decoded is List) return decoded;
+      } catch (_) {
+        return const <Object?>[];
+      }
+    }
+    return const <Object?>[];
   }
 
   Object? _normalizeTags(Object? value) {

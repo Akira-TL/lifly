@@ -6,7 +6,15 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 
-SyncEntityType = Literal["memo", "task", "expense", "ledger_budget", "reminder"]
+SyncEntityType = Literal[
+    "memo",
+    "task",
+    "expense",
+    "ledger_budget",
+    "reminder",
+    "capture_session",
+    "capture_turn",
+]
 SyncOperation = Literal["upsert", "delete"]
 
 

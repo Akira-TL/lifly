@@ -434,6 +434,46 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
+  Future<List<LocalCaptureSession>> listCaptureSessions(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _captureStore.listCaptureSessions(input, context);
+  }
+
+  @override
+  Future<LocalCaptureSession?> getCaptureSession(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _captureStore.getCaptureSession(input, context);
+  }
+
+  @override
+  Future<LocalCaptureSession> appendCaptureTurn(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _captureStore.appendCaptureTurn(input, context);
+  }
+
+  @override
+  Future<LocalCaptureTurn> reviseCaptureAction(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _captureStore.reviseCaptureAction(input, context);
+  }
+
+  @override
+  Future<LocalCaptureSession> dismissCaptureSession(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _captureStore.dismissCaptureSession(input, context);
+  }
+
+  @override
   Future<LocalCaptureCommitResult> captureCommit(
     Map<String, Object?> input,
     LocalCoreContext context,

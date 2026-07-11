@@ -37,6 +37,20 @@ async def ensure_schema_compatibility(conn: AsyncConnection) -> None:
                 "WHERE next_attempt_at IS NULL AND reminder_status = 'pending'"
             )
         )
+        await conn.execute(
+            text(
+                "ALTER TABLE mcp_capture_sessions "
+                "ADD COLUMN IF NOT EXISTS revision INTEGER NOT NULL DEFAULT 1"
+            )
+        )
+        capture_turn_columns = (
+            "ADD COLUMN IF NOT EXISTS revision INTEGER NOT NULL DEFAULT 1",
+            "ADD COLUMN IF NOT EXISTS asset_ids JSONB",
+            "ADD COLUMN IF NOT EXISTS undo_token VARCHAR(36)",
+            "ADD COLUMN IF NOT EXISTS supersedes_turn_id VARCHAR(36)",
+        )
+        for definition in capture_turn_columns:
+            await conn.execute(text(f"ALTER TABLE mcp_capture_turns {definition}"))
         return
 
     if dialect == "sqlite":
@@ -75,6 +89,21 @@ async def ensure_schema_compatibility(conn: AsyncConnection) -> None:
                 "UPDATE reminders SET next_attempt_at = remind_at "
                 "WHERE next_attempt_at IS NULL AND reminder_status = 'pending'"
             )
+        )
+        await _add_sqlite_columns(
+            conn,
+            "mcp_capture_sessions",
+            {"revision": "INTEGER NOT NULL DEFAULT 1"},
+        )
+        await _add_sqlite_columns(
+            conn,
+            "mcp_capture_turns",
+            {
+                "revision": "INTEGER NOT NULL DEFAULT 1",
+                "asset_ids": "TEXT",
+                "undo_token": "TEXT",
+                "supersedes_turn_id": "TEXT",
+            },
         )
 
 

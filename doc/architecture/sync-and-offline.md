@@ -36,6 +36,8 @@ UI
 
 Reminder 派发状态同样通过 PowerSync 同步。客户端认领到期提醒时写入 `dispatch_token / lease_until / attempt_count`，平台通知成功或失败后写回 `delivered / failed` 及时间、错误和 external ID；服务端按 `revision` 拒绝陈旧状态。lease 过期允许其他执行器重新认领，但所有平台适配器必须使用 reminder ID 作为幂等键，避免重连或崩溃恢复造成重复通知。任务完成、取消、删除或策略 dismiss 会把尚未送达的提醒同步为 cancelled。
 
+AI Capture 的 `mcp_capture_sessions` 与 `mcp_capture_turns` 也通过 PowerSync 同步。Session 和 turn 都使用 `revision` 拒绝陈旧覆盖；turn 状态 PATCH 只更新实际携带字段，不能因一次 commit、undo 或 revise 清空历史 text、actions、asset_ids、result_entities 或 undo_token。离线创建、追加、修改、提交和撤销先写本地完整会话链，联网后再上行。
+
 首页同步状态必须区分观察位置：服务端只能报告 PowerSync 配置是否可用以及服务端可验证的附件同步统计，不能推断具体客户端在线；客户端 Local Core 读取 PowerSync `currentStatus`，报告连接、连接中、下载、上传、最近同步时间和错误。最新导入状态通过同步到本地的 `import_batches` 计算，不保存不可验证的固定占位状态。
 
 PowerSync 运行配置通常按环境管理并可被 Git 忽略，但同步范围不能依赖人工记忆。`infra/powersync-required-tables.txt` 是当前最低同步表清单，部署或本地配置必须通过 `scripts/check-powersync-sync-scope.sh` 校验。

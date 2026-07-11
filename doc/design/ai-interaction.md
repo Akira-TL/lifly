@@ -169,24 +169,30 @@ AI 每次操作必须记录：
 
 ## 12. 聊天式 AI Capture
 
-当前核心能力是：
+当前核心能力是连续会话：
 
 ```text
-capture_parse → capture_commit → capture_undo
+create session → append turn → revise action → commit turn → undo turn → continue
 ```
 
-客户端体验应从“调试式表单”升级为聊天式捕获，但底层边界不变：
+客户端体验应展示完整聊天记录与 AI 已执行结果：
 
 ```text
 用户输入一轮内容
     ↓
-服务端解析候选动作
+写 user turn
     ↓
-客户端展示确认卡片
+AI 解析候选动作并写 assistant turn
     ↓
-用户选择提交
+客户端展示可编辑确认卡片
     ↓
-写入业务表、audit_logs、undo token
+用户可以修改、提交或放弃该轮
+    ↓
+提交后展示创建的备忘 / 任务 / 账单与撤销入口
+    ↓
+撤销后仍保留历史，并允许修改后重新提交
+    ↓
+继续发送下一轮内容
 ```
 
 本地模式下，`PowerSyncCaptureStore.captureParse` 已具备最小规则拆分能力：普通记录会降级为 `memo_create`，包含提醒语义会生成 `task_create`，包含金额消费语义会生成 `expense_create`。这只是离线可用的规则地基，不等于完整 AI 推理；后续仍需扩展更多金额、日期、商户、任务标题和多轮上下文边界。
@@ -201,7 +207,8 @@ McpCaptureSession
   timezone / locale
   actions[]
   requires_confirmation
-  session_status: parsed / committed / failed / dismissed / expired
+  committed: 是否至少执行过一轮
+  session_status: active / dismissed / expired
   source_channel
   expires_at
   committed_at / dismissed_at
@@ -213,15 +220,18 @@ McpCaptureTurn
   turn_index
   role: user / assistant / system
   text
+  asset_ids[]
   actions[]
   selected_action_indexes[]
   result_entities[]
-  turn_status: parsed / committed / failed / undone / partial
+  undo_token
+  supersedes_turn_id
+  turn_status: accepted / parsed / revised / superseded / committed / partial / failed / undone / dismissed
   source_channel
   created_at / updated_at
 ```
 
-本地 Local Core 已接入 `captureParse` / `captureCommit` / `captureUndo`。本地模式下候选动作、确认结果、undo token 与 undo 结果会写入 PowerSync 本地表；commit 创建的业务实体会写入 `source_capture_id`，便于会话恢复和撤销追踪。
+本地 Local Core 已接入 session 列表、读取、append turn、revise、commit、undo 和 dismiss。一次 commit 只作用于指定 assistant turn，不关闭整个 session。未执行候选动作可以直接修改；已执行 turn 必须先撤销，防止旧实体和新设置并存。修改会创建新的 revised turn，而不是覆盖历史。commit 创建的业务实体写入 `source_capture_id`，结果实体和 undo token 写回该 turn，便于聊天界面展示“AI 已设置内容”及撤销入口。
 
 ## 13. 附件和语音输入边界
 

@@ -33,19 +33,34 @@ class PowerSyncCaptureStore {
     final assetIds = _readStringList(input, 'asset_ids');
     final now = context.effectiveNow.toUtc();
     final captureId = policy.nextEntityId('capture');
-    final expiresAt = now.add(const Duration(hours: 24));
+    final expiresAt = now.add(const Duration(days: 30));
     final actions = _parseLocalActions(
       text: text,
       captureId: captureId,
       assetIds: assetIds,
       now: now,
     );
-    final turn = LocalCaptureTurn(
+    final userTurn = LocalCaptureTurn(
       id: policy.nextEntityId('capture_turn'),
       captureId: captureId,
       turnIndex: 0,
-      role: 'assistant',
+      role: 'user',
       text: text,
+      assetIds: assetIds,
+      actions: const [],
+      selectedActionIndexes: const [],
+      resultEntities: const [],
+      turnStatus: 'accepted',
+      createdAt: now,
+      updatedAt: now,
+    );
+    final actionTurn = LocalCaptureTurn(
+      id: policy.nextEntityId('capture_turn'),
+      captureId: captureId,
+      turnIndex: 1,
+      role: 'assistant',
+      text: null,
+      assetIds: assetIds,
       actions: actions,
       selectedActionIndexes: const [],
       resultEntities: const [],
@@ -60,12 +75,13 @@ class PowerSyncCaptureStore {
       locale: locale,
       actions: actions,
       requiresConfirmation: true,
-      sessionStatus: 'parsed',
+      committed: false,
+      sessionStatus: 'active',
       sourceChannel: context.sourceChannelName,
       createdAt: now,
       updatedAt: now,
       expiresAt: expiresAt,
-      turns: [turn],
+      turns: [userTurn, actionTurn],
     );
 
     await syncService.ensureInitialized();
@@ -73,8 +89,8 @@ class PowerSyncCaptureStore {
       await tx.execute(
         'INSERT INTO mcp_capture_sessions('
         'id, capture_id, user_id, original_text, timezone, locale, actions, requires_confirmation, '
-        'session_status, source_channel, created_at, updated_at, expires_at'
-        ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'committed, session_status, source_channel, created_at, updated_at, expires_at, revision'
+        ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
           session.captureId,
           session.captureId,
@@ -84,17 +100,262 @@ class PowerSyncCaptureStore {
           session.locale,
           _encodeActions(session.actions),
           session.requiresConfirmation ? 1 : 0,
+          session.committed ? 1 : 0,
           session.sessionStatus,
           session.sourceChannel,
           now.toIso8601String(),
           now.toIso8601String(),
           expiresAt.toIso8601String(),
+          1,
         ],
       );
-      await _insertTurn(tx, turn, context.userId, session.sourceChannel);
+      await _insertTurn(tx, userTurn, context.userId, session.sourceChannel);
+      await _insertTurn(tx, actionTurn, context.userId, session.sourceChannel);
     });
 
     return session;
+  }
+
+  Future<List<LocalCaptureSession>> listCaptureSessions(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    await syncService.ensureInitialized();
+    final status = _readOptionalString(input, 'status') ?? 'active';
+    final limit = (input['limit'] as int? ?? 20).clamp(1, 100);
+    final offset = (input['offset'] as int? ?? 0).clamp(0, 1000000);
+    final conditions = <String>['user_id = ?'];
+    final parameters = <Object?>[context.userId];
+    if (status == 'active') {
+      conditions.add("session_status IN ('active', 'parsed', 'committed', 'failed')");
+    } else if (status != 'all') {
+      conditions.add('session_status = ?');
+      parameters.add(status);
+    }
+    parameters.addAll([limit, offset]);
+    final rows = await syncService.db.getAll(
+      'SELECT capture_id, original_text, timezone, locale, actions, requires_confirmation, '
+      'committed, session_status, source_channel, created_at, updated_at, expires_at, '
+      'committed_at, dismissed_at FROM mcp_capture_sessions '
+      'WHERE ${conditions.join(' AND ')} ORDER BY updated_at DESC LIMIT ? OFFSET ?',
+      parameters,
+    );
+    final sessions = <LocalCaptureSession>[];
+    for (final row in rows) {
+      sessions.add(await _sessionFromRow(row, includeTurns: false));
+    }
+    return sessions;
+  }
+
+  Future<LocalCaptureSession?> getCaptureSession(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final captureId = _readRequiredString(input, 'capture_id');
+    await syncService.ensureInitialized();
+    return _getSession(captureId, context.userId, includeTurns: true);
+  }
+
+  Future<LocalCaptureSession> appendCaptureTurn(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final captureId = _readRequiredString(input, 'capture_id');
+    final text = _readRequiredString(input, 'text');
+    final assetIds = _readStringList(input, 'asset_ids');
+    await syncService.ensureInitialized();
+    final session = await _getActiveSession(
+      captureId,
+      context.effectiveNow,
+      context.userId,
+    );
+    if (session == null) {
+      throw StateError('Capture session not found, dismissed, or expired: $captureId');
+    }
+    final now = context.effectiveNow.toUtc();
+    final firstIndex = await _nextTurnIndex(captureId);
+    final actions = _parseLocalActions(
+      text: text,
+      captureId: captureId,
+      assetIds: assetIds,
+      now: now,
+    );
+    final userTurn = LocalCaptureTurn(
+      id: policy.nextEntityId('capture_turn'),
+      captureId: captureId,
+      turnIndex: firstIndex,
+      role: 'user',
+      text: text,
+      assetIds: assetIds,
+      actions: const [],
+      selectedActionIndexes: const [],
+      resultEntities: const [],
+      turnStatus: 'accepted',
+      createdAt: now,
+      updatedAt: now,
+    );
+    final actionTurn = LocalCaptureTurn(
+      id: policy.nextEntityId('capture_turn'),
+      captureId: captureId,
+      turnIndex: firstIndex + 1,
+      role: 'assistant',
+      text: null,
+      assetIds: assetIds,
+      actions: actions,
+      selectedActionIndexes: const [],
+      resultEntities: const [],
+      turnStatus: 'parsed',
+      createdAt: now,
+      updatedAt: now,
+    );
+    final expiresAt = now.add(const Duration(days: 30));
+    await syncService.db.writeTransaction((tx) async {
+      await _insertTurn(tx, userTurn, context.userId, session.sourceChannel);
+      await _insertTurn(tx, actionTurn, context.userId, session.sourceChannel);
+      await tx.execute(
+        'UPDATE mcp_capture_sessions SET actions = ?, requires_confirmation = ?, '
+        'session_status = ?, updated_at = ?, expires_at = ?, revision = revision + 1 '
+        'WHERE capture_id = ? AND user_id = ?',
+        [
+          _encodeActions(actions),
+          1,
+          'active',
+          now.toIso8601String(),
+          expiresAt.toIso8601String(),
+          captureId,
+          context.userId,
+        ],
+      );
+    });
+    return (await _getSession(captureId, context.userId, includeTurns: true))!;
+  }
+
+  Future<LocalCaptureTurn> reviseCaptureAction(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final captureId = _readRequiredString(input, 'capture_id');
+    final turnId = _readRequiredString(input, 'turn_id');
+    final actionIndex = input['action_index'] as int?;
+    if (actionIndex == null || actionIndex < 0) {
+      throw ArgumentError('action_index must be non-negative');
+    }
+    final rawPayload = input['payload'];
+    if (rawPayload is! Map) throw ArgumentError('payload is required');
+    await syncService.ensureInitialized();
+    final session = await _getActiveSession(
+      captureId,
+      context.effectiveNow,
+      context.userId,
+    );
+    if (session == null) {
+      throw StateError('Capture session not found, dismissed, or expired: $captureId');
+    }
+    final row = await syncService.db.getOptional(
+      'SELECT id, capture_id, turn_index, role, text, asset_ids, actions, '
+      'selected_action_indexes, result_entities, undo_token, supersedes_turn_id, '
+      'turn_status, created_at, updated_at FROM mcp_capture_turns '
+      'WHERE id = ? AND capture_id = ? AND user_id = ?',
+      [turnId, captureId, context.userId],
+    );
+    if (row == null) throw StateError('Capture action turn not found: $turnId');
+    final sourceTurn = _turnFromRow(row);
+    if (sourceTurn.role != 'assistant') {
+      throw StateError('Only assistant action turns can be revised');
+    }
+    if (const {'committed', 'partial'}.contains(sourceTurn.turnStatus)) {
+      throw StateError('Undo the committed turn before revising it');
+    }
+    if (actionIndex >= sourceTurn.actions.length) {
+      throw RangeError.index(actionIndex, sourceTurn.actions, 'action_index');
+    }
+    final sourceAction = sourceTurn.actions[actionIndex];
+    final revisedActions = [...sourceTurn.actions];
+    revisedActions[actionIndex] = LocalCaptureAction(
+      type: _readOptionalString(input, 'action_type') ?? sourceAction.type,
+      payload: rawPayload.cast<String, Object?>(),
+      confidence: (input['confidence'] as num?)?.toDouble() ?? sourceAction.confidence,
+      rawText: sourceAction.rawText,
+    );
+    final now = context.effectiveNow.toUtc();
+    final revisedTurn = LocalCaptureTurn(
+      id: policy.nextEntityId('capture_turn'),
+      captureId: captureId,
+      turnIndex: await _nextTurnIndex(captureId),
+      role: 'assistant',
+      text: _readOptionalString(input, 'note'),
+      assetIds: sourceTurn.assetIds,
+      actions: revisedActions,
+      selectedActionIndexes: const [],
+      resultEntities: const [],
+      supersedesTurnId: sourceTurn.id,
+      turnStatus: 'revised',
+      createdAt: now,
+      updatedAt: now,
+    );
+    await syncService.db.writeTransaction((tx) async {
+      await tx.execute(
+        'UPDATE mcp_capture_turns SET turn_status = ?, updated_at = ?, '
+        'revision = revision + 1 WHERE id = ?',
+        ['superseded', now.toIso8601String(), sourceTurn.id],
+      );
+      await _insertTurn(tx, revisedTurn, context.userId, session.sourceChannel);
+      await tx.execute(
+        'UPDATE mcp_capture_sessions SET actions = ?, requires_confirmation = ?, '
+        'session_status = ?, updated_at = ?, revision = revision + 1 '
+        'WHERE capture_id = ? AND user_id = ?',
+        [
+          _encodeActions(revisedActions),
+          1,
+          'active',
+          now.toIso8601String(),
+          captureId,
+          context.userId,
+        ],
+      );
+    });
+    return revisedTurn;
+  }
+
+  Future<LocalCaptureSession> dismissCaptureSession(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final captureId = _readRequiredString(input, 'capture_id');
+    await syncService.ensureInitialized();
+    final session = await _getSession(captureId, context.userId, includeTurns: true);
+    if (session == null) throw StateError('Capture session not found: $captureId');
+    if (session.sessionStatus != 'dismissed') {
+      final now = context.effectiveNow.toUtc();
+      final turn = LocalCaptureTurn(
+        id: policy.nextEntityId('capture_turn'),
+        captureId: captureId,
+        turnIndex: await _nextTurnIndex(captureId),
+        role: 'system',
+        text: _readOptionalString(input, 'reason') ?? 'dismiss',
+        actions: const [],
+        selectedActionIndexes: const [],
+        resultEntities: const [],
+        turnStatus: 'dismissed',
+        createdAt: now,
+        updatedAt: now,
+      );
+      await syncService.db.writeTransaction((tx) async {
+        await _insertTurn(tx, turn, context.userId, session.sourceChannel);
+        await tx.execute(
+          'UPDATE mcp_capture_sessions SET session_status = ?, dismissed_at = ?, updated_at = ?, '
+          'revision = revision + 1 WHERE capture_id = ? AND user_id = ?',
+          [
+            'dismissed',
+            now.toIso8601String(),
+            now.toIso8601String(),
+            captureId,
+            context.userId,
+          ],
+        );
+      });
+    }
+    return (await _getSession(captureId, context.userId, includeTurns: true))!;
   }
 
   Future<LocalCaptureCommitResult> captureCommit(
@@ -103,24 +364,35 @@ class PowerSyncCaptureStore {
   ) async {
     final captureId = _readRequiredString(input, 'capture_id');
     await syncService.ensureInitialized();
-    final session = await _getActiveSession(captureId, context.effectiveNow);
+    final session = await _getActiveSession(
+      captureId,
+      context.effectiveNow,
+      context.userId,
+    );
     if (session == null) {
-      throw StateError('Capture session not found or expired: $captureId');
+      throw StateError('Capture session not found, dismissed, or expired: $captureId');
     }
-    if (session.sessionStatus == 'committed') {
-      throw StateError('Capture session already committed: $captureId');
+    final requestedTurnId = _readOptionalString(input, 'turn_id');
+    final actionTurn = requestedTurnId == null
+        ? await _latestActionTurn(captureId, context.userId)
+        : await _captureTurnById(captureId, requestedTurnId, context.userId);
+    if (actionTurn == null || actionTurn.role != 'assistant') {
+      throw StateError('Capture action turn not found');
+    }
+    if (const {'committed', 'partial'}.contains(actionTurn.turnStatus)) {
+      throw StateError('Capture turn already committed: ${actionTurn.id}');
     }
 
-    final selectedIndexes = _selectedIndexes(input, session.actions.length);
+    final selectedIndexes = _selectedIndexes(input, actionTurn.actions.length);
     final created = <LocalCoreEntityRef>[];
     final failed = <LocalCoreEntityRef>[];
 
     for (final index in selectedIndexes) {
-      if (index < 0 || index >= session.actions.length) {
+      if (index < 0 || index >= actionTurn.actions.length) {
         failed.add(LocalCoreEntityRef(type: 'capture_action', id: '$index'));
         continue;
       }
-      final action = session.actions[index];
+      final action = actionTurn.actions[index];
       try {
         final payload = {...action.payload, 'source_capture_id': captureId};
         if (action.type == 'memo_create') {
@@ -143,33 +415,40 @@ class PowerSyncCaptureStore {
     }
 
     final now = context.effectiveNow.toUtc();
-    final undoToken = policy.nextEntityId('undo');
-    final turn = LocalCaptureTurn(
-      id: policy.nextEntityId('capture_turn'),
-      captureId: captureId,
-      turnIndex: session.turns.length,
-      role: 'system',
-      text: 'commit',
-      actions: const [],
-      selectedActionIndexes: selectedIndexes,
-      resultEntities: created,
-      turnStatus: failed.isEmpty ? 'committed' : 'partial',
-      createdAt: now,
-      updatedAt: now,
-    );
-
+    final undoToken = created.isEmpty ? '' : policy.nextEntityId('undo');
+    final turnStatus = created.isEmpty
+        ? 'failed'
+        : failed.isEmpty
+        ? 'committed'
+        : 'partial';
     await syncService.db.writeTransaction((tx) async {
       await tx.execute(
-        'UPDATE mcp_capture_sessions SET session_status = ?, updated_at = ?, committed_at = ? '
-        'WHERE capture_id = ?',
+        'UPDATE mcp_capture_sessions SET committed = ?, session_status = ?, '
+        'updated_at = ?, committed_at = ?, revision = revision + 1 '
+        'WHERE capture_id = ? AND user_id = ?',
         [
-          created.isEmpty ? 'failed' : 'committed',
+          created.isEmpty ? (session.committed ? 1 : 0) : 1,
+          'active',
           now.toIso8601String(),
-          created.isEmpty ? null : now.toIso8601String(),
+          created.isEmpty ? session.committedAt?.toIso8601String() : now.toIso8601String(),
           captureId,
+          context.userId,
         ],
       );
-      await _insertTurn(tx, turn, context.userId, session.sourceChannel);
+      await tx.execute(
+        'UPDATE mcp_capture_turns SET selected_action_indexes = ?, result_entities = ?, '
+        'undo_token = ?, turn_status = ?, updated_at = ?, revision = revision + 1 '
+        'WHERE id = ? AND user_id = ?',
+        [
+          jsonEncode(selectedIndexes),
+          _encodeEntityRefs(created),
+          undoToken.isEmpty ? null : undoToken,
+          turnStatus,
+          now.toIso8601String(),
+          actionTurn.id,
+          context.userId,
+        ],
+      );
       for (final entity in created) {
         await tx.execute(
           'INSERT INTO mcp_undo_actions('
@@ -215,7 +494,11 @@ class PowerSyncCaptureStore {
     }
 
     var undone = 0;
-    String? captureId;
+    final committedTurn = await syncService.db.getOptional(
+      'SELECT id, capture_id FROM mcp_capture_turns WHERE undo_token = ? AND user_id = ?',
+      [undoToken, context.userId],
+    );
+    String? captureId = committedTurn?['capture_id'] as String?;
     final entities = <LocalCoreEntityRef>[];
     final failed = <LocalCoreEntityRef>[];
     for (final row in rows) {
@@ -258,6 +541,14 @@ class PowerSyncCaptureStore {
         'WHERE undo_token = ? AND user_id = ? AND status = ?',
         ['used', now.toIso8601String(), undoToken, context.userId, 'pending'],
       );
+      final committedTurnId = committedTurn?['id'] as String?;
+      if (committedTurnId != null) {
+        await tx.execute(
+          'UPDATE mcp_capture_turns SET turn_status = ?, updated_at = ?, '
+          'revision = revision + 1 WHERE id = ?',
+          ['undone', now.toIso8601String(), committedTurnId],
+        );
+      }
       final resolvedCaptureId = captureId;
       if (resolvedCaptureId != null) {
         final turn = LocalCaptureTurn(
@@ -269,6 +560,7 @@ class PowerSyncCaptureStore {
           actions: const [],
           selectedActionIndexes: const [],
           resultEntities: entities,
+          undoToken: undoToken,
           turnStatus: failed.isEmpty ? 'undone' : 'partial_undo',
           createdAt: now,
           updatedAt: now,
@@ -287,41 +579,95 @@ class PowerSyncCaptureStore {
   Future<LocalCaptureSession?> _getActiveSession(
     String captureId,
     DateTime now,
+    String userId,
   ) async {
+    final session = await _getSession(captureId, userId, includeTurns: true);
+    if (session == null || session.sessionStatus == 'dismissed') return null;
+    final expiresAt = session.expiresAt;
+    if (expiresAt != null && expiresAt.isBefore(now.toUtc())) return null;
+    return session;
+  }
+
+  Future<LocalCaptureSession?> _getSession(
+    String captureId,
+    String userId, {
+    required bool includeTurns,
+  }) async {
     final row = await syncService.db.getOptional(
       'SELECT capture_id, original_text, timezone, locale, actions, requires_confirmation, '
-      'session_status, source_channel, created_at, updated_at, expires_at '
-      'FROM mcp_capture_sessions WHERE capture_id = ?',
-      [captureId],
+      'committed, session_status, source_channel, created_at, updated_at, expires_at, '
+      'committed_at, dismissed_at FROM mcp_capture_sessions '
+      'WHERE capture_id = ? AND user_id = ?',
+      [captureId, userId],
     );
     if (row == null) return null;
-    final expiresAt = _readDateTimeOrNull(row['expires_at']);
-    if (expiresAt != null && expiresAt.isBefore(now.toUtc())) return null;
-    final turns = await _turnsFor(captureId);
+    return _sessionFromRow(row, includeTurns: includeTurns);
+  }
+
+  Future<LocalCaptureSession> _sessionFromRow(
+    Map<String, Object?> row, {
+    required bool includeTurns,
+  }) async {
+    final captureId = row['capture_id'] as String;
     return LocalCaptureSession(
-      captureId: row['capture_id'] as String,
+      captureId: captureId,
       originalText: row['original_text'] as String? ?? '',
       timezone: row['timezone'] as String? ?? 'Asia/Shanghai',
       locale: row['locale'] as String? ?? 'zh-CN',
       actions: _decodeActions(row['actions'] as String?),
       requiresConfirmation: (row['requires_confirmation'] as int? ?? 1) == 1,
-      sessionStatus: row['session_status'] as String? ?? 'parsed',
+      committed: (row['committed'] as int? ?? 0) == 1,
+      sessionStatus: row['session_status'] as String? ?? 'active',
       sourceChannel: row['source_channel'] as String? ?? 'local',
       createdAt: _readDateTimeOrNull(row['created_at']),
       updatedAt: _readDateTimeOrNull(row['updated_at']),
-      expiresAt: expiresAt,
-      turns: turns,
+      expiresAt: _readDateTimeOrNull(row['expires_at']),
+      committedAt: _readDateTimeOrNull(row['committed_at']),
+      dismissedAt: _readDateTimeOrNull(row['dismissed_at']),
+      turns: includeTurns ? await _turnsFor(captureId) : const [],
     );
   }
 
   Future<List<LocalCaptureTurn>> _turnsFor(String captureId) async {
     final rows = await syncService.db.getAll(
-      'SELECT id, capture_id, turn_index, role, text, actions, selected_action_indexes, '
-      'result_entities, turn_status, created_at, updated_at '
-      'FROM mcp_capture_turns WHERE capture_id = ? ORDER BY turn_index ASC',
+      'SELECT id, capture_id, turn_index, role, text, asset_ids, actions, '
+      'selected_action_indexes, result_entities, undo_token, supersedes_turn_id, '
+      'turn_status, created_at, updated_at FROM mcp_capture_turns '
+      'WHERE capture_id = ? ORDER BY turn_index ASC, created_at ASC',
       [captureId],
     );
     return rows.map(_turnFromRow).toList(growable: false);
+  }
+
+  Future<LocalCaptureTurn?> _captureTurnById(
+    String captureId,
+    String turnId,
+    String userId,
+  ) async {
+    final row = await syncService.db.getOptional(
+      'SELECT id, capture_id, turn_index, role, text, asset_ids, actions, '
+      'selected_action_indexes, result_entities, undo_token, supersedes_turn_id, '
+      'turn_status, created_at, updated_at FROM mcp_capture_turns '
+      'WHERE id = ? AND capture_id = ? AND user_id = ?',
+      [turnId, captureId, userId],
+    );
+    return row == null ? null : _turnFromRow(row);
+  }
+
+  Future<LocalCaptureTurn?> _latestActionTurn(
+    String captureId,
+    String userId,
+  ) async {
+    final row = await syncService.db.getOptional(
+      'SELECT id, capture_id, turn_index, role, text, asset_ids, actions, '
+      'selected_action_indexes, result_entities, undo_token, supersedes_turn_id, '
+      'turn_status, created_at, updated_at FROM mcp_capture_turns '
+      "WHERE capture_id = ? AND user_id = ? AND role = 'assistant' "
+      "AND turn_status IN ('parsed', 'revised', 'failed') "
+      'ORDER BY turn_index DESC, created_at DESC LIMIT 1',
+      [captureId, userId],
+    );
+    return row == null ? null : _turnFromRow(row);
   }
 
   Future<int> _nextTurnIndex(String captureId) async {
@@ -355,9 +701,10 @@ class PowerSyncCaptureStore {
   ) async {
     await tx.execute(
       'INSERT INTO mcp_capture_turns('
-      'id, user_id, capture_id, turn_index, role, text, actions, selected_action_indexes, '
-      'result_entities, turn_status, source_channel, created_at, updated_at'
-      ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'id, user_id, capture_id, turn_index, role, text, asset_ids, actions, '
+      'selected_action_indexes, result_entities, undo_token, supersedes_turn_id, '
+      'turn_status, source_channel, created_at, updated_at, revision'
+      ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         turn.id,
         userId,
@@ -365,13 +712,17 @@ class PowerSyncCaptureStore {
         turn.turnIndex,
         turn.role,
         turn.text,
+        jsonEncode(turn.assetIds),
         _encodeActions(turn.actions),
         jsonEncode(turn.selectedActionIndexes),
         _encodeEntityRefs(turn.resultEntities),
+        turn.undoToken,
+        turn.supersedesTurnId,
         turn.turnStatus,
         sourceChannel,
         turn.createdAt.toIso8601String(),
         turn.updatedAt.toIso8601String(),
+        1,
       ],
     );
   }
@@ -383,11 +734,14 @@ class PowerSyncCaptureStore {
       turnIndex: row['turn_index'] as int? ?? 0,
       role: row['role'] as String? ?? 'assistant',
       text: row['text'] as String?,
+      assetIds: _decodeStringList(row['asset_ids'] as String?),
       actions: _decodeActions(row['actions'] as String?),
       selectedActionIndexes: _decodeIntList(
         row['selected_action_indexes'] as String?,
       ),
       resultEntities: _decodeEntityRefs(row['result_entities'] as String?),
+      undoToken: row['undo_token'] as String?,
+      supersedesTurnId: row['supersedes_turn_id'] as String?,
       turnStatus: row['turn_status'] as String? ?? 'parsed',
       createdAt: _readRequiredDateTime(row['created_at']),
       updatedAt: _readRequiredDateTime(row['updated_at']),
@@ -629,6 +983,13 @@ class PowerSyncCaptureStore {
     final decoded = jsonDecode(value);
     if (decoded is! List) return const [];
     return decoded.whereType<int>().toList(growable: false);
+  }
+
+  static List<String> _decodeStringList(String? value) {
+    if (value == null || value.trim().isEmpty) return const [];
+    final decoded = jsonDecode(value);
+    if (decoded is! List) return const [];
+    return decoded.whereType<String>().toList(growable: false);
   }
 
   static DateTime _readRequiredDateTime(Object? value) {

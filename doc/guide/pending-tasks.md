@@ -135,22 +135,23 @@ widget test 已覆盖核心入口切换和底部入口收敛
 
 ### LC-0706 Chat-style AI Capture
 
-状态：基础链路已完成，本地 capture_parse 已具备最小规则拆分，聊天式多轮 UI、asset_ids 真实解析、STT 和会话恢复体验待补。
+状态：连续会话生命周期与撤销/修改地基已完成；聊天式多轮 UI、asset_ids 内容提取、STT 和附件预览体验待补。
 
-目标：在现有 parse / commit / undo 基础上升级聊天式捕获体验，并保证 capture session、turns、确认结果和撤销链路可本地持久化。
+目标：保证 AI 聊天可以恢复历史、持续追加 turn，并让每一轮 AI 已设置内容可查看、修改、提交和撤销。
 
 验收：
 
 ```text
-服务端 McpCaptureSession 已增强 session_status / committed_at / dismissed_at
-服务端 McpCaptureTurn 已落地，parse / commit / undo 会写入 turn
-PowerSync mcp_capture_sessions / mcp_capture_turns schema 已接入
-PowerSyncCaptureStore 可本地持久化 captureParse / captureCommit / captureUndo
+服务端与 Local Core 支持 session 列表、读取、恢复、append turn 和 dismiss
+McpCaptureTurn 持久化 user / assistant / system 角色、asset_ids、actions、result_entities、undo_token 和 supersedes_turn_id
+commit 只作用于具体 assistant turn，session 提交后仍可继续对话
+未执行候选动作可 revise；已执行 turn 必须先 undo，之后可修改并重新提交
+PowerSync 同步 capture_session / capture_turn revision，PATCH 不清空历史字段
 本地 commit 创建实体时写入 source_capture_id
 本地 undo 使用 mcp_undo_actions 并将实体转为 ai_trashed
-AiCaptureService local mode 可走 Local Core
-PowerSync capture store test 覆盖 session / turn / commit / undo 链路
-本地 capture_parse 最小规则拆分覆盖 task_create / expense_create 候选动作
+AiCaptureService 提供强类型 list/get/append/revise/commit/undo/dismiss 接口
+回归测试覆盖连续第二轮、修改、提交、撤销、撤销后再次修改和关闭会话
+本地 capture_parse 最小规则拆分覆盖 task_create / expense_create / memo_create 候选动作
 ```
 
 ### LC-0707 Product foundation release gate

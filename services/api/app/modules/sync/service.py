@@ -13,6 +13,8 @@ from app.db.models import (
     LedgerBudget,
     LedgerCategory,
     LedgerTransaction,
+    McpCaptureSession,
+    McpCaptureTurn,
     Memo,
     Reminder,
     Task,
@@ -58,6 +60,10 @@ async def apply_sync_push(db: AsyncSession, request: SyncPushRequest) -> SyncPus
             result = await _apply_budget_change(db, change, request.client_id)
         elif change.entity_type == "reminder":
             result = await _apply_reminder_change(db, change, request.client_id)
+        elif change.entity_type == "capture_session":
+            result = await _apply_capture_session_change(db, change, request.client_id)
+        elif change.entity_type == "capture_turn":
+            result = await _apply_capture_turn_change(db, change, request.client_id)
         else:
             result = await _apply_expense_change(db, change, request.client_id)
         results.append(result)
@@ -377,6 +383,186 @@ async def _apply_reminder_change(
     return _applied(change)
 
 
+async def _apply_capture_session_change(
+    db: AsyncSession,
+    change: SyncChange,
+    client_id: str,
+) -> SyncApplyResult:
+    result = await db.execute(
+        select(McpCaptureSession).where(
+            McpCaptureSession.capture_id == change.entity_id,
+            McpCaptureSession.user_id == change.user_id,
+        )
+    )
+    session = result.scalar_one_or_none()
+    if _is_stale(session, change):
+        return _skipped(change, "stale_revision", session.revision)
+
+    if change.operation == "delete":
+        if session is None:
+            return _skipped(change, "missing_entity", None)
+        before = _capture_session_snapshot(session)
+        session.session_status = "dismissed"
+        session.dismissed_at = change.deleted_at or change.updated_at
+        session.updated_at = change.updated_at
+        session.revision = change.revision
+        await db.flush()
+        await _write_sync_audit(
+            db,
+            change,
+            client_id,
+            before=before,
+            after=_capture_session_snapshot(session),
+        )
+        return _applied(change)
+
+    data = change.data
+    if session is None:
+        session = McpCaptureSession(
+            capture_id=change.entity_id,
+            user_id=change.user_id,
+            original_text=str(data.get("original_text") or ""),
+            actions=list(data.get("actions") or []),
+            expires_at=_datetime_value(
+                data.get("expires_at"),
+                fallback=change.updated_at + timedelta(days=30),
+            ),
+        )
+        db.add(session)
+        before = None
+    else:
+        before = _capture_session_snapshot(session)
+
+    if "original_text" in data:
+        session.original_text = str(data.get("original_text") or "")
+    if "timezone" in data:
+        session.timezone = str(data.get("timezone") or "Asia/Shanghai")
+    if "locale" in data:
+        session.locale = str(data.get("locale") or "zh-CN")
+    if "actions" in data:
+        session.actions = list(data.get("actions") or [])
+    if "requires_confirmation" in data:
+        session.requires_confirmation = _bool_value(
+            data.get("requires_confirmation"),
+            fallback=bool(session.requires_confirmation),
+        )
+    if "committed" in data:
+        session.committed = _bool_value(
+            data.get("committed"),
+            fallback=bool(session.committed),
+        )
+    if "session_status" in data:
+        session.session_status = str(data.get("session_status") or "active")
+    if "source_channel" in data:
+        session.source_channel = str(data.get("source_channel") or change.source)
+    if "expires_at" in data:
+        session.expires_at = _datetime_value(
+            data.get("expires_at"),
+            fallback=session.expires_at or change.updated_at + timedelta(days=30),
+        )
+    if "committed_at" in data:
+        session.committed_at = _datetime_value(data.get("committed_at"))
+    if "dismissed_at" in data:
+        session.dismissed_at = _datetime_value(data.get("dismissed_at"))
+    session.revision = change.revision
+    if session.created_at is None:
+        session.created_at = change.created_at or change.updated_at
+    session.updated_at = change.updated_at
+    await db.flush()
+    await _write_sync_audit(
+        db,
+        change,
+        client_id,
+        before=before,
+        after=_capture_session_snapshot(session),
+    )
+    return _applied(change)
+
+
+async def _apply_capture_turn_change(
+    db: AsyncSession,
+    change: SyncChange,
+    client_id: str,
+) -> SyncApplyResult:
+    turn = await _find_entity(db, McpCaptureTurn, change)
+    if _is_stale(turn, change):
+        return _skipped(change, "stale_revision", turn.revision)
+
+    if change.operation == "delete":
+        if turn is None:
+            return _skipped(change, "missing_entity", None)
+        before = _capture_turn_snapshot(turn)
+        turn.turn_status = "deleted"
+        turn.updated_at = change.updated_at
+        turn.revision = change.revision
+        await db.flush()
+        await _write_sync_audit(
+            db,
+            change,
+            client_id,
+            before=before,
+            after=_capture_turn_snapshot(turn),
+        )
+        return _applied(change)
+
+    data = change.data
+    capture_id = str(data.get("capture_id") or (turn.capture_id if turn is not None else ""))
+    if not capture_id:
+        return _skipped(
+            change,
+            "missing_capture_id",
+            turn.revision if turn is not None else None,
+        )
+    if turn is None:
+        turn = McpCaptureTurn(
+            id=change.entity_id,
+            user_id=change.user_id,
+            capture_id=capture_id,
+            turn_index=int(data.get("turn_index") or 0),
+        )
+        db.add(turn)
+        before = None
+    else:
+        before = _capture_turn_snapshot(turn)
+
+    turn.capture_id = capture_id
+    if "turn_index" in data:
+        turn.turn_index = int(data.get("turn_index") or 0)
+    if "role" in data:
+        turn.role = str(data.get("role") or "assistant")
+    if "text" in data:
+        turn.text = data.get("text")
+    if "asset_ids" in data:
+        turn.asset_ids = list(data.get("asset_ids") or [])
+    if "actions" in data:
+        turn.actions = list(data.get("actions") or [])
+    if "selected_action_indexes" in data:
+        turn.selected_action_indexes = list(data.get("selected_action_indexes") or [])
+    if "result_entities" in data:
+        turn.result_entities = list(data.get("result_entities") or [])
+    if "undo_token" in data:
+        turn.undo_token = data.get("undo_token")
+    if "supersedes_turn_id" in data:
+        turn.supersedes_turn_id = data.get("supersedes_turn_id")
+    if "turn_status" in data:
+        turn.turn_status = str(data.get("turn_status") or "parsed")
+    if "source_channel" in data:
+        turn.source_channel = str(data.get("source_channel") or change.source)
+    turn.revision = change.revision
+    if turn.created_at is None:
+        turn.created_at = change.created_at or change.updated_at
+    turn.updated_at = change.updated_at
+    await db.flush()
+    await _write_sync_audit(
+        db,
+        change,
+        client_id,
+        before=before,
+        after=_capture_turn_snapshot(turn),
+    )
+    return _applied(change)
+
+
 async def _apply_expense_change(
     db: AsyncSession,
     change: SyncChange,
@@ -464,6 +650,69 @@ def _skipped(change: SyncChange, reason: str, revision: int | None) -> SyncApply
 
 def _memo_snapshot(memo: Memo) -> dict:
     return json_serialize(memo_to_response(memo).model_dump())
+
+
+def _capture_session_snapshot(session: McpCaptureSession) -> dict:
+    return json_serialize(
+        {
+            "capture_id": session.capture_id,
+            "user_id": session.user_id,
+            "original_text": session.original_text,
+            "timezone": session.timezone,
+            "locale": session.locale,
+            "actions": list(session.actions or []),
+            "requires_confirmation": bool(session.requires_confirmation),
+            "committed": bool(session.committed),
+            "session_status": session.session_status,
+            "source_channel": session.source_channel,
+            "expires_at": session.expires_at,
+            "committed_at": session.committed_at,
+            "dismissed_at": session.dismissed_at,
+            "revision": session.revision,
+            "created_at": session.created_at,
+            "updated_at": session.updated_at,
+        }
+    )
+
+
+def _capture_turn_snapshot(turn: McpCaptureTurn) -> dict:
+    return json_serialize(
+        {
+            "id": turn.id,
+            "user_id": turn.user_id,
+            "capture_id": turn.capture_id,
+            "turn_index": turn.turn_index,
+            "role": turn.role,
+            "text": turn.text,
+            "asset_ids": list(turn.asset_ids or []),
+            "actions": list(turn.actions or []),
+            "selected_action_indexes": list(turn.selected_action_indexes or []),
+            "result_entities": list(turn.result_entities or []),
+            "undo_token": turn.undo_token,
+            "supersedes_turn_id": turn.supersedes_turn_id,
+            "turn_status": turn.turn_status,
+            "source_channel": turn.source_channel,
+            "revision": turn.revision,
+            "created_at": turn.created_at,
+            "updated_at": turn.updated_at,
+        }
+    )
+
+
+def _bool_value(value: Any, *, fallback: bool = False) -> bool:
+    if value is None:
+        return fallback
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "off", ""}:
+            return False
+    return fallback
 
 
 def _valid_month_period(value: Any) -> bool:

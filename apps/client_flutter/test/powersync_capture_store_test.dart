@@ -60,14 +60,17 @@ void main() {
       expect(parsed.captureId, startsWith('local_capture_'));
       expect(parsed.originalText, contains('AI Capture 地基'));
       expect(parsed.actions, hasLength(1));
-      expect(parsed.turns, hasLength(1));
-      expect(parsed.turns.first.turnStatus, 'parsed');
+      expect(parsed.turns, hasLength(2));
+      expect(parsed.turns.first.role, 'user');
+      expect(parsed.turns.first.turnStatus, 'accepted');
+      expect(parsed.turns.last.role, 'assistant');
+      expect(parsed.turns.last.turnStatus, 'parsed');
 
       final sessionRow = await service.db.get(
         'SELECT original_text, session_status FROM mcp_capture_sessions WHERE capture_id = ?',
         [parsed.captureId],
       );
-      expect(sessionRow['session_status'], 'parsed');
+      expect(sessionRow['session_status'], 'active');
       expect(sessionRow['original_text'], contains('AI Capture 地基'));
 
       final committed = await bridge.captureCommit({
@@ -92,6 +95,15 @@ void main() {
       );
       expect(afterCommitTurns['count'], 2);
 
+      final activeAfterCommit = await bridge.getCaptureSession({
+        'capture_id': parsed.captureId,
+      }, context);
+      expect(activeAfterCommit, isNotNull);
+      expect(activeAfterCommit!.sessionStatus, 'active');
+      expect(activeAfterCommit.committed, isTrue);
+      expect(activeAfterCommit.turns.last.turnStatus, 'committed');
+      expect(activeAfterCommit.turns.last.undoToken, committed.undoToken);
+
       final undone = await bridge.captureUndo({
         'undo_token': committed.undoToken,
       }, context);
@@ -113,6 +125,51 @@ void main() {
         [parsed.captureId],
       );
       expect(afterUndoTurns['count'], 3);
+
+      final restored = await bridge.getCaptureSession({
+        'capture_id': parsed.captureId,
+      }, context);
+      expect(restored, isNotNull);
+      expect(restored!.turns[1].turnStatus, 'undone');
+      expect(restored.turns.last.turnStatus, 'undone');
+
+      final revised = await bridge.reviseCaptureAction({
+        'capture_id': parsed.captureId,
+        'turn_id': restored.turns[1].id,
+        'action_index': 0,
+        'payload': {
+          'type': 'memo',
+          'title': '撤销后修改',
+          'content_markdown': '修改后的 Capture 内容',
+          'tags': ['capture', 'edited'],
+        },
+      }, context);
+      expect(revised.turnStatus, 'revised');
+      expect(revised.supersedesTurnId, restored.turns[1].id);
+
+      final recommitted = await bridge.captureCommit({
+        'capture_id': parsed.captureId,
+        'turn_id': revised.id,
+        'selected_action_indexes': [0],
+      }, context);
+      expect(recommitted.committed, isTrue);
+
+      final continued = await bridge.appendCaptureTurn({
+        'capture_id': parsed.captureId,
+        'text': '继续第二轮，记录持续会话',
+        'asset_ids': ['asset-2'],
+      }, context);
+      expect(continued.sessionStatus, 'active');
+      expect(continued.turns.last.role, 'assistant');
+      expect(continued.turns.last.assetIds, ['asset-2']);
+      expect(continued.turns.last.turnStatus, 'parsed');
+
+      final dismissed = await bridge.dismissCaptureSession({
+        'capture_id': parsed.captureId,
+        'reason': '用户关闭会话',
+      }, context);
+      expect(dismissed.sessionStatus, 'dismissed');
+      expect(dismissed.turns.last.turnStatus, 'dismissed');
 
       service.dispose();
     },

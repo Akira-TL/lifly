@@ -172,6 +172,26 @@ abstract class LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   );
+  Future<List<LocalCaptureSession>> listCaptureSessions(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
+  Future<LocalCaptureSession?> getCaptureSession(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
+  Future<LocalCaptureSession> appendCaptureTurn(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
+  Future<LocalCaptureTurn> reviseCaptureAction(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
+  Future<LocalCaptureSession> dismissCaptureSession(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
   Future<LocalCaptureCommitResult> captureCommit(
     Map<String, Object?> input,
     LocalCoreContext context,

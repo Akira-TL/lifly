@@ -174,5 +174,8 @@ repository 读取支持 cloudPreferred，云端失败或断网时才降级 Local
 断网手动验收首页、记账统计、任务预警、备忘分类状态
 API / repository / UI 的字段边界清楚
 AI Capture 本地模式必须覆盖 mcp_capture_sessions、mcp_capture_turns、mcp_undo_actions、source_capture_id、ai_trashed undo 链路
+AI Capture 连续会话必须覆盖 session 列表/恢复、append turn、逐 turn commit、result_entities、undo_token、dismiss
+AI Capture 修改链必须保留 supersedes_turn_id；已 committed / partial 的 turn 必须先 undo 才允许 revise
+PowerSync capture PATCH 不得清空未携带的 text / actions / asset_ids / result_entities / undo_token
 AI Capture 本地规则拆分必须覆盖 task_create / expense_create / memo_create 候选动作
 ```

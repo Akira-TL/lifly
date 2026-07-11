@@ -303,9 +303,12 @@ class LocalCaptureTurn {
   final int turnIndex;
   final String role;
   final String? text;
+  final List<String> assetIds;
   final List<LocalCaptureAction> actions;
   final List<int> selectedActionIndexes;
   final List<LocalCoreEntityRef> resultEntities;
+  final String? undoToken;
+  final String? supersedesTurnId;
   final String turnStatus;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -316,9 +319,12 @@ class LocalCaptureTurn {
     required this.turnIndex,
     required this.role,
     required this.text,
+    this.assetIds = const [],
     required this.actions,
     required this.selectedActionIndexes,
     required this.resultEntities,
+    this.undoToken,
+    this.supersedesTurnId,
     required this.turnStatus,
     required this.createdAt,
     required this.updatedAt,
@@ -332,11 +338,14 @@ class LocalCaptureSession {
   final String locale;
   final List<LocalCaptureAction> actions;
   final bool requiresConfirmation;
+  final bool committed;
   final String sessionStatus;
   final String sourceChannel;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final DateTime? expiresAt;
+  final DateTime? committedAt;
+  final DateTime? dismissedAt;
   final List<LocalCaptureTurn> turns;
 
   const LocalCaptureSession({
@@ -346,11 +355,14 @@ class LocalCaptureSession {
     this.locale = 'zh-CN',
     required this.actions,
     required this.requiresConfirmation,
-    this.sessionStatus = 'parsed',
+    this.committed = false,
+    this.sessionStatus = 'active',
     this.sourceChannel = 'local',
     this.createdAt,
     this.updatedAt,
     this.expiresAt,
+    this.committedAt,
+    this.dismissedAt,
     this.turns = const [],
   });
 }

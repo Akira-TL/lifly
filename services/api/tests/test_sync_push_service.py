@@ -10,6 +10,7 @@ from app.db.models import (
     LedgerBudget,
     LedgerCategory,
     LedgerTransaction,
+    McpCaptureTurn,
     Memo,
     Reminder,
     Task,
@@ -29,7 +30,10 @@ class FakeAsyncSession:
         if isinstance(item, AuditLog):
             self.audit_logs.append(item)
             return
-        if isinstance(item, (Memo, Task, LedgerTransaction, LedgerBudget, Reminder)):
+        if isinstance(
+            item,
+            (Memo, Task, LedgerTransaction, LedgerBudget, Reminder, McpCaptureTurn),
+        ):
             self.entities[(type(item), item.id, item.user_id)] = item
             return
         raise TypeError(f"Unsupported fake session item: {type(item)!r}")
@@ -271,6 +275,66 @@ async def test_sync_push_rejects_invalid_budget_threshold() -> None:
     assert response.applied == 0
     assert response.results[0].reason == "invalid_alert_threshold"
     assert not session.audit_logs
+
+
+@pytest.mark.anyio
+async def test_sync_push_updates_capture_turn_without_clearing_history() -> None:
+    session = FakeAsyncSession()
+    now = datetime(2026, 7, 12, 10, tzinfo=timezone.utc)
+    turn = McpCaptureTurn(
+        id="turn-sync-1",
+        user_id="local-dev",
+        capture_id="capture-sync-1",
+        turn_index=1,
+        role="assistant",
+        text="保留的历史文本",
+        asset_ids=["asset-1"],
+        actions=[
+            {
+                "type": "memo_create",
+                "payload": {"title": "原候选动作"},
+                "confidence": 0.8,
+            }
+        ],
+        selected_action_indexes=[],
+        result_entities=[],
+        turn_status="parsed",
+        source_channel="flutter",
+        revision=2,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(turn)
+    request = SyncPushRequest(
+        client_id="client-capture",
+        changes=[
+            {
+                "entity_type": "capture_turn",
+                "operation": "upsert",
+                "entity_id": "turn-sync-1",
+                "revision": 3,
+                "updated_at": now,
+                "data": {
+                    "turn_status": "committed",
+                    "undo_token": "undo-sync-1",
+                    "selected_action_indexes": [0],
+                    "result_entities": [{"type": "memo", "id": "memo-sync-1"}],
+                },
+            }
+        ],
+    )
+
+    response = await sync_service.apply_sync_push(session, request)  # type: ignore[arg-type]
+
+    assert response.applied == 1
+    assert turn.turn_status == "committed"
+    assert turn.undo_token == "undo-sync-1"
+    assert turn.text == "保留的历史文本"
+    assert turn.asset_ids == ["asset-1"]
+    assert turn.actions[0]["payload"]["title"] == "原候选动作"
+    assert turn.result_entities == [{"type": "memo", "id": "memo-sync-1"}]
+    assert turn.revision == 3
+    assert session.audit_logs[0].entity_type == "capture_turn"
 
 
 @pytest.mark.anyio

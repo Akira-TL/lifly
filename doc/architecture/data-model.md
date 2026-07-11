@@ -434,13 +434,14 @@ CREATE TABLE mcp_capture_sessions (
   actions JSONB NOT NULL,
   requires_confirmation BOOLEAN NOT NULL,
   committed BOOLEAN NOT NULL,
-  session_status TEXT NOT NULL, -- parsed / committed / failed / dismissed / expired
+  session_status TEXT NOT NULL, -- active / dismissed / expired
   source_channel TEXT NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
   committed_at TIMESTAMPTZ,
   dismissed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL,
-  updated_at TIMESTAMPTZ NOT NULL
+  updated_at TIMESTAMPTZ NOT NULL,
+  revision BIGINT NOT NULL
 );
 
 CREATE TABLE mcp_capture_turns (
@@ -450,19 +451,25 @@ CREATE TABLE mcp_capture_turns (
   turn_index INTEGER NOT NULL,
   role TEXT NOT NULL, -- user / assistant / system
   text TEXT,
+  asset_ids JSONB,
   actions JSONB,
   selected_action_indexes JSONB,
   result_entities JSONB,
-  turn_status TEXT NOT NULL, -- parsed / committed / failed / undone / partial
+  undo_token UUID,
+  supersedes_turn_id UUID,
+  turn_status TEXT NOT NULL, -- accepted / parsed / revised / superseded / committed / partial / failed / undone / dismissed
   source_channel TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL,
-  updated_at TIMESTAMPTZ NOT NULL
+  updated_at TIMESTAMPTZ NOT NULL,
+  revision BIGINT NOT NULL
 );
 ```
 
-本地 PowerSync 也保存 `mcp_capture_sessions` 和 `mcp_capture_turns`。本地 commit 创建 memo / task / ledger_transaction 时写入 `source_capture_id`，undo 通过 `mcp_undo_actions` 将创建实体转为 `ai_trashed` 并追加 undo turn。
+Session 表示可恢复的连续聊天容器；`committed` 只表示该会话历史中至少执行过一轮，不意味着会话终止。Turn 才是提交、修改与撤销的最小状态单元。用户输入写 user turn，AI 候选动作写 assistant turn；修改候选动作时创建 revised turn，并用 `supersedes_turn_id` 保留版本链。commit 后将结果实体与 `undo_token` 写回具体 turn；undo 通过 `mcp_undo_actions` 将创建实体转为 `ai_trashed`，将原 turn 标记为 undone，并追加 system undo turn。
 
-附件和语音不直接塞进文本字段。附件只传 `asset_ids` 引用边界；语音应先形成音频 Asset，经 STT 生成文本后进入 capture turn。
+本地 PowerSync 同步 session 和 turn 的 `revision`，服务端按 revision 拒绝陈旧覆盖。PATCH 上行只更新实际携带字段，不能因状态变化清空历史 text、actions、asset_ids 或 result_entities。
+
+附件和语音不直接塞进文本字段。`asset_ids` 按 turn 保存；当前只进入解析与 memo 引用边界，图片/PDF/音频内容提取和 STT 仍属于后续适配层。
 
 ## 23. 本地 read model 边界
 

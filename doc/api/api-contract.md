@@ -479,13 +479,35 @@ POST /api/v1/tasks/{task_id}/reminder-strategy/dismiss
 
 ### 13.5 Capture Sessions
 
-当前本地主路径复用现有 Capture tool 语义，并已具备本地持久化：
+Capture 是连续聊天会话，不再把一次 `parse / commit` 视为整个会话的终点。每一轮用户输入、AI 候选动作、执行结果、修改和撤销都写入独立 turn；同一 session 可以持续追加多轮。
+
+本地主路径：
 
 ```text
 LocalCoreBridge.captureParse(input, context)
+LocalCoreBridge.listCaptureSessions(input, context)
+LocalCoreBridge.getCaptureSession(input, context)
+LocalCoreBridge.appendCaptureTurn(input, context)
+LocalCoreBridge.reviseCaptureAction(input, context)
 LocalCoreBridge.captureCommit(input, context)
 LocalCoreBridge.captureUndo(input, context)
+LocalCoreBridge.dismissCaptureSession(input, context)
 ```
+
+云端入口：
+
+```text
+POST /api/v1/mcp/capture/parse
+GET  /api/v1/mcp/capture/sessions
+GET  /api/v1/mcp/capture/sessions/{capture_id}
+POST /api/v1/mcp/capture/sessions/{capture_id}/turns
+POST /api/v1/mcp/capture/sessions/{capture_id}/turns/{turn_id}/revise
+POST /api/v1/mcp/capture/commit
+POST /api/v1/mcp/capture/undo
+POST /api/v1/mcp/capture/sessions/{capture_id}/dismiss
+```
+
+`capture/parse` 创建 session，并分别写入 user turn 与 assistant action turn。`append turn` 在同一 session 中继续记录用户输入和新的候选动作。`commit` 必须指定或解析到具体 assistant turn，只提交该轮候选动作；执行结果实体和 `undo_token` 保存在该 turn 上，session 仍保持 active。用户修改未执行候选动作时，创建新的 revised turn，并通过 `supersedes_turn_id` 保留修改链。已经 committed / partial 的 turn 必须先 undo，实体转为 `ai_trashed` 且原 turn 变为 undone，之后才允许继续修改并重新提交。dismiss 只关闭会话，不删除历史。
 
 本地持久化表：
 
@@ -495,23 +517,4 @@ mcp_capture_turns
 mcp_undo_actions
 ```
 
-当前云端入口：
-
-```text
-POST /api/v1/mcp/capture/parse
-POST /api/v1/mcp/capture/commit
-POST /api/v1/mcp/capture/undo
-```
-
-云端 parse 会写入 `McpCaptureSession` 与首个 `McpCaptureTurn`；commit 会写入业务实体、audit_logs、mcp_undo_actions，并追加 commit turn；undo 会消费 undo token，将实体转为 ai_trashed，并在能解析 source_capture_id 时追加 undo turn。本地 capture_parse 已具备最小规则拆分，可从一句话生成 task_create / expense_create / memo_create 候选动作；后续继续扩展多轮 append turn、asset_ids 真实解析、STT 和会话恢复。
-
-后续可选兼容 API：
-
-```text
-POST /api/v1/capture/sessions
-POST /api/v1/capture/sessions/{session_id}/turns
-POST /api/v1/capture/sessions/{session_id}/commit
-POST /api/v1/capture/sessions/{session_id}/undo
-```
-
-这些接口应复用当前 capture parse / commit / undo 的业务能力，不绕过审计和撤销边界。Capture session 和确认结果必须能本地持久化；云端 AI 可以用于解析，但不能成为本地记录、确认、撤销链路的唯一依赖。
+`asset_ids` 按 turn 持久化，并传入候选动作解析边界；当前本地最小规则会把附件引用写入 memo 候选 payload，但尚未完成图片、PDF、音频内容抽取。云端 AI 可以用于解析，不能成为会话记录、修改、确认或撤销链路的唯一依赖。
