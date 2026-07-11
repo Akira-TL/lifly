@@ -452,6 +452,7 @@ CREATE TABLE mcp_capture_turns (
   role TEXT NOT NULL, -- user / assistant / system
   text TEXT,
   asset_ids JSONB,
+  asset_context JSONB,
   actions JSONB,
   selected_action_indexes JSONB,
   result_entities JSONB,
@@ -467,9 +468,9 @@ CREATE TABLE mcp_capture_turns (
 
 Session 表示可恢复的连续聊天容器；`committed` 只表示该会话历史中至少执行过一轮，不意味着会话终止。Turn 才是提交、修改与撤销的最小状态单元。用户输入写 user turn，AI 候选动作写 assistant turn；修改候选动作时创建 revised turn，并用 `supersedes_turn_id` 保留版本链。commit 后将结果实体与 `undo_token` 写回具体 turn；undo 通过 `mcp_undo_actions` 将创建实体转为 `ai_trashed`，将原 turn 标记为 undone，并追加 system undo turn。
 
-本地 PowerSync 同步 session 和 turn 的 `revision`，服务端按 revision 拒绝陈旧覆盖。PATCH 上行只更新实际携带字段，不能因状态变化清空历史 text、actions、asset_ids 或 result_entities。
+本地 PowerSync 同步 session 和 turn 的 `revision`，服务端按 revision 拒绝陈旧覆盖。PATCH 上行只更新实际携带字段，不能因状态变化清空历史 text、actions、asset_ids、asset_context 或 result_entities。
 
-附件和语音不直接塞进文本字段。`asset_ids` 按 turn 保存；当前只进入解析与 memo 引用边界，图片/PDF/音频内容提取和 STT 仍属于后续适配层。
+附件和语音不直接塞进用户文本字段。`asset_ids` 保存稳定引用，`asset_context` 保存本轮解析快照，包含资产类型、名称、MIME、解析状态、提取器、可用文本、错误和待接入能力。当前服务端可真实提取小型 UTF-8 文本类附件；PDF、图片、音频和外部链接只记录明确的适配能力需求，不伪造解析结果。本地 Local Core 当前根据 PowerSync 资产元数据生成同构上下文，不读取二进制。
 
 ## 23. 本地 read model 边界
 

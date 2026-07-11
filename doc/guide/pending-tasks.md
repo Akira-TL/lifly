@@ -135,7 +135,7 @@ widget test 已覆盖核心入口切换和底部入口收敛
 
 ### LC-0706 Chat-style AI Capture
 
-状态：连续会话生命周期与撤销/修改地基已完成；聊天式多轮 UI、asset_ids 内容提取、STT 和附件预览体验待补。
+状态：连续会话、聊天式多轮 UI、附件上下文与撤销/修改链路已完成；PDF 文本提取、图片 OCR/视觉、音频 STT 和外部链接内容抓取适配器待补。
 
 目标：保证 AI 聊天可以恢复历史、持续追加 turn，并让每一轮 AI 已设置内容可查看、修改、提交和撤销。
 
@@ -143,14 +143,16 @@ widget test 已覆盖核心入口切换和底部入口收敛
 
 ```text
 服务端与 Local Core 支持 session 列表、读取、恢复、append turn 和 dismiss
-McpCaptureTurn 持久化 user / assistant / system 角色、asset_ids、actions、result_entities、undo_token 和 supersedes_turn_id
+McpCaptureTurn 持久化 user / assistant / system 角色、asset_ids、asset_context、actions、result_entities、undo_token 和 supersedes_turn_id
 commit 只作用于具体 assistant turn，session 提交后仍可继续对话
 未执行候选动作可 revise；已执行 turn 必须先 undo，之后可修改并重新提交
-PowerSync 同步 capture_session / capture_turn revision，PATCH 不清空历史字段
+PowerSync 同步 capture_session / capture_turn revision，PATCH 不清空 text / actions / asset_ids / asset_context / result_entities 等历史字段
 本地 commit 创建实体时写入 source_capture_id
 本地 undo 使用 mcp_undo_actions 并将实体转为 ai_trashed
-AiCaptureService 提供强类型 list/get/append/revise/commit/undo/dismiss 接口
-回归测试覆盖连续第二轮、修改、提交、撤销、撤销后再次修改和关闭会话
+AiCaptureService 提供强类型 assets/list/get/append/revise/commit/undo/dismiss 接口
+Flutter AI 页面消费历史 turns、宽屏会话侧栏、手机历史面板、结果实体卡片、修改、撤销、附件选择和会话关闭
+服务端可安全提取受限 UTF-8 文本附件；PDF/图片/音频/外链明确返回待接入能力，不伪造解析完成
+回归测试覆盖连续第二轮、修改、提交、撤销、撤销后再次修改、关闭会话、附件上下文与结果卡片
 本地 capture_parse 最小规则拆分覆盖 task_create / expense_create / memo_create 候选动作
 ```
 

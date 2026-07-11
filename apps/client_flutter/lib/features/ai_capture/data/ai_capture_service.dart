@@ -29,6 +29,22 @@ class AiCaptureService {
   bool get supportsCapture =>
       dataMode == LiflyDataMode.api || localCore != null;
 
+  Future<List<AiCaptureAssetContext>> listAssets({int limit = 50}) async {
+    if (dataMode == LiflyDataMode.local) {
+      final items = await _requireLocalCore().listCaptureAssets({
+        'limit': limit,
+      }, LocalCoreContext.flutterUser());
+      return items.map(_assetContextFromLocal).toList(growable: false);
+    }
+    final data = await api.get('/assets', params: {'limit': limit, 'offset': 0});
+    final payload = data['data'];
+    final items = payload is Map ? payload['items'] as List? ?? const [] : const [];
+    return items
+        .whereType<Map>()
+        .map((item) => _assetContextFromAssetJson(Map<String, dynamic>.from(item)))
+        .toList(growable: false);
+  }
+
   Future<AiCaptureParseResult> parse({
     required String text,
     String timezone = 'Asia/Shanghai',
@@ -227,6 +243,11 @@ class AiCaptureService {
       captureId: session.captureId,
       actions: session.actions.map(_actionFromLocal).toList(growable: false),
       requiresConfirmation: session.requiresConfirmation,
+      assetContext: actionTurns.isEmpty
+          ? const []
+          : actionTurns.last.assetContext
+                .map(_assetContextFromLocal)
+                .toList(growable: false),
       turnId: actionTurns.isEmpty ? null : actionTurns.last.id,
     );
   }
@@ -260,6 +281,9 @@ class AiCaptureService {
       role: turn.role,
       text: turn.text,
       assetIds: turn.assetIds,
+      assetContext: turn.assetContext
+          .map(_assetContextFromLocal)
+          .toList(growable: false),
       actions: turn.actions.map(_actionFromLocal).toList(growable: false),
       selectedActionIndexes: turn.selectedActionIndexes,
       resultEntities: turn.resultEntities.map(_entityFromLocal).toList(),
@@ -268,6 +292,71 @@ class AiCaptureService {
       turnStatus: turn.turnStatus,
       createdAt: turn.createdAt,
       updatedAt: turn.updatedAt,
+    );
+  }
+
+  AiCaptureAssetContext _assetContextFromLocal(
+    LocalCaptureAssetContext context,
+  ) {
+    return AiCaptureAssetContext(
+      assetId: context.assetId,
+      kind: context.kind,
+      assetType: context.assetType,
+      name: context.name,
+      mimeType: context.mimeType,
+      sizeBytes: context.sizeBytes,
+      sourceUrl: context.sourceUrl,
+      status: context.status,
+      extractor: context.extractor,
+      text: context.text,
+      error: context.error,
+      requiredCapability: context.requiredCapability,
+    );
+  }
+
+  AiCaptureAssetContext _assetContextFromAssetJson(
+    Map<String, dynamic> json,
+  ) {
+    final kind = json['kind'] as String?;
+    final assetType = json['asset_type'] as String?;
+    final mimeType = json['mime_type'] as String?;
+    final syncStatus = json['sync_status'] as String? ?? 'pending';
+    final normalizedMime = (mimeType ?? '').split(';').first.trim().toLowerCase();
+    var status = 'metadata_only';
+    var extractor = 'metadata';
+    String? requiredCapability = 'binary_content_extractor';
+    if (kind == 'internal' && syncStatus != 'synced') {
+      status = 'pending_upload';
+    } else if (kind == 'external') {
+      extractor = 'external_reference';
+      requiredCapability = 'external_content_fetch';
+    } else if (normalizedMime == 'application/pdf' || assetType == 'pdf') {
+      status = 'unsupported';
+      extractor = 'pdf_adapter';
+      requiredCapability = 'pdf_text_extraction';
+    } else if (normalizedMime.startsWith('image/') || assetType == 'image') {
+      status = 'unsupported';
+      extractor = 'image_adapter';
+      requiredCapability = 'ocr_or_vision';
+    } else if (normalizedMime.startsWith('audio/') || assetType == 'audio') {
+      status = 'unsupported';
+      extractor = 'audio_adapter';
+      requiredCapability = 'speech_to_text';
+    }
+    return AiCaptureAssetContext(
+      assetId: json['id'] as String? ?? '',
+      kind: kind,
+      assetType: assetType,
+      name: json['title'] as String? ??
+          json['filename'] as String? ??
+          json['external_url'] as String?,
+      mimeType: mimeType,
+      sizeBytes: json['size_bytes'] as int?,
+      sourceUrl: json['external_url'] as String?,
+      status: status,
+      extractor: extractor,
+      error: status == 'pending_upload' ? 'asset_sync_status_$syncStatus' : null,
+      requiredCapability: requiredCapability,
     );
   }
 

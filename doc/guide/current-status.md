@@ -117,7 +117,7 @@ Ledger budgets 与分类聚合写入闭环已落地：服务端与 Local Core �
 Memo AI 分类与标签元数据基础链路已落地：MemoClassification、TagMetadata、PowerSync memo_classifications/tag_metadata schema、备忘分类生成/确认/拒绝接口、/tags/summary、/tags/metadata 管理接口、服务端与本地创建/更新自动生成分类建议、MemoRepository 分类生成/标签统计/标签元数据管理
 Task reminder strategies 与派发状态机已落地：TaskReminderStrategy、Reminder、PowerSync task_reminder_strategies/reminders schema、任务分组 group、策略生成/读取/确认/dismiss；Reminder 支持 pending/delivered/failed/cancelled、到期认领 lease、dispatch token、指数退避、手动 retry、取消与审计，TaskRepository 和 Local Core 提供同构状态操作；ReminderDispatcher 通过平台无关 ReminderNotificationAdapter 投递，reminder ID 作为稳定幂等键，尚未绑定具体 Android/桌面/Web 通知插件
 手机端 5 底部导航 Shell 基础链路已落地：AppShell 收敛为首页 / 备忘 / AI / 记账 / 任务，AI 为居中主按钮，搜索/设置降级到首页入口，宽屏 Flutter 使用 NavigationRail
-Local Chat-style AI Capture 连续会话地基已落地：服务端与 Local Core 支持 session 列表、读取、恢复、append turn、候选动作 revise、逐 turn commit、undo 和 dismiss；用户 turn、AI 候选动作、result_entities、undo_token、asset_ids 与 supersedes 版本链持久化到 PowerSync，commit 不再关闭整个会话，已执行内容必须先 undo 才能修改并重新提交；AiCaptureService 已提供强类型连续会话接口，本地最小规则继续支持 task_create / expense_create / memo_create 候选动作
+Local Chat-style AI Capture 连续会话与消费层已落地：服务端与 Local Core 支持 session 列表、读取、恢复、append turn、候选动作 revise、逐 turn commit、undo 和 dismiss；用户 turn、AI 候选动作、result_entities、undo_token、asset_ids、asset_context 与 supersedes 版本链持久化到 PowerSync，commit 不再关闭整个会话，已执行内容必须先 undo 才能修改并重新提交；服务端可安全提取受限 UTF-8 文本附件，PDF/图片/音频/外链明确返回待接入能力；Flutter AI 页面已消费历史 turns、会话列表、候选卡片、已设置结果、修改、撤销、附件选择和关闭会话，宽屏与手机使用不同会话导航形态
 ```
 
 验收：

@@ -4,6 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.modules.mcp.capture_asset_context import (
+    build_capture_parse_text,
+    resolve_capture_asset_contexts,
+)
 from app.modules.mcp.capture_schemas import (
     CaptureAppendTurnRequest,
     CaptureDismissRequest,
@@ -124,6 +128,14 @@ async def capture_session_append_turn(
     if session is None:
         raise HTTPException(status_code=404, detail="Capture session not found, dismissed, or expired")
 
+    asset_context = await resolve_capture_asset_contexts(
+        db,
+        asset_ids=data.asset_ids,
+        user_id=DEFAULT_LOCAL_USER_ID,
+    )
+    serialized_context = [
+        item.model_dump(mode="json") for item in asset_context.contexts
+    ]
     next_index = await next_capture_turn_index(
         db,
         capture_id=capture_id,
@@ -137,12 +149,13 @@ async def capture_session_append_turn(
         role="user",
         text=data.text,
         asset_ids=data.asset_ids,
+        asset_context=serialized_context,
         turn_status="accepted",
         source_channel=SOURCE_CHANNEL,
     )
 
     parsed = parse_mixed_input(
-        data.text,
+        build_capture_parse_text(data.text, asset_context),
         timezone_str=session.timezone,
         locale=session.locale,
     )
@@ -155,6 +168,7 @@ async def capture_session_append_turn(
         role="assistant",
         text=None,
         asset_ids=data.asset_ids,
+        asset_context=serialized_context,
         actions=actions,
         turn_status="parsed",
         source_channel=SOURCE_CHANNEL,
@@ -221,6 +235,7 @@ async def capture_session_revise_action(
         role="assistant",
         text=data.note,
         asset_ids=list(source_turn.asset_ids or []),
+        asset_context=list(source_turn.asset_context or []),
         actions=actions,
         supersedes_turn_id=source_turn.id,
         turn_status="revised",

@@ -201,6 +201,7 @@ const liflyPowerSyncSchema = Schema([
     Column.text('role'),
     Column.text('text'),
     Column.text('asset_ids'),
+    Column.text('asset_context'),
     Column.text('actions'),
     Column.text('selected_action_indexes'),
     Column.text('result_entities'),

@@ -297,6 +297,36 @@ class LocalCaptureAction {
   });
 }
 
+class LocalCaptureAssetContext {
+  final String assetId;
+  final String? kind;
+  final String? assetType;
+  final String? name;
+  final String? mimeType;
+  final int? sizeBytes;
+  final String? sourceUrl;
+  final String status;
+  final String extractor;
+  final String? text;
+  final String? error;
+  final String? requiredCapability;
+
+  const LocalCaptureAssetContext({
+    required this.assetId,
+    this.kind,
+    this.assetType,
+    this.name,
+    this.mimeType,
+    this.sizeBytes,
+    this.sourceUrl,
+    required this.status,
+    required this.extractor,
+    this.text,
+    this.error,
+    this.requiredCapability,
+  });
+}
+
 class LocalCaptureTurn {
   final String id;
   final String captureId;
@@ -304,6 +334,7 @@ class LocalCaptureTurn {
   final String role;
   final String? text;
   final List<String> assetIds;
+  final List<LocalCaptureAssetContext> assetContext;
   final List<LocalCaptureAction> actions;
   final List<int> selectedActionIndexes;
   final List<LocalCoreEntityRef> resultEntities;
@@ -320,6 +351,7 @@ class LocalCaptureTurn {
     required this.role,
     required this.text,
     this.assetIds = const [],
+    this.assetContext = const [],
     required this.actions,
     required this.selectedActionIndexes,
     required this.resultEntities,

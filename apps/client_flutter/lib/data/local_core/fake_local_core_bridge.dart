@@ -1376,6 +1376,18 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
+  Future<List<LocalCaptureAssetContext>> listCaptureAssets(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final limit = input['limit'] as int? ?? 50;
+    return _assets
+        .take(limit)
+        .map(_fakeAssetContext)
+        .toList(growable: false);
+  }
+
+  @override
   Future<LocalCaptureSession> captureParse(
     Map<String, Object?> input,
     LocalCoreContext context,
@@ -1384,6 +1396,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
     final assetIds = (input['asset_ids'] as List? ?? const [])
         .whereType<String>()
         .toList(growable: false);
+    final assetContext = _fakeAssetContexts(assetIds);
     final now = context.effectiveNow;
     final captureId = _nextStableId('capture');
     final action = LocalCaptureAction(
@@ -1405,6 +1418,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
       role: 'user',
       text: text,
       assetIds: assetIds,
+      assetContext: assetContext,
       actions: const [],
       selectedActionIndexes: const [],
       resultEntities: const [],
@@ -1419,6 +1433,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
       role: 'assistant',
       text: null,
       assetIds: assetIds,
+      assetContext: assetContext,
       actions: [action],
       selectedActionIndexes: const [],
       resultEntities: const [],
@@ -1490,6 +1505,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
     final assetIds = (input['asset_ids'] as List? ?? const [])
         .whereType<String>()
         .toList(growable: false);
+    final assetContext = _fakeAssetContexts(assetIds);
     final now = context.effectiveNow;
     final action = LocalCaptureAction(
       type: 'memo_create',
@@ -1513,6 +1529,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
         role: 'user',
         text: text,
         assetIds: assetIds,
+        assetContext: assetContext,
         actions: const [],
         selectedActionIndexes: const [],
         resultEntities: const [],
@@ -1527,6 +1544,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
         role: 'assistant',
         text: null,
         assetIds: assetIds,
+        assetContext: assetContext,
         actions: [action],
         selectedActionIndexes: const [],
         resultEntities: const [],
@@ -1585,6 +1603,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
       role: 'assistant',
       text: input['note'] as String?,
       assetIds: sourceTurn.assetIds,
+      assetContext: sourceTurn.assetContext,
       actions: actions,
       selectedActionIndexes: const [],
       resultEntities: const [],
@@ -1863,6 +1882,7 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
       role: turn.role,
       text: turn.text,
       assetIds: turn.assetIds,
+      assetContext: turn.assetContext,
       actions: turn.actions,
       selectedActionIndexes:
           selectedActionIndexes ?? turn.selectedActionIndexes,
@@ -1914,6 +1934,40 @@ class FakeLocalCoreBridge implements LocalCoreBridge {
       _tagMetadata[index] = resolved;
     }
     return resolved;
+  }
+
+  List<LocalCaptureAssetContext> _fakeAssetContexts(List<String> assetIds) {
+    final byId = {for (final asset in _assets) asset.id: asset};
+    return assetIds
+        .map(
+          (assetId) => byId[assetId] == null
+              ? LocalCaptureAssetContext(
+                  assetId: assetId,
+                  status: 'missing',
+                  extractor: 'none',
+                  error: 'asset_not_found',
+                )
+              : _fakeAssetContext(byId[assetId]!),
+        )
+        .toList(growable: false);
+  }
+
+  LocalCaptureAssetContext _fakeAssetContext(LocalAssetRecord asset) {
+    return LocalCaptureAssetContext(
+      assetId: asset.id,
+      kind: asset.kind,
+      assetType: asset.assetType,
+      name: asset.title ?? asset.externalUrl ?? asset.id,
+      sourceUrl: asset.externalUrl,
+      status: asset.syncStatus == 'synced' ? 'metadata_only' : 'pending_upload',
+      extractor: asset.kind == 'external' ? 'external_reference' : 'metadata',
+      error: asset.syncStatus == 'synced'
+          ? null
+          : 'asset_sync_status_${asset.syncStatus}',
+      requiredCapability: asset.kind == 'external'
+          ? 'external_content_fetch'
+          : 'binary_content_extractor',
+    );
   }
 
   String _fakeBudgetPeriod(String period, DateTime now) {

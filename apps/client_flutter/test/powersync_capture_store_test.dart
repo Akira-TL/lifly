@@ -50,6 +50,25 @@ void main() {
         now: DateTime.utc(2026, 7, 7, 10),
       );
       final bridge = PowerSyncLocalCoreBridge(syncService: service);
+      await service.db.execute(
+        'INSERT INTO assets('
+        'id, user_id, kind, asset_type, external_url, external_provider, '
+        'visibility, sync_status, status, created_at, updated_at'
+        ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          'asset-2',
+          'local-dev',
+          'external',
+          'link',
+          'https://example.com/capture-context',
+          'web',
+          'private',
+          'synced',
+          'active',
+          '2026-07-07T10:00:00Z',
+          '2026-07-07T10:00:00Z',
+        ],
+      );
 
       final parsed = await bridge.captureParse({
         'text': '记录一下今天继续补 AI Capture 地基',
@@ -162,6 +181,12 @@ void main() {
       expect(continued.sessionStatus, 'active');
       expect(continued.turns.last.role, 'assistant');
       expect(continued.turns.last.assetIds, ['asset-2']);
+      expect(continued.turns.last.assetContext, hasLength(1));
+      expect(continued.turns.last.assetContext.single.status, 'metadata_only');
+      expect(
+        continued.turns.last.assetContext.single.requiredCapability,
+        'external_content_fetch',
+      );
       expect(continued.turns.last.turnStatus, 'parsed');
 
       final dismissed = await bridge.dismissCaptureSession({

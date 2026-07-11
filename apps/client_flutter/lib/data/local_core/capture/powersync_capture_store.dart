@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:client_flutter/data/local_core/capture/local_capture_asset_context_resolver.dart';
 import 'package:client_flutter/data/local_core/ledger/powersync_expense_store.dart';
 import 'package:client_flutter/data/local_core/local_core_context.dart';
 import 'package:client_flutter/data/local_core/local_core_models.dart';
@@ -13,6 +14,7 @@ class PowerSyncCaptureStore {
   final PowerSyncMemoStore memoStore;
   final PowerSyncTaskStore taskStore;
   final PowerSyncExpenseStore expenseStore;
+  final LocalCaptureAssetContextResolver assetContextResolver;
   final LocalCoreWritePolicy policy;
 
   PowerSyncCaptureStore({
@@ -20,8 +22,21 @@ class PowerSyncCaptureStore {
     required this.memoStore,
     required this.taskStore,
     required this.expenseStore,
+    LocalCaptureAssetContextResolver? assetContextResolver,
     LocalCoreWritePolicy? policy,
-  }) : policy = policy ?? LocalCoreWritePolicy();
+  }) : assetContextResolver =
+           assetContextResolver ?? LocalCaptureAssetContextResolver(syncService),
+       policy = policy ?? LocalCoreWritePolicy();
+
+  Future<List<LocalCaptureAssetContext>> listCaptureAssets(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return assetContextResolver.listAvailable(
+      userId: context.userId,
+      limit: input['limit'] as int? ?? 50,
+    );
+  }
 
   Future<LocalCaptureSession> captureParse(
     Map<String, Object?> input,
@@ -31,6 +46,10 @@ class PowerSyncCaptureStore {
     final timezone = _readOptionalString(input, 'timezone') ?? 'Asia/Shanghai';
     final locale = _readOptionalString(input, 'locale') ?? 'zh-CN';
     final assetIds = _readStringList(input, 'asset_ids');
+    final assetContext = await assetContextResolver.resolve(
+      assetIds,
+      userId: context.userId,
+    );
     final now = context.effectiveNow.toUtc();
     final captureId = policy.nextEntityId('capture');
     final expiresAt = now.add(const Duration(days: 30));
@@ -47,6 +66,7 @@ class PowerSyncCaptureStore {
       role: 'user',
       text: text,
       assetIds: assetIds,
+      assetContext: assetContext,
       actions: const [],
       selectedActionIndexes: const [],
       resultEntities: const [],
@@ -61,6 +81,7 @@ class PowerSyncCaptureStore {
       role: 'assistant',
       text: null,
       assetIds: assetIds,
+      assetContext: assetContext,
       actions: actions,
       selectedActionIndexes: const [],
       resultEntities: const [],
@@ -163,6 +184,10 @@ class PowerSyncCaptureStore {
     final captureId = _readRequiredString(input, 'capture_id');
     final text = _readRequiredString(input, 'text');
     final assetIds = _readStringList(input, 'asset_ids');
+    final assetContext = await assetContextResolver.resolve(
+      assetIds,
+      userId: context.userId,
+    );
     await syncService.ensureInitialized();
     final session = await _getActiveSession(
       captureId,
@@ -187,6 +212,7 @@ class PowerSyncCaptureStore {
       role: 'user',
       text: text,
       assetIds: assetIds,
+      assetContext: assetContext,
       actions: const [],
       selectedActionIndexes: const [],
       resultEntities: const [],
@@ -201,6 +227,7 @@ class PowerSyncCaptureStore {
       role: 'assistant',
       text: null,
       assetIds: assetIds,
+      assetContext: assetContext,
       actions: actions,
       selectedActionIndexes: const [],
       resultEntities: const [],
@@ -252,7 +279,7 @@ class PowerSyncCaptureStore {
       throw StateError('Capture session not found, dismissed, or expired: $captureId');
     }
     final row = await syncService.db.getOptional(
-      'SELECT id, capture_id, turn_index, role, text, asset_ids, actions, '
+      'SELECT id, capture_id, turn_index, role, text, asset_ids, asset_context, actions, '
       'selected_action_indexes, result_entities, undo_token, supersedes_turn_id, '
       'turn_status, created_at, updated_at FROM mcp_capture_turns '
       'WHERE id = ? AND capture_id = ? AND user_id = ?',
@@ -285,6 +312,7 @@ class PowerSyncCaptureStore {
       role: 'assistant',
       text: _readOptionalString(input, 'note'),
       assetIds: sourceTurn.assetIds,
+      assetContext: sourceTurn.assetContext,
       actions: revisedActions,
       selectedActionIndexes: const [],
       resultEntities: const [],
@@ -630,7 +658,7 @@ class PowerSyncCaptureStore {
 
   Future<List<LocalCaptureTurn>> _turnsFor(String captureId) async {
     final rows = await syncService.db.getAll(
-      'SELECT id, capture_id, turn_index, role, text, asset_ids, actions, '
+      'SELECT id, capture_id, turn_index, role, text, asset_ids, asset_context, actions, '
       'selected_action_indexes, result_entities, undo_token, supersedes_turn_id, '
       'turn_status, created_at, updated_at FROM mcp_capture_turns '
       'WHERE capture_id = ? ORDER BY turn_index ASC, created_at ASC',
@@ -645,7 +673,7 @@ class PowerSyncCaptureStore {
     String userId,
   ) async {
     final row = await syncService.db.getOptional(
-      'SELECT id, capture_id, turn_index, role, text, asset_ids, actions, '
+      'SELECT id, capture_id, turn_index, role, text, asset_ids, asset_context, actions, '
       'selected_action_indexes, result_entities, undo_token, supersedes_turn_id, '
       'turn_status, created_at, updated_at FROM mcp_capture_turns '
       'WHERE id = ? AND capture_id = ? AND user_id = ?',
@@ -659,7 +687,7 @@ class PowerSyncCaptureStore {
     String userId,
   ) async {
     final row = await syncService.db.getOptional(
-      'SELECT id, capture_id, turn_index, role, text, asset_ids, actions, '
+      'SELECT id, capture_id, turn_index, role, text, asset_ids, asset_context, actions, '
       'selected_action_indexes, result_entities, undo_token, supersedes_turn_id, '
       'turn_status, created_at, updated_at FROM mcp_capture_turns '
       "WHERE capture_id = ? AND user_id = ? AND role = 'assistant' "
@@ -701,10 +729,10 @@ class PowerSyncCaptureStore {
   ) async {
     await tx.execute(
       'INSERT INTO mcp_capture_turns('
-      'id, user_id, capture_id, turn_index, role, text, asset_ids, actions, '
+      'id, user_id, capture_id, turn_index, role, text, asset_ids, asset_context, actions, '
       'selected_action_indexes, result_entities, undo_token, supersedes_turn_id, '
       'turn_status, source_channel, created_at, updated_at, revision'
-      ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         turn.id,
         userId,
@@ -713,6 +741,7 @@ class PowerSyncCaptureStore {
         turn.role,
         turn.text,
         jsonEncode(turn.assetIds),
+        _encodeAssetContext(turn.assetContext),
         _encodeActions(turn.actions),
         jsonEncode(turn.selectedActionIndexes),
         _encodeEntityRefs(turn.resultEntities),
@@ -735,6 +764,7 @@ class PowerSyncCaptureStore {
       role: row['role'] as String? ?? 'assistant',
       text: row['text'] as String?,
       assetIds: _decodeStringList(row['asset_ids'] as String?),
+      assetContext: _decodeAssetContext(row['asset_context'] as String?),
       actions: _decodeActions(row['actions'] as String?),
       selectedActionIndexes: _decodeIntList(
         row['selected_action_indexes'] as String?,
@@ -920,6 +950,57 @@ class PowerSyncCaptureStore {
     final value = input[key];
     if (value is! List) return const [];
     return value.whereType<String>().toList(growable: false);
+  }
+
+  static String _encodeAssetContext(
+    List<LocalCaptureAssetContext> contexts,
+  ) {
+    return jsonEncode(
+      contexts
+          .map(
+            (item) => {
+              'asset_id': item.assetId,
+              'kind': item.kind,
+              'asset_type': item.assetType,
+              'name': item.name,
+              'mime_type': item.mimeType,
+              'size_bytes': item.sizeBytes,
+              'source_url': item.sourceUrl,
+              'status': item.status,
+              'extractor': item.extractor,
+              'text': item.text,
+              'error': item.error,
+              'required_capability': item.requiredCapability,
+            },
+          )
+          .toList(growable: false),
+    );
+  }
+
+  static List<LocalCaptureAssetContext> _decodeAssetContext(String? value) {
+    if (value == null || value.trim().isEmpty) return const [];
+    final decoded = jsonDecode(value);
+    if (decoded is! List) return const [];
+    return decoded
+        .whereType<Map>()
+        .map((item) {
+          final json = item.cast<String, Object?>();
+          return LocalCaptureAssetContext(
+            assetId: json['asset_id'] as String? ?? '',
+            kind: json['kind'] as String?,
+            assetType: json['asset_type'] as String?,
+            name: json['name'] as String?,
+            mimeType: json['mime_type'] as String?,
+            sizeBytes: json['size_bytes'] as int?,
+            sourceUrl: json['source_url'] as String?,
+            status: json['status'] as String? ?? 'metadata_only',
+            extractor: json['extractor'] as String? ?? 'metadata',
+            text: json['text'] as String?,
+            error: json['error'] as String?,
+            requiredCapability: json['required_capability'] as String?,
+          );
+        })
+        .toList(growable: false);
   }
 
   static String _encodeActions(List<LocalCaptureAction> actions) {

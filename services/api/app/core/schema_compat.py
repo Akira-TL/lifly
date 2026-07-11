@@ -46,6 +46,7 @@ async def ensure_schema_compatibility(conn: AsyncConnection) -> None:
         capture_turn_columns = (
             "ADD COLUMN IF NOT EXISTS revision INTEGER NOT NULL DEFAULT 1",
             "ADD COLUMN IF NOT EXISTS asset_ids JSONB",
+            "ADD COLUMN IF NOT EXISTS asset_context JSONB",
             "ADD COLUMN IF NOT EXISTS undo_token VARCHAR(36)",
             "ADD COLUMN IF NOT EXISTS supersedes_turn_id VARCHAR(36)",
         )
@@ -101,6 +102,7 @@ async def ensure_schema_compatibility(conn: AsyncConnection) -> None:
             {
                 "revision": "INTEGER NOT NULL DEFAULT 1",
                 "asset_ids": "TEXT",
+                "asset_context": "TEXT",
                 "undo_token": "TEXT",
                 "supersedes_turn_id": "TEXT",
             },

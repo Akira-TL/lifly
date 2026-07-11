@@ -392,6 +392,7 @@ class McpCaptureTurn(Base, TimestampMixin, RevisionMixin):
     role: Mapped[str] = mapped_column(String(16), nullable=False, default="assistant")
     text: Mapped[str | None] = mapped_column(Text, nullable=True)
     asset_ids: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    asset_context: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     actions: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     selected_action_indexes: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     result_entities: Mapped[list | None] = mapped_column(JSONB, nullable=True)

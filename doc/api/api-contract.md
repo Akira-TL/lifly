@@ -484,6 +484,7 @@ Capture 是连续聊天会话，不再把一次 `parse / commit` 视为整个会
 本地主路径：
 
 ```text
+LocalCoreBridge.listCaptureAssets(input, context)
 LocalCoreBridge.captureParse(input, context)
 LocalCoreBridge.listCaptureSessions(input, context)
 LocalCoreBridge.getCaptureSession(input, context)
@@ -517,4 +518,6 @@ mcp_capture_turns
 mcp_undo_actions
 ```
 
-`asset_ids` 按 turn 持久化，并传入候选动作解析边界；当前本地最小规则会把附件引用写入 memo 候选 payload，但尚未完成图片、PDF、音频内容抽取。云端 AI 可以用于解析，不能成为会话记录、修改、确认或撤销链路的唯一依赖。
+`asset_ids` 和解析后的 `asset_context` 按 turn 持久化并经 PowerSync 同步。`capture/parse` 与 `append turn` 响应中的 `asset_context` 使用统一状态：`ready / metadata_only / pending_upload / unsupported / missing / inactive / failed`，同时返回 `extractor`、`error` 和 `required_capability`，客户端不能把尚未支持的附件伪装成已识别。
+
+当前服务端会对已同步、大小不超过 256 KiB 的 UTF-8 纯文本、Markdown、CSV、JSON、XML 附件进行安全读取，并把最多 20,000 字符的内容加入解析上下文；所有附件合计最多加入 30,000 字符。PDF 返回 `pdf_text_extraction`，图片返回 `ocr_or_vision`，音频返回 `speech_to_text`，外部链接返回 `external_content_fetch`。本地 Local Core 当前只解析 PowerSync 中的附件元数据与能力状态，不读取本地二进制；引用仍会进入 memo 候选 payload。云端 AI 可以用于解析，但不能成为会话记录、修改、确认或撤销链路的唯一依赖。

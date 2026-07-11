@@ -221,6 +221,7 @@ McpCaptureTurn
   role: user / assistant / system
   text
   asset_ids[]
+  asset_context[]
   actions[]
   selected_action_indexes[]
   result_entities[]
@@ -231,16 +232,18 @@ McpCaptureTurn
   created_at / updated_at
 ```
 
-本地 Local Core 已接入 session 列表、读取、append turn、revise、commit、undo 和 dismiss。一次 commit 只作用于指定 assistant turn，不关闭整个 session。未执行候选动作可以直接修改；已执行 turn 必须先撤销，防止旧实体和新设置并存。修改会创建新的 revised turn，而不是覆盖历史。commit 创建的业务实体写入 `source_capture_id`，结果实体和 undo token 写回该 turn，便于聊天界面展示“AI 已设置内容”及撤销入口。
+本地 Local Core 已接入 session 列表、读取、append turn、revise、commit、undo 和 dismiss。一次 commit 只作用于指定 assistant turn，不关闭整个 session。未执行候选动作可以直接修改；已执行 turn 必须先撤销，防止旧实体和新设置并存。修改会创建新的 revised turn，而不是覆盖历史。commit 创建的业务实体写入 `source_capture_id`，结果实体和 undo token 写回该 turn，聊天界面已经可以展示历史消息、候选卡片、“AI 已设置内容”、修改、撤销、会话恢复与关闭入口；宽屏使用会话侧栏，手机端使用历史会话底部面板。
 
 ## 13. 附件和语音输入边界
 
-附件参与解析时只传资产引用，不把附件内容塞进用户文本：
+附件输入使用两层数据：
 
 ```text
-asset_ids[]
-asset_context[]
+asset_ids[]       稳定资产引用
+asset_context[]   本轮解析快照与能力状态
 ```
+
+`asset_context` 状态必须明确区分已提取与未支持。服务端当前可安全提取小型 UTF-8 文本、Markdown、CSV、JSON、XML；PDF、图片、音频和外部链接分别返回 `pdf_text_extraction / ocr_or_vision / speech_to_text / external_content_fetch`，不伪装成已完成。Local Core 当前只根据已同步的资产元数据构建同构上下文，避免离线层直接依赖某个二进制解析插件。
 
 语音输入拆成两层：
 

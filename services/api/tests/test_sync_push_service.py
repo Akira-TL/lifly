@@ -289,6 +289,14 @@ async def test_sync_push_updates_capture_turn_without_clearing_history() -> None
         role="assistant",
         text="保留的历史文本",
         asset_ids=["asset-1"],
+        asset_context=[
+            {
+                "asset_id": "asset-1",
+                "status": "unsupported",
+                "extractor": "pdf_adapter",
+                "required_capability": "pdf_text_extraction",
+            }
+        ],
         actions=[
             {
                 "type": "memo_create",
@@ -331,6 +339,7 @@ async def test_sync_push_updates_capture_turn_without_clearing_history() -> None
     assert turn.undo_token == "undo-sync-1"
     assert turn.text == "保留的历史文本"
     assert turn.asset_ids == ["asset-1"]
+    assert turn.asset_context[0]["required_capability"] == "pdf_text_extraction"
     assert turn.actions[0]["payload"]["title"] == "原候选动作"
     assert turn.result_entities == [{"type": "memo", "id": "memo-sync-1"}]
     assert turn.revision == 3

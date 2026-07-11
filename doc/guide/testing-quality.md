@@ -176,6 +176,9 @@ API / repository / UI 的字段边界清楚
 AI Capture 本地模式必须覆盖 mcp_capture_sessions、mcp_capture_turns、mcp_undo_actions、source_capture_id、ai_trashed undo 链路
 AI Capture 连续会话必须覆盖 session 列表/恢复、append turn、逐 turn commit、result_entities、undo_token、dismiss
 AI Capture 修改链必须保留 supersedes_turn_id；已 committed / partial 的 turn 必须先 undo 才允许 revise
-PowerSync capture PATCH 不得清空未携带的 text / actions / asset_ids / result_entities / undo_token
+PowerSync capture PATCH 不得清空未携带的 text / actions / asset_ids / asset_context / result_entities / undo_token
+AI Capture 附件上下文必须区分 ready / metadata_only / pending_upload / unsupported / missing / inactive / failed，未接入 PDF/OCR/STT/外链抓取时不得伪装已解析
+服务端文本附件提取必须限制单文件字节数、单文件文本长度和单次会话合计文本长度，并覆盖编码、超限与存储错误
+Flutter AI 会话消费测试必须覆盖历史入口、连续输入、已设置结果、修改、撤销和附件能力提示
 AI Capture 本地规则拆分必须覆盖 task_create / expense_create / memo_create 候选动作
 ```

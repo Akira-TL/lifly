@@ -426,6 +426,14 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
+  Future<List<LocalCaptureAssetContext>> listCaptureAssets(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _captureStore.listCaptureAssets(input, context);
+  }
+
+  @override
   Future<LocalCaptureSession> captureParse(
     Map<String, Object?> input,
     LocalCoreContext context,

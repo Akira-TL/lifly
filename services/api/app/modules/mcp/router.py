@@ -25,6 +25,10 @@ from app.modules.memos.service import (
     DEFAULT_LOCAL_USER_ID,
     create_memo_record,
 )
+from app.modules.mcp.capture_asset_context import (
+    build_capture_parse_text,
+    resolve_capture_asset_contexts,
+)
 from app.modules.mcp.capture_commit_service import commit_capture_actions
 from app.modules.mcp.capture_lifecycle_router import (
     attach_capture_assets,
@@ -173,8 +177,13 @@ async def capture_parse(
     data: CaptureParseRequest,
     db: AsyncSession = Depends(get_db),
 ):
+    asset_context = await resolve_capture_asset_contexts(
+        db,
+        asset_ids=data.asset_ids,
+        user_id=DEFAULT_LOCAL_USER_ID,
+    )
     result = parse_mixed_input(
-        data.text,
+        build_capture_parse_text(data.text, asset_context),
         timezone_str=data.timezone,
         locale=data.locale,
     )
@@ -196,6 +205,7 @@ async def capture_parse(
         role="user",
         text=data.text,
         asset_ids=data.asset_ids,
+        asset_context=[item.model_dump(mode="json") for item in asset_context.contexts],
         turn_status="accepted",
         source_channel=CLOUD_MCP_SOURCE_CHANNEL,
     )
@@ -206,6 +216,7 @@ async def capture_parse(
         turn_index=1,
         role="assistant",
         asset_ids=data.asset_ids,
+        asset_context=[item.model_dump(mode="json") for item in asset_context.contexts],
         actions=result.actions,
         turn_status="parsed",
         source_channel=CLOUD_MCP_SOURCE_CHANNEL,
@@ -224,6 +235,9 @@ async def capture_parse(
             for action in result.actions
         ],
         "requires_confirmation": result.requires_confirmation,
+        "asset_context": [
+            item.model_dump(mode="json") for item in asset_context.contexts
+        ],
     }
 
 

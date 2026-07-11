@@ -1,5 +1,7 @@
 import 'package:client_flutter/features/ai_capture/data/ai_capture_service.dart';
 import 'package:client_flutter/features/ai_capture/models/ai_capture_models.dart';
+import 'package:client_flutter/features/ai_capture/widgets/ai_capture_asset_picker.dart';
+import 'package:client_flutter/features/ai_capture/widgets/ai_capture_turn_card.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -12,154 +14,313 @@ class AiCapturePage extends StatefulWidget {
 
 class _AiCapturePageState extends State<AiCapturePage> {
   final TextEditingController _textController = TextEditingController();
-  final Set<int> _selectedIndexes = <int>{};
+  final ScrollController _scrollController = ScrollController();
+  final Set<String> _selectedAssetIds = <String>{};
 
-  AiCaptureParseResult? _parseResult;
-  AiCaptureCommitResult? _commitResult;
-  AiCaptureUndoResult? _undoResult;
+  List<AiCaptureSession> _sessions = const [];
+  List<AiCaptureAssetContext> _assets = const [];
+  AiCaptureSession? _session;
   String? _error;
   bool _loading = false;
+  bool _initialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    _initialized = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadInitial());
+  }
 
   @override
   void dispose() {
     _textController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final service = context.watch<AiCaptureService>();
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('AI 写入'),
+        title: const Text('AI 对话'),
         actions: [
+          IconButton(
+            tooltip: '新会话',
+            onPressed: _loading ? null : _newSession,
+            icon: const Icon(Icons.add_comment_outlined),
+          ),
+          IconButton(
+            tooltip: '历史会话',
+            onPressed: _loading ? null : _showSessionHistory,
+            icon: const Icon(Icons.history_outlined),
+          ),
+          if (_session != null && !_session!.isDismissed)
+            IconButton(
+              tooltip: '关闭当前会话',
+              onPressed: _loading ? null : _dismissCurrentSession,
+              icon: const Icon(Icons.close_outlined),
+            ),
           Padding(
-            padding: const EdgeInsets.only(right: 16),
+            padding: const EdgeInsets.only(right: 12),
             child: Center(
               child: Text(
                 service.modeLabel,
-                style: theme.textTheme.labelMedium,
+                style: Theme.of(context).textTheme.labelSmall,
               ),
             ),
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _ModeNotice(service: service),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _textController,
-            minLines: 4,
-            maxLines: 8,
-            decoration: const InputDecoration(
-              labelText: '自然语言输入',
-              hintText: '例如：在食堂花了18元，提醒我晚上复盘，记一下今天状态不错',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: _loading || !service.supportsCapture ? null : _parse,
-            icon: const Icon(Icons.auto_awesome_outlined),
-            label: const Text('解析候选动作'),
-          ),
-          if (_loading) ...[
-            const SizedBox(height: 16),
-            const LinearProgressIndicator(),
-          ],
-          if (_error != null) ...[
-            const SizedBox(height: 16),
-            _ErrorCard(message: _error!),
-          ],
-          if (_parseResult != null) ...[
-            const SizedBox(height: 16),
-            _CandidateActionsCard(
-              result: _parseResult!,
-              selectedIndexes: _selectedIndexes,
-              onChanged: (index, selected) {
-                setState(() {
-                  if (selected) {
-                    _selectedIndexes.add(index);
-                  } else {
-                    _selectedIndexes.remove(index);
-                  }
-                });
-              },
-              onCommit: _selectedIndexes.isEmpty || _loading ? null : _commit,
-            ),
-          ],
-          if (_commitResult != null) ...[
-            const SizedBox(height: 16),
-            _CommitResultCard(
-              result: _commitResult!,
-              onUndo: _commitResult!.undoToken.isEmpty || _loading
-                  ? null
-                  : _undo,
-            ),
-          ],
-          if (_undoResult != null) ...[
-            const SizedBox(height: 16),
-            _UndoResultCard(result: _undoResult!),
-          ],
-        ],
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final showSessionPanel = constraints.maxWidth >= 1000;
+          return Row(
+            children: [
+              if (showSessionPanel)
+                SizedBox(
+                  width: 280,
+                  child: _SessionPanel(
+                    sessions: _sessions,
+                    selectedCaptureId: _session?.captureId,
+                    onSelected: _openSession,
+                    onNew: _newSession,
+                  ),
+                ),
+              if (showSessionPanel) const VerticalDivider(width: 1),
+              Expanded(child: _buildChat(service)),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Future<void> _parse() async {
+  Widget _buildChat(AiCaptureService service) {
+    return Column(
+      children: [
+        _ModeNotice(service: service),
+        if (_error != null) _ErrorBanner(message: _error!),
+        Expanded(
+          child: _session == null
+              ? _EmptyConversation(onStart: _focusComposer)
+              : ListView.separated(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+                  itemCount: _session!.turns.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 6),
+                  itemBuilder: (context, index) {
+                    final turn = _session!.turns[index];
+                    return AiCaptureTurnCard(
+                      key: ValueKey('${turn.id}-${turn.turnStatus}'),
+                      turn: turn,
+                      busy: _loading,
+                      onCommit: _commitTurn,
+                      onRevise: _reviseTurn,
+                      onUndo: _undoTurn,
+                    );
+                  },
+                ),
+        ),
+        if (_loading) const LinearProgressIndicator(minHeight: 2),
+        _Composer(
+          controller: _textController,
+          enabled: service.supportsCapture && !_loading,
+          selectedAssets: _assets
+              .where((asset) => _selectedAssetIds.contains(asset.assetId))
+              .toList(growable: false),
+          onAttach: _selectAssets,
+          onRemoveAsset: (assetId) {
+            setState(() => _selectedAssetIds.remove(assetId));
+          },
+          onSend: _sendMessage,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _loadInitial() async {
+    await _run(() async {
+      final service = context.read<AiCaptureService>();
+      final results = await Future.wait<Object>([
+        service.listSessions(),
+        service.listAssets(),
+      ]);
+      final page = results[0] as AiCaptureSessionPage;
+      final assets = results[1] as List<AiCaptureAssetContext>;
+      AiCaptureSession? session;
+      if (page.items.isNotEmpty) {
+        session = await service.getSession(page.items.first.captureId);
+      }
+      if (!mounted) return;
+      setState(() {
+        _sessions = page.items;
+        _assets = assets;
+        _session = session;
+      });
+      _scrollToBottom();
+    });
+  }
+
+  Future<void> _refreshSessions({String? selectCaptureId}) async {
+    final service = context.read<AiCaptureService>();
+    final page = await service.listSessions();
+    AiCaptureSession? session = _session;
+    final targetId = selectCaptureId ?? session?.captureId;
+    if (targetId != null) {
+      try {
+        session = await service.getSession(targetId);
+      } catch (_) {
+        session = null;
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _sessions = page.items;
+      _session = session;
+    });
+    _scrollToBottom();
+  }
+
+  Future<void> _sendMessage() async {
     final text = _textController.text.trim();
     if (text.isEmpty) {
-      setState(() => _error = '请输入要解析的内容。');
+      setState(() => _error = '请输入要记录或设置的内容。');
       return;
     }
-
+    final assetIds = _selectedAssetIds.toList(growable: false);
     await _run(() async {
       final service = context.read<AiCaptureService>();
-      final result = await service.parse(text: text);
-      setState(() {
-        _parseResult = result;
-        _commitResult = null;
-        _undoResult = null;
-        _selectedIndexes
-          ..clear()
-          ..addAll(List<int>.generate(result.actions.length, (index) => index));
-      });
+      String captureId;
+      if (_session == null || _session!.isDismissed) {
+        final parsed = await service.parse(text: text, assetIds: assetIds);
+        captureId = parsed.captureId;
+      } else {
+        final updated = await service.appendTurn(
+          captureId: _session!.captureId,
+          text: text,
+          assetIds: assetIds,
+        );
+        captureId = updated.captureId;
+      }
+      _textController.clear();
+      _selectedAssetIds.clear();
+      await _refreshSessions(selectCaptureId: captureId);
     });
   }
 
-  Future<void> _commit() async {
-    final result = _parseResult;
-    if (result == null) return;
-
+  Future<void> _commitTurn(AiCaptureTurn turn, List<int> indexes) async {
     await _run(() async {
-      final service = context.read<AiCaptureService>();
-      final commit = await service.commit(
-        captureId: result.captureId,
-        selectedActionIndexes: _selectedIndexes.toList()..sort(),
+      await context.read<AiCaptureService>().commit(
+        captureId: turn.captureId,
+        turnId: turn.id,
+        selectedActionIndexes: indexes,
       );
-      setState(() {
-        _commitResult = commit;
-        _undoResult = null;
-      });
+      await _refreshSessions(selectCaptureId: turn.captureId);
     });
   }
 
-  Future<void> _undo() async {
-    final result = _commitResult;
-    if (result == null || result.undoToken.isEmpty) return;
-
+  Future<void> _reviseTurn(
+    AiCaptureTurn turn,
+    int actionIndex,
+    Map<String, dynamic> payload,
+  ) async {
     await _run(() async {
-      final service = context.read<AiCaptureService>();
-      final undo = await service.undo(undoToken: result.undoToken);
-      setState(() => _undoResult = undo);
+      await context.read<AiCaptureService>().reviseAction(
+        captureId: turn.captureId,
+        turnId: turn.id,
+        actionIndex: actionIndex,
+        payload: payload,
+        note: '用户在聊天界面修改候选内容',
+      );
+      await _refreshSessions(selectCaptureId: turn.captureId);
     });
+  }
+
+  Future<void> _undoTurn(AiCaptureTurn turn) async {
+    final undoToken = turn.undoToken;
+    if (undoToken == null || undoToken.isEmpty) return;
+    await _run(() async {
+      await context.read<AiCaptureService>().undo(undoToken: undoToken);
+      await _refreshSessions(selectCaptureId: turn.captureId);
+    });
+  }
+
+  Future<void> _dismissCurrentSession() async {
+    final session = _session;
+    if (session == null) return;
+    await _run(() async {
+      await context.read<AiCaptureService>().dismissSession(
+        session.captureId,
+        reason: '用户从 AI 聊天界面关闭会话',
+      );
+      _newSession();
+      await _refreshSessions();
+    });
+  }
+
+  Future<void> _openSession(String captureId) async {
+    await _run(() async {
+      final session = await context.read<AiCaptureService>().getSession(captureId);
+      if (!mounted) return;
+      setState(() => _session = session);
+      _scrollToBottom();
+    });
+  }
+
+  void _newSession() {
+    setState(() {
+      _session = null;
+      _selectedAssetIds.clear();
+      _error = null;
+    });
+  }
+
+  Future<void> _selectAssets() async {
+    if (_assets.isEmpty) {
+      await _run(() async {
+        final assets = await context.read<AiCaptureService>().listAssets();
+        if (mounted) setState(() => _assets = assets);
+      });
+    }
+    if (!mounted) return;
+    final selected = await showAiCaptureAssetPicker(
+      context,
+      assets: _assets,
+      selectedIds: _selectedAssetIds,
+    );
+    if (selected != null && mounted) {
+      setState(() {
+        _selectedAssetIds
+          ..clear()
+          ..addAll(selected);
+      });
+    }
+  }
+
+  Future<void> _showSessionHistory() async {
+    final selectedId = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: _SessionPanel(
+          sessions: _sessions,
+          selectedCaptureId: _session?.captureId,
+          onSelected: (captureId) => Navigator.of(context).pop(captureId),
+          onNew: () => Navigator.of(context).pop(''),
+        ),
+      ),
+    );
+    if (selectedId == null) return;
+    if (selectedId.isEmpty) {
+      _newSession();
+    } else {
+      await _openSession(selectedId);
+    }
   }
 
   Future<void> _run(Future<void> Function() action) async {
+    if (!mounted) return;
     setState(() {
       _loading = true;
       _error = null;
@@ -167,10 +328,159 @@ class _AiCapturePageState extends State<AiCapturePage> {
     try {
       await action();
     } catch (error) {
-      setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = error.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  void _focusComposer() => FocusScope.of(context).nextFocus();
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+}
+
+class _Composer extends StatelessWidget {
+  const _Composer({
+    required this.controller,
+    required this.enabled,
+    required this.selectedAssets,
+    required this.onAttach,
+    required this.onRemoveAsset,
+    required this.onSend,
+  });
+
+  final TextEditingController controller;
+  final bool enabled;
+  final List<AiCaptureAssetContext> selectedAssets;
+  final VoidCallback onAttach;
+  final ValueChanged<String> onRemoveAsset;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      elevation: 6,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (selectedAssets.isNotEmpty)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: selectedAssets
+                        .map(
+                          (asset) => InputChip(
+                            label: Text(asset.displayName),
+                            onDeleted: enabled
+                                ? () => onRemoveAsset(asset.assetId)
+                                : null,
+                          ),
+                        )
+                        .toList(growable: false),
+                  ),
+                ),
+              if (selectedAssets.isNotEmpty) const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  IconButton(
+                    tooltip: '添加附件',
+                    onPressed: enabled ? onAttach : null,
+                    icon: const Icon(Icons.attach_file),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      key: const Key('ai_capture_composer'),
+                      controller: controller,
+                      enabled: enabled,
+                      minLines: 1,
+                      maxLines: 5,
+                      textInputAction: TextInputAction.newline,
+                      decoration: const InputDecoration(
+                        hintText: '告诉 AI 要记录、修改或设置什么…',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    tooltip: '发送',
+                    onPressed: enabled ? onSend : null,
+                    icon: const Icon(Icons.send_outlined),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SessionPanel extends StatelessWidget {
+  const _SessionPanel({
+    required this.sessions,
+    required this.selectedCaptureId,
+    required this.onSelected,
+    required this.onNew,
+  });
+
+  final List<AiCaptureSession> sessions;
+  final String? selectedCaptureId;
+  final ValueChanged<String> onSelected;
+  final VoidCallback onNew;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        ListTile(
+          leading: const Icon(Icons.add_comment_outlined),
+          title: const Text('新会话'),
+          onTap: onNew,
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: sessions.isEmpty
+              ? const Center(child: Text('暂无历史会话'))
+              : ListView.builder(
+                  itemCount: sessions.length,
+                  itemBuilder: (context, index) {
+                    final session = sessions[index];
+                    return ListTile(
+                      selected: session.captureId == selectedCaptureId,
+                      leading: const Icon(Icons.chat_bubble_outline),
+                      title: Text(
+                        session.originalText.isEmpty
+                            ? '未命名会话'
+                            : session.originalText,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text('${session.turnCount} 条记录'),
+                      onTap: () => onSelected(session.captureId),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
   }
 }
 
@@ -182,20 +492,21 @@ class _ModeNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final message = service.supportsCloudCapture
-        ? '当前使用 Cloud MCP。提交前请确认候选动作，写入后可通过 undo_token 撤销。'
-        : '当前使用 Local Core 本地捕获。候选动作、确认结果和撤销链路会先落本地。';
-    return Card(
+        ? '联网时优先使用云端解析；聊天记录、设置结果和撤销凭据会持久化。'
+        : '当前使用 Local Core；会话、候选动作和撤销链路均可离线保存。';
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(
               service.supportsCloudCapture
                   ? Icons.cloud_done_outlined
-                  : Icons.desktop_windows_outlined,
+                  : Icons.offline_bolt_outlined,
+              size: 18,
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             Expanded(child: Text(message)),
           ],
         ),
@@ -204,50 +515,29 @@ class _ModeNotice extends StatelessWidget {
   }
 }
 
-class _CandidateActionsCard extends StatelessWidget {
-  const _CandidateActionsCard({
-    required this.result,
-    required this.selectedIndexes,
-    required this.onChanged,
-    required this.onCommit,
-  });
+class _EmptyConversation extends StatelessWidget {
+  const _EmptyConversation({required this.onStart});
 
-  final AiCaptureParseResult result;
-  final Set<int> selectedIndexes;
-  final void Function(int index, bool selected) onChanged;
-  final VoidCallback? onCommit;
+  final VoidCallback onStart;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return Center(
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(32),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text('候选动作', style: Theme.of(context).textTheme.titleMedium),
+            const Icon(Icons.auto_awesome, size: 48),
+            const SizedBox(height: 12),
+            Text('开始一段连续会话', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
-            Text('capture_id: ${result.captureId}'),
-            const SizedBox(height: 8),
-            for (var i = 0; i < result.actions.length; i++)
-              CheckboxListTile(
-                value: selectedIndexes.contains(i),
-                onChanged: (value) => onChanged(i, value ?? false),
-                title: Text(
-                  '${result.actions[i].label} · ${result.actions[i].summary}',
-                ),
-                subtitle: Text(
-                  'confidence: ${result.actions[i].confidence.toStringAsFixed(2)}',
-                ),
-                controlAffinity: ListTileControlAffinity.leading,
-                contentPadding: EdgeInsets.zero,
-              ),
-            const SizedBox(height: 8),
-            FilledButton.icon(
-              onPressed: onCommit,
-              icon: const Icon(Icons.check_outlined),
-              label: const Text('确认写入选中动作'),
+            const Text(
+              'AI 设置任务、备忘或账单后，会在对话中保留结果，并提供修改和撤销入口。',
+              textAlign: TextAlign.center,
             ),
+            const SizedBox(height: 12),
+            OutlinedButton(onPressed: onStart, child: const Text('开始输入')),
           ],
         ),
       ),
@@ -255,93 +545,29 @@ class _CandidateActionsCard extends StatelessWidget {
   }
 }
 
-class _CommitResultCard extends StatelessWidget {
-  const _CommitResultCard({required this.result, required this.onUndo});
-
-  final AiCaptureCommitResult result;
-  final VoidCallback? onUndo;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('提交结果', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text('committed: ${result.committed}'),
-            Text('created: ${result.createdEntities.length}'),
-            Text('failed: ${result.failedActions.length}'),
-            Text('undo_token: ${result.undoToken}'),
-            if (result.createdEntities.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              for (final entity in result.createdEntities)
-                Text('${entity.type}: ${entity.id}'),
-            ],
-            if (result.failedActions.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              for (final failure in result.failedActions)
-                Text(
-                  '#${failure.actionIndex} ${failure.actionType ?? '-'} · ${failure.reason}',
-                ),
-            ],
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: onUndo,
-              icon: const Icon(Icons.undo_outlined),
-              label: const Text('撤销本次 AI 写入'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _UndoResultCard extends StatelessWidget {
-  const _UndoResultCard({required this.result});
-
-  final AiCaptureUndoResult result;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('撤销结果', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text('undone: ${result.undone}'),
-            Text('failed: ${result.failedEntities.length}'),
-            for (final entity in result.entities)
-              Text('${entity.type}: ${entity.id}'),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ErrorCard extends StatelessWidget {
-  const _ErrorCard({required this.message});
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
 
   final String message;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      color: Theme.of(context).colorScheme.errorContainer,
+    final colors = Theme.of(context).colorScheme;
+    return Material(
+      color: colors.errorContainer,
       child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Text(
-          message,
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onErrorContainer,
-          ),
+        padding: const EdgeInsets.all(10),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline, color: colors.onErrorContainer),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(color: colors.onErrorContainer),
+              ),
+            ),
+          ],
         ),
       ),
     );

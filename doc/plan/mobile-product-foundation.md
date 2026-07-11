@@ -6,7 +6,7 @@
 状态：执行中
 当前分支：develop/v0.7.0
 平台范围：Flutter Local Core / 本地 SQLite / PowerSync schema / repository / 服务端同构 API / 手机端 UI / Web 与桌面端适配原则
-当前动作：阶段六已完成 AI Capture 连续会话、逐轮提交、修改与撤销地基，后续补附件内容提取边界并进入 release gate
+当前动作：阶段六已完成 AI Capture 连续会话、附件上下文与聊天 UI 消费，下一步进入产品地基 release gate
 完成规则：计划内能力实现并回写固定正式文档后，删除本文档
 ```
 
@@ -599,7 +599,7 @@ doc/guide/current-status.md
 
 ### 阶段六：聊天式 AI Capture
 
-状态：连续会话生命周期与撤销/修改地基已落地，UI 和附件内容提取待补。
+状态：连续会话、附件上下文与基础聊天 UI 已落地，进入 release gate。
 
 平台重点：Flutter AI 页面 / Local Capture Session / 附件输入边界 / 云端 AI 解析可选兜底。
 
@@ -626,17 +626,20 @@ commit 只提交具体 assistant turn，result_entities 与 undo_token 写回该
 已 committed / partial 的 turn 必须先 undo，之后允许修改并重新提交
 PowerSync schema 与 Sync Push 支持 capture_session / capture_turn revision 和 PATCH 字段保留
 PowerSyncCaptureStore 与 PowerSyncLocalCoreBridge 已接入完整生命周期
-AiCaptureService 提供强类型 list/get/append/revise/commit/undo/dismiss 接口
+AiCaptureService 提供强类型 assets/list/get/append/revise/commit/undo/dismiss 接口
 本地 commit 创建的 memo / task / ledger_transaction 会写入 source_capture_id
 本地 undo 通过 mcp_undo_actions 转为 ai_trashed，原 turn 标记 undone 并追加 system undo turn
-asset_ids 按 turn 持久化，并进入 memo 候选引用边界
-回归测试覆盖连续第二轮、修改、提交、撤销、撤销后再次修改和关闭会话
+asset_ids 与 asset_context 按 turn 持久化并同步，PATCH 不清空附件解析快照
+服务端可安全提取受限 UTF-8 文本附件；PDF/图片/音频/外链返回明确能力状态，不伪造已解析
+Flutter AI 页面已消费历史 turns、会话列表、候选动作、已设置结果、修改、撤销、附件选择和关闭会话；宽屏与手机使用不同会话导航
+回归测试覆盖连续第二轮、修改、提交、撤销、撤销后再次修改、关闭会话、附件上下文与结果卡片
 本地 capture_parse 已具备最小规则拆分，可从一句话生成 task_create / expense_create / memo_create 候选动作
 ```
 
 当前本地主入口：
 
 ```text
+LocalCoreBridge.listCaptureAssets(input, context)
 LocalCoreBridge.captureParse(input, context)
 LocalCoreBridge.listCaptureSessions(input, context)
 LocalCoreBridge.getCaptureSession(input, context)
@@ -663,9 +666,10 @@ POST /api/v1/mcp/capture/sessions/{capture_id}/dismiss
 仍待补齐：
 
 ```text
-聊天界面消费历史 turns、已设置结果卡片、修改和撤销入口
-asset_ids 对应图片/PDF/音频内容提取，而不是只作为引用边界
-语音输入与 STT
+PDF 文本提取适配器
+图片 OCR / 视觉适配器
+音频 STT 适配器
+外部链接内容抓取适配器
 本地规则解析继续补充更多自然语言金额、日期、商户和任务拆分边界
 Capture Store 与 Fake Local Core 文件拆分，降低超大文件维护风险
 ```
@@ -736,7 +740,7 @@ Flutter analyze/test 通过
 下一步进入：
 
 ```text
-Capture 附件内容提取与会话 UI 消费边界
+LC-0707 Product foundation release gate
 ```
 
-原因：Capture Session 已具备列表、读取、恢复、append turn、逐轮修改/提交/撤销和 dismiss，聊天历史与 AI 已设置结果能够云端/本地持久化。当前剩余缺口是 asset_ids 只保存引用，尚未形成图片/PDF/音频内容提取接口；聊天 UI 也尚未消费历史 turns、结果卡片、修改和撤销动作。下一步先稳定附件解析适配边界，再进入产品地基 release gate 与 UI 实现。
+原因：首页真实状态、预算写入、任务提醒派发、连续 AI 会话、附件上下文和基础聊天消费链路均已具备服务端、Local Core 与 PowerSync 同构边界。PDF/OCR/STT/外链抓取属于可插拔增强能力，不应继续阻塞 v0.7 地基收口；下一步应执行断网与云端失败验收、清理超大 Capture 文件结构债务、回写固定文档、删除本计划并合并发布分支。

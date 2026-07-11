@@ -80,6 +80,7 @@ class PowerSyncCrudMapper {
   static const Set<String> _jsonCollectionKeys = {
     'actions',
     'asset_ids',
+    'asset_context',
     'selected_action_indexes',
     'result_entities',
   };

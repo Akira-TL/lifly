@@ -7,6 +7,10 @@ from pydantic import ValidationError
 
 from app.db.models import McpCaptureSession, McpCaptureTurn
 from app.modules.mcp import router as mcp_router
+from app.modules.mcp.capture_asset_context import (
+    CaptureAssetContext,
+    CaptureAssetContextResult,
+)
 from app.modules.mcp.capture_schemas import CaptureParseRequest
 from app.modules.mcp.capture_session_service import (
     CAPTURE_SESSION_TTL,
@@ -33,7 +37,25 @@ class FakeDb:
 
 
 @pytest.mark.anyio
-async def test_capture_parse_persists_session_metadata() -> None:
+async def test_capture_parse_persists_session_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_resolve_asset_contexts(*args: object, **kwargs: object):
+        return CaptureAssetContextResult(
+            contexts=[
+                CaptureAssetContext(
+                    asset_id="asset-1",
+                    status="metadata_only",
+                    extractor="metadata",
+                )
+            ]
+        )
+
+    monkeypatch.setattr(
+        mcp_router,
+        "resolve_capture_asset_contexts",
+        fake_resolve_asset_contexts,
+    )
     db = FakeDb()
     response = await mcp_router.capture_parse(
         CaptureParseRequest(

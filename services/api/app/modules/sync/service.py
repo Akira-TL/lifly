@@ -534,6 +534,8 @@ async def _apply_capture_turn_change(
         turn.text = data.get("text")
     if "asset_ids" in data:
         turn.asset_ids = list(data.get("asset_ids") or [])
+    if "asset_context" in data:
+        turn.asset_context = list(data.get("asset_context") or [])
     if "actions" in data:
         turn.actions = list(data.get("actions") or [])
     if "selected_action_indexes" in data:
@@ -685,6 +687,7 @@ def _capture_turn_snapshot(turn: McpCaptureTurn) -> dict:
             "role": turn.role,
             "text": turn.text,
             "asset_ids": list(turn.asset_ids or []),
+            "asset_context": list(turn.asset_context or []),
             "actions": list(turn.actions or []),
             "selected_action_indexes": list(turn.selected_action_indexes or []),
             "result_entities": list(turn.result_entities or []),

@@ -179,6 +179,7 @@ void main() {
         'turn_index': 3,
         'role': 'assistant',
         'asset_ids': '["asset-1"]',
+        'asset_context': '[{"asset_id":"asset-1","status":"unsupported","extractor":"pdf_adapter","required_capability":"pdf_text_extraction"}]',
         'actions': '[{"type":"memo_create","payload":{"title":"B"},"confidence":0.9}]',
         'selected_action_indexes': '[0]',
         'result_entities': '[{"type":"memo","id":"memo-1"}]',
@@ -202,6 +203,17 @@ void main() {
     expect((session['data'] as Map<String, Object?>)['actions'], isA<List>());
     expect(turn['entity_type'], 'capture_turn');
     expect((turn['data'] as Map<String, Object?>)['asset_ids'], ['asset-1']);
+    expect(
+      (turn['data'] as Map<String, Object?>)['asset_context'],
+      [
+        {
+          'asset_id': 'asset-1',
+          'status': 'unsupported',
+          'extractor': 'pdf_adapter',
+          'required_capability': 'pdf_text_extraction',
+        },
+      ],
+    );
     expect(
       (turn['data'] as Map<String, Object?>)['result_entities'],
       [

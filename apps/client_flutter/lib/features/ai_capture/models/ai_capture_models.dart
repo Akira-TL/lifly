@@ -50,6 +50,57 @@ class AiCaptureAction {
   }
 }
 
+class AiCaptureAssetContext {
+  const AiCaptureAssetContext({
+    required this.assetId,
+    this.kind,
+    this.assetType,
+    this.name,
+    this.mimeType,
+    this.sizeBytes,
+    this.sourceUrl,
+    required this.status,
+    required this.extractor,
+    this.text,
+    this.error,
+    this.requiredCapability,
+  });
+
+  final String assetId;
+  final String? kind;
+  final String? assetType;
+  final String? name;
+  final String? mimeType;
+  final int? sizeBytes;
+  final String? sourceUrl;
+  final String status;
+  final String extractor;
+  final String? text;
+  final String? error;
+  final String? requiredCapability;
+
+  factory AiCaptureAssetContext.fromJson(Map<String, dynamic> json) {
+    return AiCaptureAssetContext(
+      assetId: json['asset_id'] as String? ?? '',
+      kind: json['kind'] as String?,
+      assetType: json['asset_type'] as String?,
+      name: json['name'] as String?,
+      mimeType: json['mime_type'] as String?,
+      sizeBytes: json['size_bytes'] as int?,
+      sourceUrl: json['source_url'] as String?,
+      status: json['status'] as String? ?? 'metadata_only',
+      extractor: json['extractor'] as String? ?? 'metadata',
+      text: json['text'] as String?,
+      error: json['error'] as String?,
+      requiredCapability: json['required_capability'] as String?,
+    );
+  }
+
+  String get displayName => name ?? sourceUrl ?? assetId;
+
+  bool get isReady => status == 'ready';
+}
+
 class AiCaptureTurn {
   const AiCaptureTurn({
     required this.id,
@@ -58,6 +109,7 @@ class AiCaptureTurn {
     required this.role,
     required this.text,
     required this.assetIds,
+    required this.assetContext,
     required this.actions,
     required this.selectedActionIndexes,
     required this.resultEntities,
@@ -74,6 +126,7 @@ class AiCaptureTurn {
   final String role;
   final String? text;
   final List<String> assetIds;
+  final List<AiCaptureAssetContext> assetContext;
   final List<AiCaptureAction> actions;
   final List<int> selectedActionIndexes;
   final List<AiCaptureEntityRef> resultEntities;
@@ -92,6 +145,14 @@ class AiCaptureTurn {
       text: json['text'] as String?,
       assetIds: (json['asset_ids'] as List? ?? const [])
           .whereType<String>()
+          .toList(growable: false),
+      assetContext: (json['asset_context'] as List? ?? const [])
+          .whereType<Map>()
+          .map(
+            (item) => AiCaptureAssetContext.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
           .toList(growable: false),
       actions: (json['actions'] as List? ?? const [])
           .whereType<Map>()
@@ -217,12 +278,14 @@ class AiCaptureParseResult {
     required this.captureId,
     required this.actions,
     required this.requiresConfirmation,
+    required this.assetContext,
     this.turnId,
   });
 
   final String captureId;
   final List<AiCaptureAction> actions;
   final bool requiresConfirmation;
+  final List<AiCaptureAssetContext> assetContext;
   final String? turnId;
 
   factory AiCaptureParseResult.fromJson(Map<String, dynamic> json) {
@@ -234,6 +297,14 @@ class AiCaptureParseResult {
           .map((item) => AiCaptureAction.fromJson(Map<String, dynamic>.from(item)))
           .toList(),
       requiresConfirmation: json['requires_confirmation'] as bool? ?? true,
+      assetContext: (json['asset_context'] as List? ?? const [])
+          .whereType<Map>()
+          .map(
+            (item) => AiCaptureAssetContext.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList(growable: false),
       turnId: json['turn_id'] as String?,
     );
   }

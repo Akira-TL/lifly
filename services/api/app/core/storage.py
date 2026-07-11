@@ -37,6 +37,18 @@ def generate_download_url(storage_key: str) -> str:
     return client.presigned_get_object(settings.minio_bucket, storage_key)  # type: ignore[return-value]
 
 
+def read_object_bytes(storage_key: str, max_bytes: int) -> bytes:
+    response = get_storage().get_object(settings.minio_bucket, storage_key)
+    try:
+        payload = response.read(max_bytes + 1)
+    finally:
+        response.close()
+        response.release_conn()
+    if len(payload) > max_bytes:
+        raise ValueError("object exceeds capture extraction limit")
+    return payload
+
+
 def check_object_exists(storage_key: str) -> bool:
     try:
         get_storage().stat_object(settings.minio_bucket, storage_key)

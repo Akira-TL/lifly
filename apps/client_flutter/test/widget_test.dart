@@ -3,6 +3,7 @@ import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/local_core/fake_local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/features/ai_capture/data/ai_capture_service.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:client_flutter/main.dart';
 import 'package:provider/provider.dart';
@@ -200,8 +201,9 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('AI'));
-    await tester.pump();
-    expect(find.text('AI 写入'), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.text('AI 对话'), findsOneWidget);
+    expect(find.byKey(const Key('ai_capture_composer')), findsOneWidget);
 
     await tester.tap(find.text('任务'));
     await tester.pump();
