@@ -39,3 +39,7 @@ API 契约 -> doc/api/
 不在 plan 完成后保留重复内容
 不继续使用数字前缀命名计划
 ```
+
+## 最近收口
+
+`mobile-product-foundation.md` 对应的 v0.7.0 产品地基计划已经完成并回写到 API、架构、客户端、测试和当前状态文档，发布门禁由 `scripts/check-v0.7-release-gate.sh` 长期维护，因此计划文件已删除。

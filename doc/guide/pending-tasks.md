@@ -158,4 +158,22 @@ Flutter AI 页面消费历史 turns、宽屏会话侧栏、手机历史面板、
 
 ### LC-0707 Product foundation release gate
 
+状态：已完成。
+
 目标：确认 v0.7 产品地基没有假数据和客户端硬编码产品规则。
+
+验收：
+
+```text
+服务端、Flutter 与 PowerSync 完整检查通过
+首页和记账 repository 覆盖云端失败后的 Local Core fallback
+AI Capture 连续会话、修改、提交和撤销可在 Local Core 独立运行
+附件库使用真实文件选择、对象存储 PUT 和 upload-complete，不保留占位文件名
+Fake Local Core 按备忘、记账、任务和 Capture store 拆分
+PowerSync Capture / Task 的规则、编解码与 SQL 辅助已拆分
+Dart / Python 业务文件通过 800 行体积门禁
+scripts/check-v0.7-release-gate.sh 固化发布检查
+已完成计划回写并删除 mobile-product-foundation 计划文档
+```
+
+后续增强能力：PDF 正文提取、图片 OCR/视觉、音频 STT、外部链接正文抓取、具体平台系统通知插件与正式数据库 migration runner。这些能力不阻塞 v0.7.0 产品地基发布。

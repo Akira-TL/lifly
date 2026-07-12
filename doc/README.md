@@ -40,7 +40,7 @@ design/ui-information-architecture.md
 guide/development.md
 guide/current-status.md
 guide/roadmap.md
-plan/mobile-product-foundation.md
+plan/README.md
 ```
 
 ## 维护规则

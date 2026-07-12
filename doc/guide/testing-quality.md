@@ -132,6 +132,7 @@ security tests
 scripts/check-api.sh
 scripts/check-client-flutter.sh
 scripts/check-powersync-sync-scope.sh
+scripts/check-v0.7-release-gate.sh
 scripts/check-v0.4-ai-write.sh
 scripts/smoke-mcp-v0.1.sh
 ```
@@ -180,5 +181,7 @@ PowerSync capture PATCH 不得清空未携带的 text / actions / asset_ids / as
 AI Capture 附件上下文必须区分 ready / metadata_only / pending_upload / unsupported / missing / inactive / failed，未接入 PDF/OCR/STT/外链抓取时不得伪装已解析
 服务端文本附件提取必须限制单文件字节数、单文件文本长度和单次会话合计文本长度，并覆盖编码、超限与存储错误
 Flutter AI 会话消费测试必须覆盖历史入口、连续输入、已设置结果、修改、撤销和附件能力提示
+附件库上传必须覆盖真实文件选择、create-upload-url、对象存储 PUT 与 upload-complete，禁止占位文件名直接注册
+产品地基发布门禁必须检查 Dart/Python 业务文件不超过 800 行，并拒绝首页固定状态占位值和附件占位上传入口
 AI Capture 本地规则拆分必须覆盖 task_create / expense_create / memo_create 候选动作
 ```

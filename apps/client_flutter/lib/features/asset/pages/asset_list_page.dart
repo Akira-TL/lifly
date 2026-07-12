@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/repositories/asset_repository.dart';
 import 'package:client_flutter/domain/entities/asset.dart';
+import 'package:client_flutter/features/asset/data/asset_file_picker.dart';
 import 'package:client_flutter/shared/widgets/asset_card.dart';
 
 class AssetListPage extends StatefulWidget {
@@ -14,8 +15,10 @@ class AssetListPage extends StatefulWidget {
 
 class _AssetListPageState extends State<AssetListPage> {
   late final AssetRepository _repo;
+  final AssetFilePicker _filePicker = const FileSelectorAssetFilePicker();
   List<Asset> _assets = [];
   bool _loading = true;
+  bool _uploading = false;
   String? _error;
 
   @override
@@ -74,7 +77,13 @@ class _AssetListPageState extends State<AssetListPage> {
             ListTile(
               leading: const Icon(Icons.upload_file),
               title: const Text('上传文件'),
-              onTap: () { Navigator.pop(ctx); _triggerUpload(); },
+              subtitle: _uploading ? const Text('正在上传…') : null,
+              onTap: _uploading
+                  ? null
+                  : () {
+                      Navigator.pop(ctx);
+                      _triggerUpload();
+                    },
             ),
             ListTile(
               leading: const Icon(Icons.link),
@@ -87,9 +96,33 @@ class _AssetListPageState extends State<AssetListPage> {
     );
   }
 
-  void _triggerUpload() async {
-    final res = await _repo.createUploadUrl(filename: 'placeholder-file.png', assetType: 'image');
-    setState(() => _assets.insert(0, Asset.fromJson(res['asset'] as Map<String, dynamic>)));
+  Future<void> _triggerUpload() async {
+    final selected = await _filePicker.pickFile();
+    if (selected == null || !mounted) return;
+    setState(() {
+      _uploading = true;
+      _error = null;
+    });
+    try {
+      final asset = await _repo.uploadBytes(
+        filename: selected.name,
+        bytes: selected.bytes,
+        mimeType: selected.mimeType,
+        assetType: selected.assetType,
+      );
+      if (!mounted) return;
+      setState(() => _assets.insert(0, asset));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已上传 ${asset.displayName}')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('上传失败：$error')),
+      );
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
   }
 
   void _showExternalLinkDialog() {

@@ -133,7 +133,21 @@ MVP 采用 Markdown 编辑器 + 附件卡片，不做块编辑器。
 - asset:// 引用；
 - 预览模式。
 
-## 7. 附件缓存
+## 7. 附件上传与缓存
+
+附件库上传使用统一链路：
+
+```text
+用户选择真实文件
+  ↓
+create-upload-url 创建 Asset 与上传意图
+  ↓
+客户端向对象存储 presigned URL 执行 PUT
+  ↓
+upload-complete 校验对象并把 sync_status 更新为 synced
+```
+
+客户端不得使用固定占位文件名模拟上传。文件类型根据扩展名映射为 image / pdf / audio / file，并携带可识别的 MIME；上传失败只提示错误，不把未完成资产伪装成已同步。
 
 本地缓存策略：
 
