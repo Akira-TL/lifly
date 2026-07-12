@@ -3,24 +3,21 @@ from __future__ import annotations
 import inspect
 
 import pytest
-from fastapi import HTTPException
+from pydantic import ValidationError
 
-from app.db.models import McpCaptureSession
+from app.db.models import McpCaptureSession, McpCaptureTurn
 from app.modules.mcp import router as mcp_router
+from app.modules.mcp.capture_asset_context import (
+    CaptureAssetContext,
+    CaptureAssetContextResult,
+)
+from app.modules.mcp.capture_schemas import CaptureParseRequest
 from app.modules.mcp.capture_session_service import (
     CAPTURE_SESSION_TTL,
     deserialize_capture_actions,
     serialize_capture_actions,
 )
 from app.modules.mcp.parse_engine import CandidateAction
-
-
-class FakeRequest:
-    def __init__(self, body: dict | None) -> None:
-        self.body = body
-
-    async def json(self) -> dict | None:
-        return self.body
 
 
 class FakeDb:
@@ -40,14 +37,33 @@ class FakeDb:
 
 
 @pytest.mark.anyio
-async def test_capture_parse_persists_session_metadata() -> None:
+async def test_capture_parse_persists_session_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_resolve_asset_contexts(*args: object, **kwargs: object):
+        return CaptureAssetContextResult(
+            contexts=[
+                CaptureAssetContext(
+                    asset_id="asset-1",
+                    status="metadata_only",
+                    extractor="metadata",
+                )
+            ]
+        )
+
+    monkeypatch.setattr(
+        mcp_router,
+        "resolve_capture_asset_contexts",
+        fake_resolve_asset_contexts,
+    )
     db = FakeDb()
     response = await mcp_router.capture_parse(
-        FakeRequest({
-            "text": "记一下今天状态不错，提醒我晚上8点复盘",
-            "timezone": "Asia/Shanghai",
-            "locale": "zh-CN",
-        }),
+        CaptureParseRequest(
+            text="记一下今天状态不错，提醒我晚上8点复盘",
+            timezone="Asia/Shanghai",
+            locale="zh-CN",
+            asset_ids=["asset-1"],
+        ),
         db,  # type: ignore[arg-type]
     )
 
@@ -55,9 +71,11 @@ async def test_capture_parse_persists_session_metadata() -> None:
     assert response["actions"]
     assert db.flushed is True
     assert db.committed is True
-    assert len(db.added) == 1
+    assert len(db.added) == 3
 
     session = db.added[0]
+    user_turn = db.added[1]
+    action_turn = db.added[2]
     assert isinstance(session, McpCaptureSession)
     assert session.capture_id == response["capture_id"]
     assert session.user_id == mcp_router.DEFAULT_LOCAL_USER_ID
@@ -68,14 +86,33 @@ async def test_capture_parse_persists_session_metadata() -> None:
     assert session.committed is False
     assert session.expires_at is not None
     assert len(session.actions) == len(response["actions"])
+    assert session.session_status == "active"
+
+    assert isinstance(user_turn, McpCaptureTurn)
+    assert user_turn.capture_id == response["capture_id"]
+    assert user_turn.turn_index == 0
+    assert user_turn.role == "user"
+    assert user_turn.turn_status == "accepted"
+    assert user_turn.text.startswith("记一下今天状态不错")
+    assert user_turn.asset_ids == ["asset-1"]
+
+    assert isinstance(action_turn, McpCaptureTurn)
+    assert action_turn.id == response["turn_id"]
+    assert action_turn.turn_index == 1
+    assert action_turn.role == "assistant"
+    assert action_turn.turn_status == "parsed"
+    assert action_turn.asset_ids == ["asset-1"]
+    assert len(action_turn.actions) == len(response["actions"])
+    memo_actions = [
+        action for action in action_turn.actions if action["type"] == "memo_create"
+    ]
+    assert memo_actions
+    assert memo_actions[0]["payload"]["asset_ids"] == ["asset-1"]
 
 
-@pytest.mark.anyio
-async def test_capture_parse_rejects_empty_text() -> None:
-    with pytest.raises(HTTPException) as exc:
-        await mcp_router.capture_parse(FakeRequest({"text": "   "}), FakeDb())  # type: ignore[arg-type]
-
-    assert exc.value.status_code == 400
+def test_capture_parse_rejects_empty_text() -> None:
+    with pytest.raises(ValidationError):
+        CaptureParseRequest(text="   ")
 
 
 def test_capture_action_serialization_roundtrip() -> None:
@@ -100,7 +137,7 @@ def test_capture_action_serialization_roundtrip() -> None:
         }
     ]
     assert restored == actions
-    assert CAPTURE_SESSION_TTL.total_seconds() == 3600
+    assert CAPTURE_SESSION_TTL.days == 30
 
 
 def test_capture_commit_uses_persistent_session_before_memory_fallback() -> None:
@@ -109,5 +146,7 @@ def test_capture_commit_uses_persistent_session_before_memory_fallback() -> None
     assert "get_active_capture_session" in source
     assert "deserialize_capture_actions" in source
     assert "mark_capture_session_committed" in source
+    assert "mark_capture_turn_committed" in source
+    assert "latest_action_turn" in source
     assert "memory_session = CAPTURE_STORE.get(capture_id)" in source
     assert source.index("get_active_capture_session") < source.index("memory_session")

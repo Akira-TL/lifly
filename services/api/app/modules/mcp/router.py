@@ -25,12 +25,28 @@ from app.modules.memos.service import (
     DEFAULT_LOCAL_USER_ID,
     create_memo_record,
 )
+from app.modules.mcp.capture_asset_context import (
+    build_capture_parse_text,
+    resolve_capture_asset_contexts,
+)
 from app.modules.mcp.capture_commit_service import commit_capture_actions
+from app.modules.mcp.capture_lifecycle_router import (
+    attach_capture_assets,
+    router as capture_lifecycle_router,
+)
+from app.modules.mcp.capture_schemas import CaptureCommitRequest, CaptureParseRequest
 from app.modules.mcp.capture_session_service import (
     deserialize_capture_actions,
     get_active_capture_session,
+    get_capture_turn,
+    get_turn_by_undo_token,
+    latest_action_turn,
     mark_capture_session_committed,
+    mark_capture_turn_committed,
+    mark_capture_turn_undone,
+    next_capture_turn_index,
     persist_capture_session,
+    persist_capture_turn,
 )
 from app.modules.mcp.parse_engine import CAPTURE_STORE, parse_mixed_input
 from app.modules.mcp.undo_service import consume_undo_entries, list_undo_entries, persist_undo_entries
@@ -50,6 +66,7 @@ from app.schemas.common import (
 )
 
 router = APIRouter()
+router.include_router(capture_lifecycle_router)
 
 CLOUD_MCP_SOURCE_CHANNEL = "cloud_mcp"
 MCP_AI_ACTOR_TYPE = "ai"
@@ -156,52 +173,86 @@ async def _persist_create_undo_entries(
 
 # ─── capture_parse ────────────────────────────────────────────────────────────
 @router.post("/capture/parse")
-async def capture_parse(request: Request, db: AsyncSession = Depends(get_db)):
-    body = await _read_json_body(request)
-    text = str(body.get("text", ""))
-    timezone_str = str(body.get("timezone", "Asia/Shanghai"))
-    locale = str(body.get("locale", "zh-CN"))
-
-    if not text.strip():
-        raise HTTPException(status_code=400, detail="text is required")
-
-    result = parse_mixed_input(text, timezone_str=timezone_str, locale=locale)
+async def capture_parse(
+    data: CaptureParseRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    asset_context = await resolve_capture_asset_contexts(
+        db,
+        asset_ids=data.asset_ids,
+        user_id=DEFAULT_LOCAL_USER_ID,
+    )
+    result = parse_mixed_input(
+        build_capture_parse_text(data.text, asset_context),
+        timezone_str=data.timezone,
+        locale=data.locale,
+    )
+    result.actions = attach_capture_assets(result.actions, data.asset_ids)
     await persist_capture_session(
         db,
         result=result,
-        original_text=text,
-        timezone_str=timezone_str,
-        locale=locale,
+        original_text=data.text,
+        timezone_str=data.timezone,
+        locale=data.locale,
         user_id=DEFAULT_LOCAL_USER_ID,
+        source_channel=CLOUD_MCP_SOURCE_CHANNEL,
+    )
+    await persist_capture_turn(
+        db,
+        capture_id=result.capture_id,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        turn_index=0,
+        role="user",
+        text=data.text,
+        asset_ids=data.asset_ids,
+        asset_context=[item.model_dump(mode="json") for item in asset_context.contexts],
+        turn_status="accepted",
+        source_channel=CLOUD_MCP_SOURCE_CHANNEL,
+    )
+    action_turn = await persist_capture_turn(
+        db,
+        capture_id=result.capture_id,
+        user_id=DEFAULT_LOCAL_USER_ID,
+        turn_index=1,
+        role="assistant",
+        asset_ids=data.asset_ids,
+        asset_context=[item.model_dump(mode="json") for item in asset_context.contexts],
+        actions=result.actions,
+        turn_status="parsed",
         source_channel=CLOUD_MCP_SOURCE_CHANNEL,
     )
     await db.commit()
 
-    actions_out = []
-    for act in result.actions:
-        actions_out.append({
-            "type": act.type,
-            "payload": act.payload,
-            "confidence": act.confidence,
-        })
-
     return {
         "capture_id": result.capture_id,
-        "actions": actions_out,
+        "turn_id": action_turn.id,
+        "actions": [
+            {
+                "type": action.type,
+                "payload": action.payload,
+                "confidence": action.confidence,
+            }
+            for action in result.actions
+        ],
         "requires_confirmation": result.requires_confirmation,
+        "asset_context": [
+            item.model_dump(mode="json") for item in asset_context.contexts
+        ],
     }
 
 
 # ─── capture_commit ───────────────────────────────────────────────────────────
 @router.post("/capture/commit")
 async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
-    body = await request.json()
-    capture_id = body.get("capture_id")
-    if not capture_id:
-        raise HTTPException(status_code=422, detail="capture_id is required")
-    selected_indexes: list[int] | None = body.get("selected_action_indexes")
-    request_id = _request_id(request, body)
+    body = await _read_json_body(request)
+    try:
+        data = CaptureCommitRequest.model_validate(body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
+    capture_id = data.capture_id
+    selected_indexes = data.selected_action_indexes
+    request_id = _request_id(request, body) or data.request_id
     db_session = await get_active_capture_session(
         db,
         capture_id=capture_id,
@@ -210,16 +261,33 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
     memory_session = CAPTURE_STORE.get(capture_id)
     if not db_session and not memory_session:
         raise HTTPException(status_code=404, detail="Capture session not found or expired")
-    if db_session and db_session.committed:
-        raise HTTPException(status_code=409, detail="Capture session already committed")
-    if memory_session and memory_session.committed:
-        raise HTTPException(status_code=409, detail="Capture session already committed")
 
-    session_actions = (
-        deserialize_capture_actions(db_session.actions)
-        if db_session
-        else memory_session.actions
-    )
+    action_turn = None
+    if db_session:
+        action_turn = (
+            await get_capture_turn(
+                db,
+                capture_id=capture_id,
+                turn_id=data.turn_id,
+                user_id=DEFAULT_LOCAL_USER_ID,
+            )
+            if data.turn_id
+            else await latest_action_turn(
+                db,
+                capture_id=capture_id,
+                user_id=DEFAULT_LOCAL_USER_ID,
+            )
+        )
+        if action_turn is None or action_turn.role != "assistant":
+            raise HTTPException(status_code=404, detail="Capture action turn not found")
+        if action_turn.turn_status in {"committed", "partial"}:
+            raise HTTPException(status_code=409, detail="Capture turn already committed")
+        session_actions = deserialize_capture_actions(action_turn.actions)
+    else:
+        if memory_session.committed:
+            raise HTTPException(status_code=409, detail="Legacy capture action already committed")
+        session_actions = memory_session.actions
+
     selected_count = len(session_actions) if selected_indexes is None else len(selected_indexes)
     if selected_count > MCP_MAX_CAPTURE_COMMIT_ACTIONS:
         raise HTTPException(
@@ -236,11 +304,11 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
         actor_type=MCP_AI_ACTOR_TYPE,
         source_channel=CLOUD_MCP_SOURCE_CHANNEL,
         entity_source=MCP_ENTITY_SOURCE,
-        source_text=body.get("source_text"),
+        source_text=data.source_text,
         request_id=request_id,
     )
 
-    undo_token = str(uuid.uuid4())
+    undo_token = str(uuid.uuid4()) if commit_result.created_entities else ""
     if commit_result.created_entities:
         await _persist_create_undo_entries(
             db,
@@ -248,13 +316,25 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
             created_entities=commit_result.created_entities,
         )
 
-    if db_session:
-        await mark_capture_session_committed(db, db_session)
+    if db_session and action_turn:
+        effective_indexes = selected_indexes or list(range(len(session_actions)))
+        await mark_capture_turn_committed(
+            db,
+            turn=action_turn,
+            selected_action_indexes=effective_indexes,
+            result_entities=commit_result.created_entities,
+            undo_token=undo_token,
+            has_failures=bool(commit_result.failed_actions),
+        )
+        if commit_result.created_entities:
+            await mark_capture_session_committed(db, db_session)
     if memory_session:
         memory_session.committed = True
     await db.commit()
 
     return {
+        "capture_id": capture_id,
+        "turn_id": action_turn.id if action_turn else None,
         "committed": bool(commit_result.created_entities),
         "created_entities": commit_result.created_entities,
         "failed_actions": [failure.to_dict() for failure in commit_result.failed_actions],
@@ -349,6 +429,48 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
             request_id=request_id,
         )
         undone_entities.append({"type": entry.entity_type, "id": entry.entity_id})
+
+    committed_turn = await get_turn_by_undo_token(
+        db,
+        undo_token=undo_token,
+        user_id=DEFAULT_LOCAL_USER_ID,
+    )
+    capture_id = committed_turn.capture_id if committed_turn else None
+    if committed_turn:
+        await mark_capture_turn_undone(db, committed_turn)
+
+    if capture_id is None and undone_entities:
+        entity = undone_entities[0]
+        model_class = {
+            "memo": Memo,
+            "ledger_transaction": LedgerTransaction,
+            "task": Task,
+            "asset": Asset,
+        }.get(entity["type"])
+        if model_class is not None:
+            result = await db.execute(
+                select(model_class).where(getattr(model_class, "id") == entity["id"])
+            )
+            source_entity = result.scalar_one_or_none()
+            capture_id = getattr(source_entity, "source_capture_id", None)
+    if capture_id:
+        turn_index = await next_capture_turn_index(
+            db,
+            capture_id=capture_id,
+            user_id=DEFAULT_LOCAL_USER_ID,
+        )
+        await persist_capture_turn(
+            db,
+            capture_id=capture_id,
+            user_id=DEFAULT_LOCAL_USER_ID,
+            turn_index=turn_index,
+            role="system",
+            text="undo",
+            result_entities=undone_entities,
+            undo_token=undo_token,
+            turn_status="undone" if not failed_entities else "partial_undo",
+            source_channel=CLOUD_MCP_SOURCE_CHANNEL,
+        )
 
     await db.commit()
     return {

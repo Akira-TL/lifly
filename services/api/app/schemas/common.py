@@ -89,6 +89,20 @@ class MemoResponse(BaseModel):
     assets: list[dict] | None = None
 
 
+class MemoClassificationGenerateRequest(BaseModel):
+    replace_suggested: bool = True
+    include_user_tags: bool = True
+
+
+class TagMetadataUpsert(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    kind: str = Field(default="memo", pattern=r"^(memo|system)$")
+    color_token: str | None = Field(default=None, max_length=64)
+    icon_token: str | None = Field(default=None, max_length=64)
+    sort_order: int | None = None
+    status: str = Field(default="active", pattern=r"^(active|hidden|deleted)$")
+
+
 # ─── Ledger ─────────────────────────────────────────────────────────────────
 
 class LedgerTransactionCreate(BaseModel):
@@ -135,6 +149,40 @@ class LedgerTransactionResponse(BaseModel):
     updated_at: datetime
 
 
+class LedgerBudgetCreate(BaseModel):
+    period_type: str = Field(default="month", pattern=r"^month$")
+    period_key: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+    category_id: str | None = None
+    amount: float = Field(gt=0)
+    currency: str = Field(default="CNY", min_length=3, max_length=8)
+    alert_threshold: float | None = Field(default=0.8, gt=0, le=1)
+
+
+class LedgerBudgetUpdate(BaseModel):
+    period_key: str | None = Field(default=None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+    category_id: str | None = None
+    amount: float | None = Field(default=None, gt=0)
+    currency: str | None = Field(default=None, min_length=3, max_length=8)
+    alert_threshold: float | None = Field(default=None, gt=0, le=1)
+    status: str | None = Field(default=None, pattern=r"^(active|deleted)$")
+
+
+class LedgerBudgetResponse(BaseModel):
+    id: str
+    user_id: str
+    period_type: str
+    period_key: str
+    category_id: str | None
+    category_name: str | None = None
+    amount: float
+    currency: str
+    alert_threshold: float | None
+    status: str
+    revision: int
+    created_at: datetime
+    updated_at: datetime
+
+
 # ─── Task ───────────────────────────────────────────────────────────────────
 
 class TaskCreate(BaseModel):
@@ -169,6 +217,31 @@ class TaskResponse(BaseModel):
     completed_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class TaskReminderStrategyGenerateRequest(BaseModel):
+    replace_suggested: bool = True
+
+
+class ReminderClaimRequest(BaseModel):
+    limit: int = Field(default=20, ge=1, le=50)
+    now: datetime | None = None
+    lease_seconds: int = Field(default=120, ge=15, le=600)
+
+
+class ReminderDeliverySuccessRequest(BaseModel):
+    dispatch_token: str = Field(min_length=1, max_length=64)
+    external_id: str | None = Field(default=None, max_length=256)
+
+
+class ReminderDeliveryFailureRequest(BaseModel):
+    dispatch_token: str = Field(min_length=1, max_length=64)
+    error: str = Field(min_length=1, max_length=4096)
+    retry_after_seconds: int | None = Field(default=None, ge=0, le=86400)
+
+
+class ReminderRetryRequest(BaseModel):
+    reset_attempts: bool = True
 
 
 # ─── Asset ───────────────────────────────────────────────────────────────────

@@ -7,12 +7,14 @@ class LocalMemoCreateInput {
   final String? title;
   final String contentMarkdown;
   final List<String> tags;
+  final String? sourceCaptureId;
 
   const LocalMemoCreateInput({
     required this.type,
     required this.title,
     required this.contentMarkdown,
     required this.tags,
+    required this.sourceCaptureId,
   });
 
   factory LocalMemoCreateInput.fromMap(Map<String, Object?> input) {
@@ -21,6 +23,7 @@ class LocalMemoCreateInput {
       title: _readOptionalString(input, 'title'),
       contentMarkdown: _readOptionalString(input, 'content_markdown') ?? '',
       tags: _readStringList(input, 'tags'),
+      sourceCaptureId: _readOptionalString(input, 'source_capture_id'),
     );
   }
 }

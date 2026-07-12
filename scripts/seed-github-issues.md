@@ -64,9 +64,9 @@ Validation:
 - curl http://localhost:8310/api/v1/health
 
 Related Docs:
-- docs/26-v0.1-architecture-freeze.md
-- docs/30-monorepo-setup.md
-- docs/31-agent-task-protocol.md
+- doc/archive/v0.1.0plan/architecture-freeze.md
+- doc/architecture/monorepo-setup.md
+- doc/guide/agent-task-protocol.md
 EOF
 )"
 ```
@@ -91,11 +91,11 @@ Scope:
 - Inspect services/api/app/modules/**
 - Inspect infra/docker-compose.yml
 - Inspect package.json and pnpm-workspace.yaml
-- Write docs/35-current-architecture-audit.md
+- Write doc/archive/reviews/current-architecture-audit.md
 
 Allowed Files / Directories:
-- docs/35-current-architecture-audit.md
-- README.md only if docs index needs update
+- doc/archive/reviews/current-architecture-audit.md
+- README.md only if doc index needs update
 
 Forbidden Changes:
 - Do not change runtime code in this audit issue
@@ -112,10 +112,10 @@ Validation:
 - Documentation review
 
 Related Docs:
-- docs/26-v0.1-architecture-freeze.md
-- docs/06-data-model.md
-- docs/08-mcp-design.md
-- docs/31-agent-task-protocol.md
+- doc/archive/v0.1.0plan/architecture-freeze.md
+- doc/architecture/data-model.md
+- doc/api/mcp-contract.md
+- doc/guide/agent-task-protocol.md
 EOF
 )"
 ```
@@ -144,7 +144,7 @@ Scope:
 Allowed Files / Directories:
 - packages/protocol/**
 - services/cloud-mcp/** only if needed for imports
-- docs/08-mcp-design.md only if schema details need alignment
+- doc/api/mcp-contract.md only if schema details need alignment
 
 Forbidden Changes:
 - Do not implement business persistence in this issue
@@ -154,15 +154,15 @@ Forbidden Changes:
 Acceptance Criteria:
 - Schema package exports all v0.1 tool schemas
 - Schema tests exist
-- Tool names match docs/26-v0.1-architecture-freeze.md
+- Tool names match doc/archive/v0.1.0plan/architecture-freeze.md
 
 Validation:
 - pnpm --filter @lifly/protocol test
 - pnpm typecheck
 
 Related Docs:
-- docs/08-mcp-design.md
-- docs/26-v0.1-architecture-freeze.md
+- doc/api/mcp-contract.md
+- doc/archive/v0.1.0plan/architecture-freeze.md
 EOF
 )"
 ```
@@ -187,10 +187,10 @@ Use this when assigning an issue to an AI agent:
 ```text
 You are the Lifly <ROLE> Agent.
 Read first:
-- docs/26-v0.1-architecture-freeze.md
-- docs/31-agent-task-protocol.md
+- doc/archive/v0.1.0plan/architecture-freeze.md
+- doc/guide/agent-task-protocol.md
 - current Issue
-- related docs listed in the Issue
+- related doc files listed in the Issue
 
 Execute only this Issue.
 Do not expand scope.

@@ -1,10 +1,13 @@
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/domain/entities/asset.dart';
+import 'package:dio/dio.dart';
 
 class AssetRepository {
   final ApiClient api;
+  final Dio _storageClient;
 
-  AssetRepository(this.api);
+  AssetRepository(this.api, {Dio? storageClient})
+    : _storageClient = storageClient ?? Dio();
 
   Future<List<Asset>> list({
     int limit = 20,
@@ -39,6 +42,45 @@ class AssetRepository {
       'asset_type': assetType,
     });
     return res['data'] as Map<String, dynamic>;
+  }
+
+  Future<Asset> uploadBytes({
+    required String filename,
+    required List<int> bytes,
+    String? mimeType,
+    String assetType = 'file',
+  }) async {
+    if (bytes.isEmpty) throw ArgumentError('Upload file must not be empty');
+    final intent = await createUploadUrl(
+      filename: filename,
+      mimeType: mimeType,
+      sizeBytes: bytes.length,
+      assetType: assetType,
+    );
+    final assetId = intent['asset_id'] as String?;
+    final uploadUrl = intent['upload_url'] as String?;
+    if (assetId == null || assetId.isEmpty || uploadUrl == null || uploadUrl.isEmpty) {
+      throw StateError('Asset upload intent is incomplete');
+    }
+    final uploadIntent = intent['upload_intent'] as Map?;
+    final rawHeaders = uploadIntent?['headers'] as Map?;
+    final headers = <String, dynamic>{
+      for (final entry in rawHeaders?.entries ?? const <MapEntry<dynamic, dynamic>>[])
+        entry.key.toString(): entry.value,
+    };
+    if (mimeType != null && mimeType.isNotEmpty) {
+      headers.putIfAbsent('content-type', () => mimeType);
+    }
+    await _storageClient.put<void>(
+      uploadUrl,
+      data: bytes,
+      options: Options(
+        headers: headers,
+        contentType: mimeType ?? 'application/octet-stream',
+        responseType: ResponseType.plain,
+      ),
+    );
+    return uploadComplete(assetId, sizeBytes: bytes.length);
   }
 
   Future<Asset> registerExternalUrl({

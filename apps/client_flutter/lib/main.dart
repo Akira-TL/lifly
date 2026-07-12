@@ -36,10 +36,16 @@ void main() {
           update: (_, syncService, _) =>
               PowerSyncLocalCoreBridge(syncService: syncService),
         ),
-        ProxyProvider2<ApiClient, LiflyDataMode, AiCaptureService>(
-          update: (_, api, dataMode, _) => AiCaptureService(
+        ProxyProvider3<
+          ApiClient,
+          LiflyDataMode,
+          LocalCoreBridge,
+          AiCaptureService
+        >(
+          update: (_, api, dataMode, localCore, _) => AiCaptureService(
             api: api,
             dataMode: dataMode,
+            localCore: localCore,
           ),
         ),
       ],

@@ -50,6 +50,19 @@ class RevisionMixin:
 
 # ─── Memo ───────────────────────────────────────────────────────────────────
 
+class TagMetadata(Base, TimestampMixin):
+    __tablename__ = "tag_metadata"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, default="memo")
+    color_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    icon_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    sort_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+
+
 class Memo(Base, TimestampMixin, SoftDeleteMixin, RevisionMixin):
     __tablename__ = "memos"
 
@@ -67,6 +80,20 @@ class Memo(Base, TimestampMixin, SoftDeleteMixin, RevisionMixin):
     assets: Mapped[list[MemoAssetRef]] = relationship(
         "MemoAssetRef", back_populates="memo", cascade="all, delete-orphan"
     )
+
+
+class MemoClassification(Base, TimestampMixin):
+    __tablename__ = "memo_classifications"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    memo_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    tag: Mapped[str] = mapped_column(String(128), nullable=False)
+    source: Mapped[str] = mapped_column(String(16), nullable=False, default="ai")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="suggested")
+    confidence: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 # ─── Asset ──────────────────────────────────────────────────────────────────
@@ -151,6 +178,20 @@ class LedgerTransaction(Base, TimestampMixin, SoftDeleteMixin, RevisionMixin):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
 
 
+class LedgerBudget(Base, TimestampMixin, RevisionMixin):
+    __tablename__ = "ledger_budgets"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    period_type: Mapped[str] = mapped_column(String(16), nullable=False, default="month")
+    period_key: Mapped[str] = mapped_column(String(16), nullable=False)
+    category_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    amount: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(8), nullable=False, default="CNY")
+    alert_threshold: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+
+
 class LedgerEntry(Base):
     __tablename__ = "ledger_entries"
 
@@ -183,7 +224,23 @@ class Task(Base, TimestampMixin, SoftDeleteMixin, RevisionMixin):
     source: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
-class Reminder(Base):
+class TaskReminderStrategy(Base, TimestampMixin):
+    __tablename__ = "task_reminder_strategies"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    task_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    warning_level: Mapped[str] = mapped_column(String(16), nullable=False, default="normal")
+    warning_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    preparation_window_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ai_suggested_remind_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    strategy_status: Mapped[str] = mapped_column(String(20), nullable=False, default="suggested")
+    source: Mapped[str] = mapped_column(String(16), nullable=False, default="ai")
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class Reminder(Base, TimestampMixin, RevisionMixin):
     __tablename__ = "reminders"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
@@ -193,9 +250,17 @@ class Reminder(Base):
     remind_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     channel: Mapped[str] = mapped_column(String(16), nullable=False, default="app")
     reminder_status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    external_id: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    dispatch_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 # ─── Calendar (预留) ────────────────────────────────────────────────────────
@@ -299,7 +364,7 @@ class McpUndoAction(Base):
 
 # ─── MCP Capture Session ────────────────────────────────────────────────────
 
-class McpCaptureSession(Base, TimestampMixin):
+class McpCaptureSession(Base, TimestampMixin, RevisionMixin):
     __tablename__ = "mcp_capture_sessions"
 
     capture_id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -310,8 +375,31 @@ class McpCaptureSession(Base, TimestampMixin):
     actions: Mapped[list] = mapped_column(JSONB, nullable=False)
     requires_confirmation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     committed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    session_status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
     source_channel: Mapped[str] = mapped_column(String(32), nullable=False, default="cloud_mcp")
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class McpCaptureTurn(Base, TimestampMixin, RevisionMixin):
+    __tablename__ = "mcp_capture_turns"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    capture_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    turn_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    role: Mapped[str] = mapped_column(String(16), nullable=False, default="assistant")
+    text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    asset_ids: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    asset_context: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    actions: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    selected_action_indexes: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    result_entities: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    undo_token: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    supersedes_turn_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    turn_status: Mapped[str] = mapped_column(String(20), nullable=False, default="parsed")
+    source_channel: Mapped[str] = mapped_column(String(32), nullable=False, default="cloud_mcp")
 
 
 # ─── Tombstone ──────────────────────────────────────────────────────────────

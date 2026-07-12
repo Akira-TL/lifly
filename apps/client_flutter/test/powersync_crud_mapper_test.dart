@@ -76,6 +76,152 @@ void main() {
     expect((change['data'] as Map<String, Object?>)['status'], 'deleted');
   });
 
+  test('maps ledger budget changes into sync payloads', () {
+    final entry = CrudEntry(
+      9,
+      UpdateType.put,
+      'ledger_budgets',
+      'budget-1',
+      null,
+      {
+        'user_id': 'local-dev',
+        'period_type': 'month',
+        'period_key': '2026-07',
+        'category_id': 'food',
+        'amount': 1200.0,
+        'currency': 'CNY',
+        'alert_threshold': 0.8,
+        'status': 'active',
+        'revision': 1,
+        'created_at': '2026-07-08T09:00:00Z',
+        'updated_at': '2026-07-08T09:00:00Z',
+      },
+    );
+
+    final request = mapper.mapBatch(
+      [entry],
+      clientId: 'lifly-flutter-9-9',
+      fallbackNow: fallbackNow,
+    );
+    final change = request.changes.single.toJson();
+
+    expect(change['entity_type'], 'ledger_budget');
+    expect(change['operation'], 'upsert');
+    expect(change['revision'], 1);
+    expect((change['data'] as Map<String, Object?>), containsPair('period_key', '2026-07'));
+    expect((change['data'] as Map<String, Object?>), containsPair('category_id', 'food'));
+  });
+
+  test('maps reminder delivery state into sync payloads', () {
+    final entry = CrudEntry(
+      9,
+      UpdateType.patch,
+      'reminders',
+      'reminder-1',
+      null,
+      {
+        'user_id': 'local-dev',
+        'target_type': 'task',
+        'target_id': 'task-1',
+        'remind_at': '2026-07-11T10:00:00Z',
+        'channel': 'app',
+        'reminder_status': 'failed',
+        'attempt_count': 1,
+        'max_attempts': 3,
+        'next_attempt_at': '2026-07-11T10:01:00Z',
+        'last_error': 'permission denied',
+        'revision': 2,
+        'created_at': '2026-07-11T09:00:00Z',
+        'updated_at': '2026-07-11T10:00:00Z',
+      },
+    );
+
+    final request = mapper.mapBatch(
+      [entry],
+      clientId: 'lifly-flutter-9-9',
+      fallbackNow: fallbackNow,
+    );
+    final change = request.changes.single.toJson();
+
+    expect(change['entity_type'], 'reminder');
+    expect(change['operation'], 'upsert');
+    expect(change['revision'], 2);
+    expect((change['data'] as Map<String, Object?>), containsPair('reminder_status', 'failed'));
+    expect((change['data'] as Map<String, Object?>), containsPair('attempt_count', 1));
+  });
+
+  test('maps capture session and turn collections into sync payloads', () {
+    final sessionEntry = CrudEntry(
+      10,
+      UpdateType.patch,
+      'mcp_capture_sessions',
+      'capture-1',
+      null,
+      {
+        'user_id': 'local-dev',
+        'original_text': '连续会话',
+        'actions': '[{"type":"memo_create","payload":{"title":"A"},"confidence":0.8}]',
+        'committed': 1,
+        'session_status': 'active',
+        'revision': 3,
+        'updated_at': '2026-07-12T10:00:00Z',
+      },
+    );
+    final turnEntry = CrudEntry(
+      11,
+      UpdateType.patch,
+      'mcp_capture_turns',
+      'turn-1',
+      null,
+      {
+        'user_id': 'local-dev',
+        'capture_id': 'capture-1',
+        'turn_index': 3,
+        'role': 'assistant',
+        'asset_ids': '["asset-1"]',
+        'asset_context': '[{"asset_id":"asset-1","status":"unsupported","extractor":"pdf_adapter","required_capability":"pdf_text_extraction"}]',
+        'actions': '[{"type":"memo_create","payload":{"title":"B"},"confidence":0.9}]',
+        'selected_action_indexes': '[0]',
+        'result_entities': '[{"type":"memo","id":"memo-1"}]',
+        'undo_token': 'undo-1',
+        'turn_status': 'committed',
+        'revision': 4,
+        'updated_at': '2026-07-12T10:01:00Z',
+      },
+    );
+
+    final request = mapper.mapBatch(
+      [sessionEntry, turnEntry],
+      clientId: 'lifly-flutter-10-11',
+      fallbackNow: fallbackNow,
+    );
+
+    expect(request.changeCount, 2);
+    final session = request.changes.first.toJson();
+    final turn = request.changes.last.toJson();
+    expect(session['entity_type'], 'capture_session');
+    expect((session['data'] as Map<String, Object?>)['actions'], isA<List>());
+    expect(turn['entity_type'], 'capture_turn');
+    expect((turn['data'] as Map<String, Object?>)['asset_ids'], ['asset-1']);
+    expect(
+      (turn['data'] as Map<String, Object?>)['asset_context'],
+      [
+        {
+          'asset_id': 'asset-1',
+          'status': 'unsupported',
+          'extractor': 'pdf_adapter',
+          'required_capability': 'pdf_text_extraction',
+        },
+      ],
+    );
+    expect(
+      (turn['data'] as Map<String, Object?>)['result_entities'],
+      [
+        {'type': 'memo', 'id': 'memo-1'},
+      ],
+    );
+  });
+
   test('ignores unsupported PowerSync CRUD tables', () {
     final auditEntry = CrudEntry(
       8,

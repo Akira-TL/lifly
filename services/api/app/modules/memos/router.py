@@ -2,13 +2,17 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.db.models import Asset, Memo, MemoAssetRef
+from app.db.models import Asset, Memo, MemoAssetRef, MemoClassification, TagMetadata
 from app.modules.assets.service import asset_to_response
+from app.modules.memos.classification_engine import (
+    ensure_tag_metadata,
+    generate_memo_classifications,
+)
 from app.modules.memos.service import (
     DEFAULT_LOCAL_USER_ID,
     create_memo_record,
@@ -17,6 +21,7 @@ from app.modules.memos.service import (
 )
 from app.schemas.common import (
     MemoAssetBindRequest,
+    MemoClassificationGenerateRequest,
     MemoCreate,
     MemoUpdate,
     PaginatedResponse,
@@ -33,6 +38,21 @@ def _memo_data(memo: Memo, *, assets: list[dict] | None = None) -> dict:
     return data
 
 
+def _classification_data(item: MemoClassification) -> dict:
+    return {
+        "id": item.id,
+        "memo_id": item.memo_id,
+        "tag": item.tag,
+        "source": item.source,
+        "status": item.status,
+        "confidence": float(item.confidence) if item.confidence is not None else None,
+        "reason": item.reason,
+        "created_at": item.created_at.isoformat() if item.created_at else None,
+        "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+        "confirmed_at": item.confirmed_at.isoformat() if item.confirmed_at else None,
+    }
+
+
 def _asset_ref_data(ref: MemoAssetRef, asset: Asset) -> dict:
     return {
         "id": ref.id,
@@ -45,6 +65,20 @@ def _asset_ref_data(ref: MemoAssetRef, asset: Asset) -> dict:
     }
 
 
+def _tag_metadata_data(item: TagMetadata) -> dict:
+    return {
+        "id": item.id,
+        "name": item.name,
+        "kind": item.kind,
+        "color_token": item.color_token,
+        "icon_token": item.icon_token,
+        "sort_order": item.sort_order,
+        "status": item.status,
+        "created_at": item.created_at.isoformat() if item.created_at else None,
+        "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+    }
+
+
 async def _load_memo(db: AsyncSession, memo_id: str) -> Memo:
     result = await db.execute(
         select(Memo).where(Memo.id == memo_id, Memo.user_id == DEFAULT_LOCAL_USER_ID)
@@ -53,6 +87,57 @@ async def _load_memo(db: AsyncSession, memo_id: str) -> Memo:
     if not memo:
         raise HTTPException(status_code=404, detail="Memo not found")
     return memo
+
+
+async def _load_classification(
+    db: AsyncSession,
+    classification_id: str,
+    memo_id: str | None = None,
+) -> MemoClassification:
+    query = select(MemoClassification).where(
+        MemoClassification.id == classification_id,
+        MemoClassification.user_id == DEFAULT_LOCAL_USER_ID,
+    )
+    if memo_id:
+        query = query.where(MemoClassification.memo_id == memo_id)
+    result = await db.execute(query)
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Memo classification not found")
+    return item
+
+
+async def _upsert_classification(
+    db: AsyncSession,
+    memo_id: str,
+    data: dict,
+    status: str,
+) -> MemoClassification:
+    await _load_memo(db, memo_id)
+    classification_id = data.get("classification_id") or data.get("id")
+    if classification_id:
+        item = await _load_classification(db, str(classification_id), memo_id)
+        await ensure_tag_metadata(db, user_id=DEFAULT_LOCAL_USER_ID, tag=item.tag)
+    else:
+        tag = str(data.get("tag") or "").strip()
+        if not tag:
+            raise HTTPException(status_code=400, detail="tag is required")
+        await ensure_tag_metadata(db, user_id=DEFAULT_LOCAL_USER_ID, tag=tag)
+        item = MemoClassification(
+            user_id=DEFAULT_LOCAL_USER_ID,
+            memo_id=memo_id,
+            tag=tag,
+            source=str(data.get("source") or "user"),
+            confidence=data.get("confidence"),
+            reason=data.get("reason"),
+        )
+        db.add(item)
+    item.status = status
+    if status == "confirmed":
+        item.confirmed_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(item)
+    return item
 
 
 async def _load_active_asset(db: AsyncSession, asset_id: str) -> Asset:
@@ -104,6 +189,8 @@ async def list_memos(
     type: str | None = Query(default=None),
     status: str = Query(default="active"),
     q: str | None = Query(default=None),
+    tag: str | None = Query(default=None),
+    classification_status: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
     query = select(Memo).where(Memo.user_id == DEFAULT_LOCAL_USER_ID, Memo.status == status)
@@ -113,6 +200,18 @@ async def list_memos(
         query = query.where(
             Memo.title.ilike(f"%{q}%") | Memo.content_markdown.ilike(f"%{q}%")
         )
+    if tag or classification_status:
+        classification_query = select(MemoClassification.memo_id).where(
+            MemoClassification.user_id == DEFAULT_LOCAL_USER_ID,
+            MemoClassification.status != "rejected",
+        )
+        if tag:
+            classification_query = classification_query.where(MemoClassification.tag == tag)
+        if classification_status:
+            classification_query = classification_query.where(
+                MemoClassification.status == classification_status
+            )
+        query = query.where(Memo.id.in_(classification_query))
 
     count_query = select(func.count()).select_from(query.subquery())
     total = await db.scalar(count_query)
@@ -129,6 +228,49 @@ async def list_memos(
             items=[memo_to_response(m).model_dump() for m in memos],
         ).model_dump()
     )
+
+
+@router.get("/{memo_id}/classifications", response_model=ApiResponse)
+async def list_memo_classifications(memo_id: str, db: AsyncSession = Depends(get_db)):
+    await _load_memo(db, memo_id)
+    result = await db.execute(
+        select(MemoClassification)
+        .where(
+            MemoClassification.user_id == DEFAULT_LOCAL_USER_ID,
+            MemoClassification.memo_id == memo_id,
+        )
+        .order_by(MemoClassification.updated_at.desc())
+    )
+    return ApiResponse(data=[_classification_data(item) for item in result.scalars().all()])
+
+
+@router.post("/{memo_id}/classifications/generate", response_model=ApiResponse)
+async def generate_memo_classification_suggestions(
+    memo_id: str,
+    data: MemoClassificationGenerateRequest = Body(default_factory=MemoClassificationGenerateRequest),
+    db: AsyncSession = Depends(get_db),
+):
+    memo = await _load_memo(db, memo_id)
+    items = await generate_memo_classifications(
+        db,
+        memo,
+        replace_suggested=data.replace_suggested,
+        include_user_tags=data.include_user_tags,
+    )
+    await db.commit()
+    return ApiResponse(data=[_classification_data(item) for item in items])
+
+
+@router.post("/{memo_id}/classifications/confirm", response_model=ApiResponse)
+async def confirm_memo_classification(memo_id: str, data: dict = Body(default_factory=dict), db: AsyncSession = Depends(get_db)):
+    item = await _upsert_classification(db, memo_id, data, "confirmed")
+    return ApiResponse(data=_classification_data(item))
+
+
+@router.post("/{memo_id}/classifications/reject", response_model=ApiResponse)
+async def reject_memo_classification(memo_id: str, data: dict = Body(default_factory=dict), db: AsyncSession = Depends(get_db)):
+    item = await _upsert_classification(db, memo_id, data, "rejected")
+    return ApiResponse(data=_classification_data(item))
 
 
 @router.get("/{memo_id}", response_model=ApiResponse)

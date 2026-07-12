@@ -3,6 +3,7 @@ import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/local_core/fake_local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/features/ai_capture/data/ai_capture_service.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:client_flutter/main.dart';
 import 'package:provider/provider.dart';
@@ -146,13 +147,19 @@ void main() {
         providers: [
           Provider<LiflyDataMode>.value(value: LiflyDataMode.api),
           Provider<ApiClient>(create: (_) => FakeApiClient()),
-          ProxyProvider2<ApiClient, LiflyDataMode, AiCaptureService>(
-            update: (_, api, dataMode, _) => AiCaptureService(
+          Provider<LocalCoreBridge>(create: (_) => FakeLocalCoreBridge()),
+          ProxyProvider3<
+            ApiClient,
+            LiflyDataMode,
+            LocalCoreBridge,
+            AiCaptureService
+          >(
+            update: (_, api, dataMode, localCore, _) => AiCaptureService(
               api: api,
               dataMode: dataMode,
+              localCore: localCore,
             ),
           ),
-          Provider<LocalCoreBridge>(create: (_) => FakeLocalCoreBridge()),
         ],
         child: const LiflyApp(),
       ),
@@ -160,7 +167,15 @@ void main() {
 
     await tester.pump();
 
+    expect(find.text('首页'), findsWidgets);
     expect(find.text('备忘'), findsWidgets);
+    expect(find.text('AI'), findsOneWidget);
+    expect(find.text('记账'), findsWidgets);
+    expect(find.text('任务'), findsWidgets);
+    expect(find.text('搜索'), findsNothing);
+    expect(find.text('设置'), findsNothing);
+    expect(find.byTooltip('全局搜索'), findsOneWidget);
+    expect(find.byTooltip('设置'), findsOneWidget);
     expect(find.text('测试备忘'), findsNothing);
 
     await tester.tap(find.text('备忘').last);
@@ -184,6 +199,11 @@ void main() {
     expect(find.text('测试账单'), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
+
+    await tester.tap(find.text('AI'));
+    await tester.pumpAndSettle();
+    expect(find.text('AI 对话'), findsOneWidget);
+    expect(find.byKey(const Key('ai_capture_composer')), findsOneWidget);
 
     await tester.tap(find.text('任务'));
     await tester.pump();

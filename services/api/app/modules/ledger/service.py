@@ -4,8 +4,9 @@ from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import AuditLog, LedgerTransaction
+from app.db.models import AuditLog, LedgerBudget, LedgerTransaction
 from app.schemas.common import (
+    LedgerBudgetResponse,
     LedgerTransactionCreate,
     LedgerTransactionResponse,
     json_serialize,
@@ -38,6 +39,40 @@ def ledger_transaction_to_dict(tx: LedgerTransaction) -> dict:
     return json_serialize(ledger_transaction_to_response(tx).model_dump())
 
 
+def ledger_budget_to_response(
+    budget: LedgerBudget,
+    *,
+    category_name: str | None = None,
+) -> LedgerBudgetResponse:
+    return LedgerBudgetResponse(
+        id=budget.id,
+        user_id=budget.user_id,
+        period_type=budget.period_type,
+        period_key=budget.period_key,
+        category_id=budget.category_id,
+        category_name=category_name,
+        amount=float(budget.amount),
+        currency=budget.currency,
+        alert_threshold=(
+            float(budget.alert_threshold) if budget.alert_threshold is not None else None
+        ),
+        status=budget.status,
+        revision=budget.revision,
+        created_at=budget.created_at,
+        updated_at=budget.updated_at,
+    )
+
+
+def ledger_budget_to_dict(
+    budget: LedgerBudget,
+    *,
+    category_name: str | None = None,
+) -> dict:
+    return json_serialize(
+        ledger_budget_to_response(budget, category_name=category_name).model_dump()
+    )
+
+
 async def write_ledger_audit(
     db: AsyncSession,
     *,
@@ -51,12 +86,13 @@ async def write_ledger_audit(
     tool_name: str | None = None,
     source_text: str | None = None,
     request_id: str | None = None,
+    entity_type: str = "ledger_transaction",
 ) -> AuditLog:
     log = AuditLog(
         user_id=user_id,
         actor_type=actor_type,
         action=action,
-        entity_type="ledger_transaction",
+        entity_type=entity_type,
         entity_id=entity_id,
         before_snapshot=before,
         after_snapshot=after,

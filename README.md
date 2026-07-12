@@ -2,29 +2,47 @@
 
 AI-first / Chat-first personal life data system.
 
-Current stable development tag: `v0.4.11`.
+Lifly 以备忘、记账、任务提醒为最小闭环，以 MCP/API 为 AI 写入边界，以本地优先 + 云端同步为数据策略。
 
-Next development entry: `v0.5.0` Assets & Import/Export.
+## Current Focus
+
+```text
+客户端体验与手机端产品地基
+首页 Home Overview read model
+记账预算、分类统计、消费洞察
+备忘 AI 自动分类、标签元数据
+任务 AI 预警策略
+AI Capture 聊天式体验
+手机端 5 底部导航：首页 / 备忘 / AI / 记账 / 任务
+```
 
 ## Docs
 
-Start here:
+正式文档入口：
 
 ```text
-docs/00-decision-record.md
-docs/26-v0.1-architecture-freeze.md
-docs/27-milestones.md
-docs/28-issues-backlog.md
-docs/30-monorepo-setup.md
-docs/31-agent-task-protocol.md
-docs/32-pr-review-protocol.md
-docs/33-github-gitlab-project-setup.md
-docs/34-architecture-decision-record-template.md
-docs/59-version-control-plan.md
-docs/60-major-version-roadmap.md
-docs/development-plans/v0.4.0-ai-write-full-development.md
-docs/development-plans/v0.5.0-assets-import-export-mvp.md
+doc/README.md
 ```
+
+常用文档：
+
+```text
+doc/requirements/product-definition.md
+doc/architecture/architecture-overview.md
+doc/architecture/data-model.md
+doc/design/ai-interaction.md
+doc/design/client-app.md
+doc/api/api-contract.md
+doc/requirements/memo-doc-system.md
+doc/requirements/ledger-system.md
+doc/requirements/task-reminder-system.md
+doc/guide/development.md
+doc/design/ui-information-architecture.md
+doc/guide/roadmap.md
+doc/guide/ai-execution-model.md
+```
+
+临时开发计划和已完成阶段记录不再作为长期文档入口维护。固定内容应迁移到上面的正式文档。
 
 ## Quick Start
 
@@ -46,7 +64,7 @@ packages/protocol
 packages/domain
 packages/shared
 infra
-docs
+doc
 ```
 
 ## AI Agent Rule
@@ -54,9 +72,10 @@ docs
 Before editing code, every AI agent must read:
 
 ```text
-docs/26-v0.1-architecture-freeze.md
-current GitHub Issue
-related module docs
+CLAUDE.md
+/home/Akira/.claude/CLAUDE.md
+related module docs under doc/
+current Issue or user request
 ```
 
-The Issue is the task contract. Do not expand scope beyond the Issue.
+The Issue or explicit user request is the task contract. Do not expand scope beyond it.

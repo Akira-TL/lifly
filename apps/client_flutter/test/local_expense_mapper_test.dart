@@ -11,6 +11,7 @@ void main() {
       'currency': 'CNY',
       'merchant': 'Local Merchant',
       'note': 'local expense',
+      'category_id': 'food',
       'occurred_at': '2026-07-01T08:00:00.000Z',
       'status': 'active',
       'revision': 2,
@@ -21,6 +22,7 @@ void main() {
     expect(tx.id, 'tx_1');
     expect(tx.amount, 12.5);
     expect(tx.revision, 2);
+    expect(tx.categoryId, 'food');
     expect(tx.occurredAt, DateTime.utc(2026, 7, 1, 8));
   });
 
@@ -32,6 +34,7 @@ void main() {
       currency: 'CNY',
       merchant: 'Local Merchant',
       note: 'local expense',
+      categoryId: 'food',
       occurredAt: DateTime.utc(2026, 7, 1, 8),
       status: 'active',
       revision: 1,
@@ -43,6 +46,7 @@ void main() {
 
     expect(snapshot['id'], 'tx_1');
     expect(snapshot['amount'], 12.5);
+    expect(snapshot['category_id'], 'food');
     expect(snapshot['occurred_at'], '2026-07-01T08:00:00.000Z');
   });
 

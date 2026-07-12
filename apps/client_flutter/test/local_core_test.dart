@@ -6,6 +6,11 @@ void main() {
   final fixedNow = DateTime.utc(2026, 6, 25, 12);
   final context = LocalCoreContext.localMcp('test_tool', now: fixedNow);
 
+  test('Local Core defaults to the PowerSync development user', () {
+    expect(context.userId, 'local-dev');
+    expect(LocalCoreContext.flutterUser().userId, 'local-dev');
+  });
+
   test('FakeLocalCoreBridge reports health', () async {
     final core = FakeLocalCoreBridge();
     final health = await core.health();

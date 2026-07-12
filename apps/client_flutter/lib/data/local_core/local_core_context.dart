@@ -2,6 +2,8 @@ enum LocalCoreActorType { user, ai, system }
 
 enum LocalCoreSourceChannel { flutter, localMcp, cloudMcp, import, system }
 
+const defaultLocalCoreUserId = 'local-dev';
+
 class LocalCoreContext {
   final LocalCoreActorType actorType;
   final LocalCoreSourceChannel sourceChannel;
@@ -15,7 +17,7 @@ class LocalCoreContext {
   const LocalCoreContext({
     required this.actorType,
     required this.sourceChannel,
-    this.userId = 'local_user',
+    this.userId = defaultLocalCoreUserId,
     this.actorId,
     this.toolName,
     this.requestId,
@@ -23,7 +25,10 @@ class LocalCoreContext {
     this.now,
   });
 
-  factory LocalCoreContext.flutterUser({String userId = 'local_user', DateTime? now}) {
+  factory LocalCoreContext.flutterUser({
+    String userId = defaultLocalCoreUserId,
+    DateTime? now,
+  }) {
     return LocalCoreContext(
       actorType: LocalCoreActorType.user,
       sourceChannel: LocalCoreSourceChannel.flutter,
@@ -32,7 +37,11 @@ class LocalCoreContext {
     );
   }
 
-  factory LocalCoreContext.localMcp(String toolName, {String userId = 'local_user', DateTime? now}) {
+  factory LocalCoreContext.localMcp(
+    String toolName, {
+    String userId = defaultLocalCoreUserId,
+    DateTime? now,
+  }) {
     return LocalCoreContext(
       actorType: LocalCoreActorType.ai,
       sourceChannel: LocalCoreSourceChannel.localMcp,

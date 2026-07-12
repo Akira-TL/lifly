@@ -1,0 +1,148 @@
+# Lifly Milestones
+
+本文档只保留里程碑状态，不承载单轮开发计划。具体能力定义以正式模块文档为准。
+
+## M0：Repo Bootstrap & Governance Alignment
+
+状态：已完成。
+
+目标：完成仓库命名、文档入仓、AI 执行规范、基础工程结构和本地开发设施对齐。
+
+## M1：Local Data MVP
+
+状态：已完成。
+
+目标：完成客户端本地手动记录闭环。
+
+范围：
+
+```text
+memo CRUD
+expense CRUD
+task CRUD
+本地 SQLite / PowerSync schema
+基础 UI
+```
+
+## M2：Cloud Sync MVP
+
+状态：已完成。
+
+目标：完成云同步闭环。
+
+范围：
+
+```text
+登录
+PostgreSQL schema
+PowerSync 集成
+跨端同步
+audit_logs
+trash 状态机
+```
+
+## M3：AI Write / MCP
+
+状态：已完成。
+
+目标：AI/MCP 写入、确认、撤销、审计和诊断形成完整闭环。
+
+范围：
+
+```text
+Cloud MCP / Local MCP 共用 tool schema
+capture_parse / capture_commit / capture_undo
+AI undo 进入 ai_trashed，不物理删除
+Flutter AI 写入入口
+AI 写入审计摘要
+Cloud / Local MCP parity tests
+```
+
+## M4：Assets & Import / Export
+
+状态：已完成。
+
+目标：附件与 CSV 导入导出闭环。
+
+范围：
+
+```text
+asset_create_upload_url
+asset_register_external_url
+memo asset 引用
+微信 / 支付宝账单导入预览
+导入提交与批次回滚
+Markdown / CSV / JSON export
+```
+
+## M5：Import / Export / Asset Experience
+
+状态：已完成。
+
+目标：把附件、导入、回滚和导出 API 闭环做成 Flutter 客户端可用体验。
+
+范围：
+
+```text
+Flutter 导入入口与文件选择
+微信 / 支付宝账单预览表格
+导入提交与二次确认
+导入批次列表与回滚
+导出入口与诊断信息
+附件库基础管理体验
+```
+
+## M6：Client Experience & Mobile Product Foundation
+
+状态：当前阶段。
+
+目标：补齐手机端真实产品页面需要的云端同步优先、本地可兜底的数据地基，再做真实 UI 消费。
+
+范围：
+
+```text
+Local Home Overview read model
+Local Ledger budgets / category aggregation / insights
+Local Memo AI classifications / tag metadata
+Local Task reminder strategies
+Local Chat-style AI Capture
+手机端 5 底部导航：首页 / 备忘 / AI / 记账 / 任务
+```
+
+当前进展：
+
+```text
+Home Overview 基础链路已落地：服务端 /api/v1/home/overview、LocalCoreBridge.getHomeOverview、LocalHomeOverviewBuilder、HomeOverviewRepository 云端优先/失败 fallback、HomePage repository 消费、云端/本地混合最近活动流；finance_overview 已扩展预算金额、预算使用、预算进度、预算剩余、分类占比和财务洞察字段；sync_summary 已接入客户端 PowerSync currentStatus 与服务端附件同步统计，import_summary 已接入最新 import_batches，settings_summary 已接入本地数据库与服务端配置完整性
+Ledger budgets 与分类聚合写入闭环已落地：服务端与 Local Core 支持总预算和支出分类预算的列表、创建、更新、软删除、恢复与审计；PowerSync ledger_budgets 已接入 revision、CRUD 上传和服务端陈旧版本判定；LedgerRepository 预算读取云端优先/失败后本地 fallback，离线写入走 Local Core；/ledger/overview、/ledger/categories/summary、/ledger/insights 与本地月份聚合继续保持同构
+Memo AI 分类与标签元数据基础链路已落地：MemoClassification、TagMetadata、PowerSync memo_classifications/tag_metadata schema、备忘分类生成/确认/拒绝接口、/tags/summary、/tags/metadata 管理接口、服务端与本地创建/更新自动生成分类建议、MemoRepository 分类生成/标签统计/标签元数据管理
+Task reminder strategies 与派发状态机已落地：TaskReminderStrategy、Reminder、PowerSync task_reminder_strategies/reminders schema、任务分组 group、策略生成/读取/确认/dismiss；Reminder 支持 pending/delivered/failed/cancelled、到期认领 lease、dispatch token、指数退避、手动 retry、取消与审计，TaskRepository 和 Local Core 提供同构状态操作；ReminderDispatcher 通过平台无关 ReminderNotificationAdapter 投递，reminder ID 作为稳定幂等键，尚未绑定具体 Android/桌面/Web 通知插件
+手机端 5 底部导航 Shell 基础链路已落地：AppShell 收敛为首页 / 备忘 / AI / 记账 / 任务，AI 为居中主按钮，搜索/设置降级到首页入口，宽屏 Flutter 使用 NavigationRail
+Local Chat-style AI Capture 连续会话与消费层已落地：服务端与 Local Core 支持 session 列表、读取、恢复、append turn、候选动作 revise、逐 turn commit、undo 和 dismiss；用户 turn、AI 候选动作、result_entities、undo_token、asset_ids、asset_context 与 supersedes 版本链持久化到 PowerSync，commit 不再关闭整个会话，已执行内容必须先 undo 才能修改并重新提交；服务端可安全提取受限 UTF-8 文本附件，PDF/图片/音频/外链明确返回待接入能力；Flutter AI 页面已消费历史 turns、会话列表、候选卡片、已设置结果、修改、撤销、附件选择和关闭会话，宽屏与手机使用不同会话导航形态
+v0.7.0 产品地基发布门禁已收口：Fake Local Core 按备忘、记账、任务、Capture 拆分，PowerSync Capture 与 Task Store 的规则/SQL 辅助已拆分，Dart/Python 业务文件统一纳入 800 行门禁；附件库已移除硬编码占位上传，改为真实文件选择、对象存储上传和 upload-complete；scripts/check-v0.7-release-gate.sh 统一检查服务端、Flutter、PowerSync、离线 fallback、假数据残留、源码体积与计划清理
+```
+
+验收：
+
+```text
+首页、预算、分类、洞察、AI 分类、任务预警正常优先来自云端拉取和同步，云端失败或断网时来自 Local Core / PowerSync 本地 read model
+云端 API 与本地 read model 字段同构，云端负责正常拉取和同步，本地负责失败兜底和离线可用
+客户端不写假数据、不硬编码长期产品规则
+手机端、Web、桌面端共享业务语义但可以使用不同布局
+```
+
+## M7：Desktop Local MCP & Production Hardening
+
+状态：后续。
+
+目标：强化桌面端 Local MCP、本地模型、离线 AI、发布包和生产稳定性。
+
+范围：
+
+```text
+Local MCP stdio
+Desktop Local Core host transport
+与 Cloud MCP 共用 schema
+发布包与升级策略
+生产监控与错误反馈
+隐私政策和用户协议
+```

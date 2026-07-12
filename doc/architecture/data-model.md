@@ -1,0 +1,500 @@
+# 数据模型设计
+
+> 本文档是逻辑模型草案，不是最终迁移脚本。实际建表需结合 PowerSync、PostgreSQL、客户端 SQLite 和 ORM 约束调整。
+
+## 1. 通用字段
+
+所有核心表建议包含：
+
+```sql
+id UUID PRIMARY KEY
+user_id UUID NOT NULL
+created_at TIMESTAMPTZ NOT NULL
+updated_at TIMESTAMPTZ NOT NULL
+deleted_at TIMESTAMPTZ NULL
+status TEXT NOT NULL
+revision BIGINT NOT NULL
+source TEXT NULL
+```
+
+## 2. capture_items
+
+```sql
+CREATE TABLE capture_items (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL,
+  source_channel TEXT NOT NULL,
+  source_message_id TEXT,
+  raw_text TEXT,
+  raw_payload JSONB,
+  parsed_result JSONB,
+  parsed_status TEXT NOT NULL,
+  committed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL
+);
+```
+
+## 3. memos
+
+```sql
+CREATE TABLE memos (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL,
+  type TEXT NOT NULL, -- memo / journal / clip / doc
+  title TEXT,
+  content_markdown TEXT NOT NULL,
+  tags TEXT[],
+  mood TEXT,
+  source_capture_id UUID,
+  status TEXT NOT NULL, -- active / archived / ai_trashed / user_trashed / purged
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  deleted_at TIMESTAMPTZ,
+  revision BIGINT NOT NULL
+);
+```
+
+## 4. assets
+
+```sql
+CREATE TABLE assets (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL,
+  kind TEXT NOT NULL, -- internal / external
+  asset_type TEXT NOT NULL, -- image / pdf / ppt / mindmap / file / link
+  filename TEXT,
+  mime_type TEXT,
+  size_bytes BIGINT,
+  sha256 TEXT,
+  storage_provider TEXT,
+  storage_key TEXT,
+  external_url TEXT,
+  external_provider TEXT,
+  visibility TEXT NOT NULL,
+  sync_status TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  status TEXT NOT NULL
+);
+```
+
+## 5. memo_asset_refs
+
+```sql
+CREATE TABLE memo_asset_refs (
+  id UUID PRIMARY KEY,
+  memo_id UUID NOT NULL,
+  asset_id UUID NOT NULL,
+  ref_type TEXT NOT NULL,
+  position_hint TEXT,
+  created_at TIMESTAMPTZ NOT NULL
+);
+```
+
+## 6. ledger_accounts
+
+```sql
+CREATE TABLE ledger_accounts (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL, -- cash / wallet / bank / credit / other
+  currency TEXT NOT NULL,
+  is_default BOOLEAN NOT NULL DEFAULT false,
+  status TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+```
+
+## 7. ledger_categories
+
+```sql
+CREATE TABLE ledger_categories (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL,
+  name TEXT NOT NULL,
+  parent_id UUID,
+  type TEXT NOT NULL, -- expense / income / transfer
+  icon TEXT,
+  color TEXT,
+  sort_order INTEGER,
+  status TEXT NOT NULL
+);
+```
+
+## 8. ledger_transactions
+
+```sql
+CREATE TABLE ledger_transactions (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL,
+  account_id UUID,
+  category_id UUID,
+  direction TEXT NOT NULL, -- expense / income / transfer
+  amount NUMERIC(18, 2) NOT NULL,
+  currency TEXT NOT NULL,
+  merchant TEXT,
+  note TEXT,
+  occurred_at TIMESTAMPTZ NOT NULL,
+  source TEXT NOT NULL, -- manual / ai / import
+  source_capture_id UUID,
+  import_batch_id UUID,
+  confidence NUMERIC(5, 4),
+  status TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  deleted_at TIMESTAMPTZ,
+  revision BIGINT NOT NULL
+);
+```
+
+## 9. ledger_entries 预留
+
+```sql
+CREATE TABLE ledger_entries (
+  id UUID PRIMARY KEY,
+  transaction_id UUID NOT NULL,
+  account_id UUID NOT NULL,
+  entry_type TEXT NOT NULL, -- debit / credit
+  amount NUMERIC(18, 2) NOT NULL,
+  currency TEXT NOT NULL
+);
+```
+
+MVP 可以暂不使用 ledger_entries，但保留未来升级空间。
+
+## 10. tasks
+
+```sql
+CREATE TABLE tasks (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  due_at TIMESTAMPTZ,
+  remind_at TIMESTAMPTZ,
+  priority TEXT,
+  task_status TEXT NOT NULL, -- todo / doing / done / cancelled
+  source_capture_id UUID,
+  status TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  completed_at TIMESTAMPTZ,
+  deleted_at TIMESTAMPTZ,
+  revision BIGINT NOT NULL
+);
+```
+
+## 11. reminders
+
+```sql
+CREATE TABLE reminders (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL,
+  target_type TEXT NOT NULL,
+  target_id UUID NOT NULL,
+  remind_at TIMESTAMPTZ NOT NULL,
+  channel TEXT NOT NULL, -- app / push / email / bot
+  reminder_status TEXT NOT NULL, -- pending / delivered / failed / cancelled
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 3,
+  next_attempt_at TIMESTAMPTZ,
+  last_attempt_at TIMESTAMPTZ,
+  delivered_at TIMESTAMPTZ,
+  failed_at TIMESTAMPTZ,
+  cancelled_at TIMESTAMPTZ,
+  last_error TEXT,
+  external_id TEXT,
+  dispatch_token TEXT,
+  lease_until TIMESTAMPTZ,
+  revision BIGINT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+```
+
+`reminder_status` 是业务状态，认领中的并发控制不增加第五种状态，而是使用短期 `dispatch_token / lease_until`。同一个 Reminder ID 同时作为平台通知幂等键；lease 过期后允许再次认领，但平台适配器必须对相同幂等键去重。失败状态通过 `next_attempt_at` 和指数退避自动重试，达到 `max_attempts` 后等待用户手动 retry。现有数据库通过 additive schema compatibility 补齐新增字段，正式 migration runner 落地后迁入版本化迁移。
+
+## 12. calendar_events 预留
+
+```sql
+CREATE TABLE calendar_events (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  location TEXT,
+  start_at TIMESTAMPTZ NOT NULL,
+  end_at TIMESTAMPTZ,
+  all_day BOOLEAN NOT NULL DEFAULT false,
+  timezone TEXT,
+  rrule TEXT,
+  external_uid TEXT,
+  source_provider TEXT,
+  status TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  revision BIGINT NOT NULL
+);
+```
+
+## 13. import_batches
+
+```sql
+CREATE TABLE import_batches (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL,
+  source_provider TEXT NOT NULL, -- generic_csv / alipay / wechat
+  filename TEXT,
+  file_hash TEXT,
+  status TEXT NOT NULL, -- preview / committed / rolled_back / failed
+  total_rows INTEGER,
+  valid_rows INTEGER,
+  duplicate_rows INTEGER,
+  created_at TIMESTAMPTZ NOT NULL,
+  committed_at TIMESTAMPTZ,
+  rolled_back_at TIMESTAMPTZ
+);
+```
+
+## 14. import_rows
+
+```sql
+CREATE TABLE import_rows (
+  id UUID PRIMARY KEY,
+  batch_id UUID NOT NULL,
+  row_index INTEGER NOT NULL,
+  raw_data JSONB NOT NULL,
+  parsed_data JSONB,
+  status TEXT NOT NULL,
+  transaction_id UUID,
+  error_message TEXT
+);
+```
+
+## 15. audit_logs
+
+```sql
+CREATE TABLE audit_logs (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL,
+  actor_type TEXT NOT NULL, -- user / ai / system / import
+  actor_id TEXT,
+  action TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id UUID NOT NULL,
+  before_snapshot JSONB,
+  after_snapshot JSONB,
+  source_channel TEXT,
+  source_text TEXT,
+  tool_name TEXT,
+  request_id TEXT,
+  created_at TIMESTAMPTZ NOT NULL
+);
+```
+
+## 16. tombstones
+
+```sql
+CREATE TABLE tombstones (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id UUID NOT NULL,
+  purged_at TIMESTAMPTZ NOT NULL,
+  last_revision BIGINT NOT NULL
+);
+```
+
+## 17. 现状与扩展模型边界
+
+本文档同时记录已实现模型和下一阶段需要稳定下来的长期模型。实际迁移脚本必须以代码和 migration 为准。
+
+当前已实现核心表覆盖：
+
+```text
+memos
+assets
+memo_asset_refs
+ledger_accounts
+ledger_categories
+ledger_transactions
+ledger_entries
+tasks
+reminders
+calendar_events
+import_batches
+import_rows
+audit_logs
+mcp_undo_actions
+```
+
+下一阶段产品地基需要补充的模型如下，未实现前客户端只能兼容降级，不能伪造对应产品能力。
+
+## 18. memo_classifications
+
+用于支撑备忘 AI 自动分类、分类置信度、AI 建议状态和用户确认状态。
+
+```sql
+CREATE TABLE memo_classifications (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL,
+  memo_id UUID NOT NULL,
+  label TEXT NOT NULL,
+  label_type TEXT NOT NULL, -- tag / type / topic / intent
+  source TEXT NOT NULL, -- ai / user / rule / import
+  confidence NUMERIC(5, 4),
+  status TEXT NOT NULL, -- suggested / confirmed / rejected
+  model_name TEXT,
+  created_at TIMESTAMPTZ NOT NULL,
+  confirmed_at TIMESTAMPTZ
+);
+```
+
+`memos.tags` 可以继续作为轻量冗余字段，但长期分类事实以 `memo_classifications` 为准。
+
+## 19. tag_metadata
+
+用于支撑标签颜色、图标、排序、统计和多模块标签复用。
+
+```sql
+CREATE TABLE tag_metadata (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL, -- memo / ledger / task / global
+  color_token TEXT,
+  icon_token TEXT,
+  sort_order INTEGER,
+  status TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+```
+
+## 20. ledger_budgets
+
+用于支撑预算进度、分类预算、预算阈值提醒和首页财务概览。
+
+```sql
+CREATE TABLE ledger_budgets (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL,
+  period_type TEXT NOT NULL, -- 当前实现固定 month
+  period_key TEXT NOT NULL,
+  category_id UUID,
+  amount NUMERIC(18, 2) NOT NULL,
+  currency TEXT NOT NULL,
+  alert_threshold NUMERIC(5, 4),
+  status TEXT NOT NULL,
+  revision INTEGER NOT NULL DEFAULT 1,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+```
+
+`category_id IS NULL` 表示总预算；`category_id IS NOT NULL` 表示分类预算。业务层保证 `(user_id, period_type, period_key, category_id)` 在 active 状态下唯一；`revision` 用于 PowerSync 陈旧写入判定。现有数据库通过 additive schema compatibility 补齐 `revision`，正式迁移框架落地后应迁入版本化 migration。
+
+## 21. task_reminder_strategies
+
+用于支撑 AI 提醒建议、任务预警、提前准备窗口和用户确认状态。
+
+```sql
+CREATE TABLE task_reminder_strategies (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL,
+  task_id UUID NOT NULL,
+  warning_level TEXT NOT NULL, -- critical / warning / normal
+  warning_reason TEXT,
+  preparation_window_days INTEGER,
+  suggested_start_at TIMESTAMPTZ,
+  ai_suggested_remind_at TIMESTAMPTZ,
+  confidence NUMERIC(5, 4),
+  status TEXT NOT NULL, -- suggested / confirmed / dismissed / expired
+  created_by TEXT NOT NULL, -- ai / user / rule
+  created_at TIMESTAMPTZ NOT NULL,
+  confirmed_at TIMESTAMPTZ
+);
+```
+
+策略不是提醒派发本身。策略确认后才写入或更新 `Task.remind_at` 和 `Reminder`。
+
+## 22. mcp_capture_sessions / mcp_capture_turns
+
+用于把当前 parse / commit / undo 能力封装成聊天式 AI Capture 体验。当前命名沿用 MCP capture 链路，后续如果抽成非 MCP Capture API，可以在兼容层上再提供 `capture_sessions` 视图或别名。
+
+```sql
+CREATE TABLE mcp_capture_sessions (
+  capture_id UUID PRIMARY KEY,
+  user_id UUID NOT NULL,
+  original_text TEXT NOT NULL,
+  timezone TEXT NOT NULL,
+  locale TEXT NOT NULL,
+  actions JSONB NOT NULL,
+  requires_confirmation BOOLEAN NOT NULL,
+  committed BOOLEAN NOT NULL,
+  session_status TEXT NOT NULL, -- active / dismissed / expired
+  source_channel TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  committed_at TIMESTAMPTZ,
+  dismissed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  revision BIGINT NOT NULL
+);
+
+CREATE TABLE mcp_capture_turns (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL,
+  capture_id UUID NOT NULL,
+  turn_index INTEGER NOT NULL,
+  role TEXT NOT NULL, -- user / assistant / system
+  text TEXT,
+  asset_ids JSONB,
+  asset_context JSONB,
+  actions JSONB,
+  selected_action_indexes JSONB,
+  result_entities JSONB,
+  undo_token UUID,
+  supersedes_turn_id UUID,
+  turn_status TEXT NOT NULL, -- accepted / parsed / revised / superseded / committed / partial / failed / undone / dismissed
+  source_channel TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  revision BIGINT NOT NULL
+);
+```
+
+Session 表示可恢复的连续聊天容器；`committed` 只表示该会话历史中至少执行过一轮，不意味着会话终止。Turn 才是提交、修改与撤销的最小状态单元。用户输入写 user turn，AI 候选动作写 assistant turn；修改候选动作时创建 revised turn，并用 `supersedes_turn_id` 保留版本链。commit 后将结果实体与 `undo_token` 写回具体 turn；undo 通过 `mcp_undo_actions` 将创建实体转为 `ai_trashed`，将原 turn 标记为 undone，并追加 system undo turn。
+
+本地 PowerSync 同步 session 和 turn 的 `revision`，服务端按 revision 拒绝陈旧覆盖。PATCH 上行只更新实际携带字段，不能因状态变化清空历史 text、actions、asset_ids、asset_context 或 result_entities。
+
+附件和语音不直接塞进用户文本字段。`asset_ids` 保存稳定引用，`asset_context` 保存本轮解析快照，包含资产类型、名称、MIME、解析状态、提取器、可用文本、错误和待接入能力。当前服务端可真实提取小型 UTF-8 文本类附件；PDF、图片、音频和外部链接只记录明确的适配能力需求，不伪造解析结果。本地 Local Core 当前根据 PowerSync 资产元数据生成同构上下文，不读取二进制。
+
+## 23. 本地 read model 边界
+
+首页概览、预算统计、分类占比、任务预警、标签统计和最近混合内容流原则上不需要单独持久化为正式业务表，应优先由 Local Core 基于本地 PowerSync SQLite 计算。
+
+本地 read model 输出必须和云端同构 API 保持字段一致：
+
+```text
+schema_version
+generated_at
+user_timezone
+source_mode: local / api / fallback
+```
+
+可本地计算的 read model 包括：
+
+```text
+HomeOverview
+LedgerOverview
+LedgerCategorySummary
+LedgerInsight
+MemoTagSummary
+TaskWarningGroup
+RecentActivityFeed
+```
+
+只有在存在性能问题、离线启动耗时问题或需要历史快照时，才考虑新增缓存表。缓存表不是事实来源，可以随时清空重建。
