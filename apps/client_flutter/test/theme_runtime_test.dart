@@ -1,4 +1,5 @@
 import 'package:client_flutter/app/theme/app_theme.dart';
+import 'package:client_flutter/app/theme/theme_package.dart';
 import 'package:client_flutter/app/theme/theme_runtime.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -34,6 +35,9 @@ void main() {
       final resolvedSnapshot = ThemeSnapshot(
         familyId: 'test.theme',
         displayName: '测试主题',
+        packageVersion: '1.0.0',
+        performanceClass: ThemePerformanceClass.standard,
+        tokens: LiflyCoreTheme.tokens,
         lightTheme: ThemeData(
           useMaterial3: true,
           brightness: Brightness.light,
