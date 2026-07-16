@@ -1,9 +1,17 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:client_flutter/app/app_config.dart';
 import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/app/shell/app_shell.dart';
+import 'package:client_flutter/app/theme/theme_package.dart';
+import 'package:client_flutter/app/theme/theme_platform.dart';
+import 'package:client_flutter/app/theme/theme_preferences.dart';
+import 'package:client_flutter/app/theme/theme_registry.dart';
 import 'package:client_flutter/app/theme/theme_runtime.dart';
+import 'package:client_flutter/app/theme/themes/lifly_test_theme.dart';
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/powersync_local_core_bridge.dart';
@@ -16,7 +24,23 @@ void main() {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider<ThemeRuntime>(create: (_) => ThemeRuntime()),
+        ChangeNotifierProvider<ThemeRuntime>(
+          create: (_) {
+            final packages = kDebugMode
+                ? <ThemePackage>[
+                    ThemePackage.fromJson(liflyTestThemePackageJson),
+                  ]
+                : const <ThemePackage>[];
+            final runtime = ThemeRuntime(
+              registry: ThemeRegistry(packages: packages),
+              preferenceStore: SharedPreferencesThemePreferenceStore(),
+              appVersion: AppConfig.appVersion,
+              platform: currentThemeTargetPlatform(),
+            );
+            unawaited(runtime.restore());
+            return runtime;
+          },
+        ),
         Provider<LiflyDataMode>.value(value: AppConfig.dataMode),
         Provider<ApiClient>(
           create: (_) => ApiClient(baseUrl: AppConfig.apiBaseUrl),

@@ -1,3 +1,4 @@
+import 'package:client_flutter/app/theme/theme_color_mode.dart';
 import 'package:client_flutter/app/theme/theme_package.dart';
 import 'package:client_flutter/app/theme/theme_runtime.dart';
 import 'package:flutter/material.dart';
@@ -6,11 +7,13 @@ class ThemePackageResolver implements ThemeResolver {
   final ThemePackage package;
   final String appVersion;
   final ThemeTargetPlatform platform;
+  final ThemePackageColorMode requestedColorMode;
 
   const ThemePackageResolver({
     required this.package,
     required this.appVersion,
     required this.platform,
+    this.requestedColorMode = ThemePackageColorMode.system,
   });
 
   @override
@@ -27,15 +30,20 @@ class ThemePackageResolver implements ThemeResolver {
       );
     }
 
+    final resolvedColorMode = resolveThemeColorMode(
+      requestedColorMode,
+      manifest.supportedColorModes,
+    );
     return ThemeSnapshot(
       familyId: manifest.themeId,
       displayName: manifest.displayName,
       packageVersion: manifest.version,
       performanceClass: manifest.performanceClass,
+      colorMode: resolvedColorMode,
       tokens: package.tokens,
       lightTheme: package.tokens.buildTheme(Brightness.light),
       darkTheme: package.tokens.buildTheme(Brightness.dark),
-      themeMode: _defaultThemeMode(manifest.supportedColorModes),
+      themeMode: materialThemeMode(resolvedColorMode),
     );
   }
 }
@@ -47,21 +55,6 @@ class ThemePackageCompatibilityException implements Exception {
 
   @override
   String toString() => 'ThemePackageCompatibilityException: $message';
-}
-
-ThemeMode _defaultThemeMode(Set<ThemePackageColorMode> modes) {
-  if (modes.contains(ThemePackageColorMode.system) ||
-      modes.containsAll({
-        ThemePackageColorMode.light,
-        ThemePackageColorMode.dark,
-      })) {
-    return ThemeMode.system;
-  }
-  if (modes.contains(ThemePackageColorMode.dark) ||
-      modes.contains(ThemePackageColorMode.oled)) {
-    return ThemeMode.dark;
-  }
-  return ThemeMode.light;
 }
 
 bool _isVersionAtLeast(String current, String minimum) {

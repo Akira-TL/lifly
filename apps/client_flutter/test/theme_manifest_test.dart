@@ -139,8 +139,8 @@ void main() {
   });
 
   test('runtime falls back to Core when package compatibility fails', () async {
-    final runtime = ThemeRuntime(
-      resolver: ThemePackageResolver(
+    final runtime = ThemeRuntime.withResolver(
+      ThemePackageResolver(
         package: ThemePackage.fromJson(_fixtureCopy()),
         appVersion: '0.7.9',
         platform: ThemeTargetPlatform.web,

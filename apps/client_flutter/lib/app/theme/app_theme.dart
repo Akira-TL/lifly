@@ -72,6 +72,7 @@ class LiflyCoreTheme {
     displayName: 'Lifly Core',
     packageVersion: 'builtin',
     performanceClass: ThemePerformanceClass.core,
+    colorMode: ThemePackageColorMode.system,
     tokens: tokens,
     lightTheme: tokens.buildTheme(Brightness.light),
     darkTheme: tokens.buildTheme(Brightness.dark),

@@ -20,7 +20,7 @@ class _StaticThemeResolver implements ThemeResolver {
 
 void main() {
   test('ThemeRuntime exposes Lifly Core synchronously before restoration', () {
-    final runtime = ThemeRuntime();
+    final runtime = ThemeRuntime.withResolver(_StaticThemeResolver());
 
     expect(runtime.snapshot.familyId, LiflyCoreTheme.familyId);
     expect(runtime.snapshot.displayName, 'Lifly Core');
@@ -37,6 +37,7 @@ void main() {
         displayName: '测试主题',
         packageVersion: '1.0.0',
         performanceClass: ThemePerformanceClass.standard,
+        colorMode: ThemePackageColorMode.dark,
         tokens: LiflyCoreTheme.tokens,
         lightTheme: ThemeData(
           useMaterial3: true,
@@ -51,7 +52,7 @@ void main() {
         themeMode: ThemeMode.dark,
       );
       final resolver = _StaticThemeResolver(nextSnapshot: resolvedSnapshot);
-      final runtime = ThemeRuntime(resolver: resolver);
+      final runtime = ThemeRuntime.withResolver(resolver);
 
       await runtime.restore();
       expect(runtime.snapshot, same(resolvedSnapshot));

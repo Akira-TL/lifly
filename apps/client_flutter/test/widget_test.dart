@@ -2,6 +2,8 @@ import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/app/theme/app_theme.dart';
 import 'package:client_flutter/app/theme/theme_package.dart';
 import 'package:client_flutter/app/theme/theme_package_resolver.dart';
+import 'package:client_flutter/app/theme/theme_preferences.dart';
+import 'package:client_flutter/app/theme/theme_registry.dart';
 import 'package:client_flutter/app/theme/theme_runtime.dart';
 import 'package:client_flutter/app/theme/themes/lifly_test_theme.dart';
 import 'package:client_flutter/data/api/api_client.dart';
@@ -18,6 +20,18 @@ class _WidgetThemeResolver implements ThemeResolver {
 
   @override
   Future<ThemeSnapshot?> resolve() async => snapshot;
+}
+
+class _MemoryThemePreferenceStore implements ThemePreferenceStore {
+  ThemePreference? value;
+
+  @override
+  Future<ThemePreference?> load() async => value;
+
+  @override
+  Future<void> save(ThemePreference preference) async {
+    value = preference;
+  }
 }
 
 class FakeApiClient extends ApiClient {
@@ -150,12 +164,13 @@ class FakeApiClient extends ApiClient {
   }
 }
 
-Widget _buildTestApp(ThemeRuntime themeRuntime) {
+Widget _buildTestApp(ThemeRuntime themeRuntime, {ApiClient? apiClient}) {
+  final api = apiClient ?? FakeApiClient();
   return MultiProvider(
     providers: [
       ChangeNotifierProvider<ThemeRuntime>.value(value: themeRuntime),
       Provider<LiflyDataMode>.value(value: LiflyDataMode.api),
-      Provider<ApiClient>(create: (_) => FakeApiClient()),
+      Provider<ApiClient>.value(value: api),
       Provider<LocalCoreBridge>(create: (_) => FakeLocalCoreBridge()),
       ProxyProvider3<
         ApiClient,
@@ -180,6 +195,7 @@ ThemeSnapshot _switchedTheme() {
     displayName: 'Widget Test Theme',
     packageVersion: '1.0.0',
     performanceClass: ThemePerformanceClass.standard,
+    colorMode: ThemePackageColorMode.light,
     tokens: LiflyCoreTheme.tokens,
     lightTheme: ThemeData(
       useMaterial3: true,
@@ -200,7 +216,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final themeResolver = _WidgetThemeResolver();
-    final themeRuntime = ThemeRuntime(resolver: themeResolver);
+    final themeRuntime = ThemeRuntime.withResolver(themeResolver);
 
     await tester.pumpWidget(_buildTestApp(themeRuntime));
 
@@ -271,8 +287,8 @@ void main() {
     'Declarative package applies to business pages without theme branches',
     (WidgetTester tester) async {
       final package = ThemePackage.fromJson(liflyTestThemePackageJson);
-      final themeRuntime = ThemeRuntime(
-        resolver: ThemePackageResolver(
+      final themeRuntime = ThemeRuntime.withResolver(
+        ThemePackageResolver(
           package: package,
           appVersion: '0.8.0',
           platform: ThemeTargetPlatform.web,
@@ -303,6 +319,41 @@ void main() {
     },
   );
 
+  testWidgets(
+    'Registry theme selection preserves current route and service instances',
+    (WidgetTester tester) async {
+      final runtime = ThemeRuntime(
+        registry: ThemeRegistry(
+          packages: [ThemePackage.fromJson(liflyTestThemePackageJson)],
+        ),
+        preferenceStore: _MemoryThemePreferenceStore(),
+        appVersion: '0.8.0',
+        platform: ThemeTargetPlatform.phone,
+      );
+      final api = FakeApiClient();
+      await tester.pumpWidget(_buildTestApp(runtime, apiClient: api));
+      await tester.pump();
+
+      await tester.tap(find.text('任务').last);
+      await tester.pump();
+      await tester.tap(find.text('测试任务'));
+      await tester.pumpAndSettle();
+      final apiBefore = tester.element(find.byType(LiflyApp)).read<ApiClient>();
+
+      await runtime.selectFamily('lifly.test.mint');
+      await runtime.selectColorMode(ThemePackageColorMode.dark);
+      await tester.pump();
+
+      final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+      final apiAfter = tester.element(find.byType(LiflyApp)).read<ApiClient>();
+      expect(app.themeMode, ThemeMode.dark);
+      expect(find.text('任务详情'), findsOneWidget);
+      expect(find.text('测试描述'), findsOneWidget);
+      expect(apiAfter, same(apiBefore));
+      expect(apiAfter, same(api));
+    },
+  );
+
   testWidgets('Wide shell keeps NavigationRail while restoring a theme', (
     WidgetTester tester,
   ) async {
@@ -312,7 +363,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     final themeResolver = _WidgetThemeResolver();
-    final themeRuntime = ThemeRuntime(resolver: themeResolver);
+    final themeRuntime = ThemeRuntime.withResolver(themeResolver);
     await tester.pumpWidget(_buildTestApp(themeRuntime));
     await tester.pump();
 
