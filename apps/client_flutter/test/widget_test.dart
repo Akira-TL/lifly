@@ -1,4 +1,6 @@
 import 'package:client_flutter/app/data_mode.dart';
+import 'package:client_flutter/app/shell/app_shell.dart';
+import 'package:client_flutter/app/shell/shell_preferences.dart';
 import 'package:client_flutter/app/theme/app_theme.dart';
 import 'package:client_flutter/app/theme/theme_package.dart';
 import 'package:client_flutter/app/theme/theme_package_resolver.dart';
@@ -21,6 +23,20 @@ class _WidgetThemeResolver implements ThemeResolver {
 
   @override
   Future<ThemeSnapshot?> resolve() async => snapshot;
+}
+
+class _MemoryShellPreferenceStore implements ShellPreferenceStore {
+  bool? collapsed;
+
+  _MemoryShellPreferenceStore();
+
+  @override
+  Future<bool?> loadSidebarCollapsed() async => collapsed;
+
+  @override
+  Future<void> saveSidebarCollapsed(bool collapsed) async {
+    this.collapsed = collapsed;
+  }
 }
 
 class _MemoryThemePreferenceStore implements ThemePreferenceStore {
@@ -165,7 +181,11 @@ class FakeApiClient extends ApiClient {
   }
 }
 
-Widget _buildTestApp(ThemeRuntime themeRuntime, {ApiClient? apiClient}) {
+Widget _buildTestApp(
+  ThemeRuntime themeRuntime, {
+  ApiClient? apiClient,
+  Widget child = const LiflyApp(),
+}) {
   final api = apiClient ?? FakeApiClient();
   return MultiProvider(
     providers: [
@@ -186,7 +206,7 @@ Widget _buildTestApp(ThemeRuntime themeRuntime, {ApiClient? apiClient}) {
         ),
       ),
     ],
-    child: const LiflyApp(),
+    child: child,
   );
 }
 
@@ -384,6 +404,72 @@ void main() {
     expect(find.text('记账'), findsWidgets);
     expect(find.text('任务'), findsWidgets);
   });
+
+  testWidgets(
+    'Web shell exposes global actions and persists sidebar collapse',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final runtime = ThemeRuntime.withResolver(
+        ThemePackageResolver(
+          package: ThemePackage.fromJson(liflyTestThemePackageJson),
+          appVersion: '0.8.1',
+          platform: ThemeTargetPlatform.web,
+        ),
+      );
+      await runtime.restore();
+      final preferences = _MemoryShellPreferenceStore();
+
+      Widget shell() {
+        return MaterialApp(
+          theme: runtime.snapshot.lightTheme,
+          darkTheme: runtime.snapshot.darkTheme,
+          themeMode: runtime.snapshot.themeMode,
+          home: AppShell(preferenceStore: preferences),
+        );
+      }
+
+      await tester.pumpWidget(_buildTestApp(runtime, child: shell()));
+      await tester.pumpAndSettle();
+
+      var rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
+      expect(rail.extended, isTrue);
+      expect(find.text('Lifly'), findsOneWidget);
+      expect(find.text('生活数据中心'), findsOneWidget);
+      expect(find.text('搜索'), findsOneWidget);
+      expect(find.text('快速记录'), findsOneWidget);
+      expect(find.text('附件'), findsOneWidget);
+      expect(find.text('设置'), findsOneWidget);
+
+      await tester.tap(find.text('搜索'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(AppBar, '搜索'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('快速记录'));
+      await tester.pump();
+      expect(find.text('AI 对话'), findsOneWidget);
+
+      await tester.tap(find.text('收起侧栏'));
+      await tester.pumpAndSettle();
+      rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
+      expect(rail.extended, isFalse);
+      expect(preferences.collapsed, isTrue);
+      expect(find.byTooltip('展开侧栏'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      await tester.pumpWidget(_buildTestApp(runtime, child: shell()));
+      await tester.pumpAndSettle();
+
+      rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
+      expect(rail.extended, isFalse);
+    },
+  );
 
   testWidgets('Desktop compact profile keeps a narrow keyboard-ready rail', (
     WidgetTester tester,
