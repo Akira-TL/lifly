@@ -7,8 +7,8 @@ Lifly 的架构目标是：
 - 本地优先；
 - 云端同步；
 - AI/MCP 可调用；
-- Windows + Android 优先；
-- 后续多平台可扩展；
+- Windows + Android 产品基线，Web 作为当前 UI/UX 首要验证平台；
+- Flutter Web、手机端和桌面端共享业务与主题运行时；
 - 附件与文本分离；
 - 所有操作可审计。
 
@@ -37,7 +37,7 @@ Lifly 的架构目标是：
            ▼                      ▼
 ┌─────────────────────┐     ┌──────────────────────┐
 │ Flutter Client       │     │ Object Storage        │
-│ Windows / Android    │     │ R2 / S3 / MinIO       │
+│ Web / Phone / Desktop│     │ R2 / S3 / MinIO       │
 │ SQLite local store   │     └──────────────────────┘
 └──────────┬──────────┘
            │
@@ -82,11 +82,17 @@ PowerSync 同步结构化数据和附件 metadata，不同步二进制文件。�
 
 所有核心数据必须提供导出路径，避免数据锁定。
 
+### 4.5 主题是声明式内容，不是插件
+
+主题包只能提供经过校验的 Manifest、语义 Token、平台覆盖和资源。远程主题不能执行 Dart、脚本、API 调用或数据库查询。主题失败不能阻塞应用，最终必须降级到内置 `Lifly Core`。
+
+主题 Runtime、安装缓存、授权占位、受控布局和 Core-first Web 启动详见 `theme-application-framework.md`。
+
 ## 5. 主要服务
 
 | 服务 | 职责 |
 |---|---|
-| Flutter Client | Windows/Android 客户端，本地记录、查看、编辑、缓存 |
+| Flutter Client | Web/手机/桌面共享客户端，本地记录、查看、编辑、缓存、主题 Runtime 与多端布局 |
 | FastAPI Backend | 业务 API、认证、同步写入、导入、附件管理 |
 | PowerSync | PostgreSQL 与客户端 SQLite 同步 |
 | Cloud MCP Server | 云端 MCP 工具暴露 |

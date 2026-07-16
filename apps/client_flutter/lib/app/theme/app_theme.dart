@@ -1,17 +1,97 @@
+import 'package:client_flutter/app/theme/theme_package.dart';
+import 'package:client_flutter/app/theme/theme_platform_profile.dart';
+import 'package:client_flutter/app/theme/theme_snapshot.dart';
+import 'package:client_flutter/app/theme/theme_tokens.dart';
 import 'package:flutter/material.dart';
 
-class AppTheme {
-  static ThemeData get light => ThemeData(
-    useMaterial3: true,
-    colorSchemeSeed: const Color(0xFF4F46E5),
-    brightness: Brightness.light,
-    appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
+class LiflyCoreTheme {
+  static const familyId = 'lifly.core';
+
+  static const tokens = ThemeTokenSet(
+    light: ThemeModeTokens(
+      colors: ThemeSemanticColors(
+        primary: Color(0xFF4F46E5),
+        onPrimary: Color(0xFFFFFFFF),
+        secondary: Color(0xFF625B71),
+        surface: Color(0xFFFFFBFF),
+        onSurface: Color(0xFF1C1B1F),
+        critical: Color(0xFFBA1A1A),
+        warning: Color(0xFF8A5100),
+        success: Color(0xFF216E39),
+        info: Color(0xFF00639B),
+        neutral: Color(0xFF605D66),
+      ),
+      typography: ThemeTypographyTokens(
+        fontFamily: null,
+        titleScale: 1,
+        bodyScale: 1,
+        labelScale: 1,
+      ),
+      spacing: ThemeSpacingTokens(page: 16, card: 16, inline: 8),
+      radius: ThemeRadiusTokens(card: 12, control: 8),
+      elevation: ThemeElevationTokens(card: 1),
+      density: ThemeDensityTokens(visual: 0),
+      motion: ThemeMotionTokens(
+        enabled: true,
+        fast: Duration(milliseconds: 120),
+        normal: Duration(milliseconds: 200),
+      ),
+    ),
+    dark: ThemeModeTokens(
+      colors: ThemeSemanticColors(
+        primary: Color(0xFFC4C0FF),
+        onPrimary: Color(0xFF211A85),
+        secondary: Color(0xFFCBC2DB),
+        surface: Color(0xFF1C1B1F),
+        onSurface: Color(0xFFE6E1E5),
+        critical: Color(0xFFFFB4AB),
+        warning: Color(0xFFFFB95F),
+        success: Color(0xFF8DDAA5),
+        info: Color(0xFF92CCFF),
+        neutral: Color(0xFFCAC4D0),
+      ),
+      typography: ThemeTypographyTokens(
+        fontFamily: null,
+        titleScale: 1,
+        bodyScale: 1,
+        labelScale: 1,
+      ),
+      spacing: ThemeSpacingTokens(page: 16, card: 16, inline: 8),
+      radius: ThemeRadiusTokens(card: 12, control: 8),
+      elevation: ThemeElevationTokens(card: 1),
+      density: ThemeDensityTokens(visual: 0),
+      motion: ThemeMotionTokens(
+        enabled: true,
+        fast: Duration(milliseconds: 120),
+        normal: Duration(milliseconds: 200),
+      ),
+    ),
   );
 
-  static ThemeData get dark => ThemeData(
-    useMaterial3: true,
-    colorSchemeSeed: const Color(0xFF4F46E5),
-    brightness: Brightness.dark,
-    appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
-  );
+  static final Map<ThemeTargetPlatform, ThemeSnapshot> _snapshots = {
+    for (final platform in ThemeTargetPlatform.values)
+      platform: _buildSnapshot(platform),
+  };
+
+  static ThemeSnapshot get snapshot => snapshotFor(ThemeTargetPlatform.web);
+
+  static ThemeSnapshot snapshotFor(ThemeTargetPlatform platform) {
+    return _snapshots[platform]!;
+  }
+
+  static ThemeSnapshot _buildSnapshot(ThemeTargetPlatform platform) {
+    final profile = ThemePlatformProfile.defaults(platform);
+    return ThemeSnapshot(
+      familyId: familyId,
+      displayName: 'Lifly Core',
+      packageVersion: 'builtin',
+      performanceClass: ThemePerformanceClass.core,
+      colorMode: ThemePackageColorMode.system,
+      platformProfile: profile,
+      tokens: tokens,
+      lightTheme: tokens.buildTheme(Brightness.light, platformProfile: profile),
+      darkTheme: tokens.buildTheme(Brightness.dark, platformProfile: profile),
+      themeMode: ThemeMode.system,
+    );
+  }
 }

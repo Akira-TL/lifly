@@ -1,3 +1,6 @@
+import 'package:client_flutter/app/shell/shell_layout_policy.dart';
+import 'package:client_flutter/app/theme/theme_package.dart';
+import 'package:client_flutter/app/theme/theme_platform_profile.dart';
 import 'package:flutter/material.dart';
 import 'package:client_flutter/features/ai_capture/pages/ai_capture_page.dart';
 import 'package:client_flutter/features/home/pages/home_page.dart';
@@ -13,7 +16,6 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  static const _railBreakpoint = 900.0;
   static const _primaryDestinationIndex = 2;
   static const _destinations = <_ShellDestination>[
     _ShellDestination(
@@ -59,10 +61,19 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth >= _railBreakpoint) {
+        final profile =
+            Theme.of(context).extension<ThemePlatformProfile>() ??
+            ThemePlatformProfile.defaults(ThemeTargetPlatform.phone);
+        final layout = ShellLayoutPolicy.resolve(
+          width: constraints.maxWidth,
+          profile: profile,
+        );
+        if (layout.useNavigationRail) {
           return _WideShell(
             currentIndex: _currentIndex,
             destinations: _destinations,
+            layout: layout,
+            keyboardNavigation: profile.keyboardNavigation,
             onDestinationSelected: _selectDestination,
           );
         }
@@ -74,6 +85,7 @@ class _AppShellState extends State<AppShell> {
           ),
           bottomNavigationBar: _MobileShellNavigationBar(
             currentIndex: _currentIndex,
+            height: layout.mobileNavigationHeight,
             primaryDestinationIndex: _primaryDestinationIndex,
             destinations: _destinations,
             onDestinationSelected: _selectDestination,
@@ -101,54 +113,69 @@ class _ShellDestination {
 class _WideShell extends StatelessWidget {
   final int currentIndex;
   final List<_ShellDestination> destinations;
+  final ShellLayoutPolicy layout;
+  final bool keyboardNavigation;
   final ValueChanged<int> onDestinationSelected;
 
   const _WideShell({
     required this.currentIndex,
     required this.destinations,
+    required this.layout,
+    required this.keyboardNavigation,
     required this.onDestinationSelected,
   });
 
   @override
   Widget build(BuildContext context) {
+    final content = Row(
+      children: [
+        NavigationRail(
+          selectedIndex: currentIndex,
+          onDestinationSelected: onDestinationSelected,
+          extended: layout.railExtended,
+          labelType: layout.railLabelType,
+          minWidth: layout.railMinimumWidth,
+          minExtendedWidth: layout.railMinimumExtendedWidth,
+          destinations: destinations
+              .map(
+                (item) => NavigationRailDestination(
+                  icon: Icon(item.icon),
+                  selectedIcon: Icon(item.selectedIcon),
+                  label: Text(item.label),
+                ),
+              )
+              .toList(growable: false),
+        ),
+        const VerticalDivider(width: 1),
+        Expanded(
+          child: IndexedStack(
+            index: currentIndex,
+            children: destinations.map((item) => item.page).toList(),
+          ),
+        ),
+      ],
+    );
     return Scaffold(
-      body: Row(
-        children: [
-          NavigationRail(
-            selectedIndex: currentIndex,
-            onDestinationSelected: onDestinationSelected,
-            labelType: NavigationRailLabelType.all,
-            destinations: destinations
-                .map(
-                  (item) => NavigationRailDestination(
-                    icon: Icon(item.icon),
-                    selectedIcon: Icon(item.selectedIcon),
-                    label: Text(item.label),
-                  ),
-                )
-                .toList(growable: false),
-          ),
-          const VerticalDivider(width: 1),
-          Expanded(
-            child: IndexedStack(
-              index: currentIndex,
-              children: destinations.map((item) => item.page).toList(),
-            ),
-          ),
-        ],
-      ),
+      body: keyboardNavigation
+          ? FocusTraversalGroup(
+              policy: OrderedTraversalPolicy(),
+              child: content,
+            )
+          : content,
     );
   }
 }
 
 class _MobileShellNavigationBar extends StatelessWidget {
   final int currentIndex;
+  final double height;
   final int primaryDestinationIndex;
   final List<_ShellDestination> destinations;
   final ValueChanged<int> onDestinationSelected;
 
   const _MobileShellNavigationBar({
     required this.currentIndex,
+    required this.height,
     required this.primaryDestinationIndex,
     required this.destinations,
     required this.onDestinationSelected,
@@ -163,7 +190,7 @@ class _MobileShellNavigationBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 80,
+          height: height,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -215,6 +242,7 @@ class _ShellDestinationButton extends StatelessWidget {
       selected: selected,
       label: destination.label,
       child: InkWell(
+        key: Key('shell_destination_${destination.label}'),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -268,6 +296,7 @@ class _PrimaryDestinationButton extends StatelessWidget {
       selected: selected,
       label: destination.label,
       child: InkWell(
+        key: Key('shell_destination_${destination.label}'),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),

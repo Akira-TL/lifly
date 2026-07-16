@@ -94,7 +94,7 @@ Flutter 导入入口与文件选择
 
 ## M6：Client Experience & Mobile Product Foundation
 
-状态：当前阶段。
+状态：已完成地基阶段，页面消费继续迭代。
 
 目标：补齐手机端真实产品页面需要的云端同步优先、本地可兜底的数据地基，再做真实 UI 消费。
 
@@ -130,7 +130,53 @@ v0.7.0 产品地基发布门禁已收口：Fake Local Core 按备忘、记账、
 手机端、Web、桌面端共享业务语义但可以使用不同布局
 ```
 
-## M7：Desktop Local MCP & Production Hardening
+## M7：Cross-platform Theme Application Framework
+
+状态：已完成。
+
+目标：建立 Web、手机端和桌面端共享的多主题应用框架，保证默认 Core 极致轻量，并为未来主题商店、付费授权和推荐机制预留稳定边界。
+
+范围：
+
+```text
+Lifly Core 内置兜底主题
+声明式 Theme Manifest / Semantic Tokens
+Theme Runtime 与设备偏好
+system / light / dark / OLED / highContrast 协议
+Web / phone / desktop 平台 Profile
+compact / balanced / dashboard 受控布局
+主题包版本缓存、摘要、资源、签名和授权占位
+已知可用版本回滚与 fallback 链
+Web HTML 启动壳与 Core-first 首帧
+默认 Web / Wasm Release 双构建门禁
+```
+
+当前进展：
+
+```text
+Theme Runtime 启动时同步提供 Lifly Core，设备偏好、缓存主题、授权和可选资源只在 Core 首帧后恢复
+Manifest 严格校验主题身份、版本、平台、色彩模式、性能等级、资源、fallback、授权类型、平台覆盖和完整性元数据；远程主题不能执行 Dart、脚本、API 或查询
+Lifly Core 使用系统字体和内置语义 Token，不依赖远程资源、自定义字体、大型装饰资源或持续动画
+主题选择与色彩模式已进入设置页，切换主题不重建 API、PowerSync、Local Core、AI 服务和当前路由
+手机端最小交互区域 48px，Web dashboard 可展开侧栏，桌面 compact 使用紧凑侧栏；Hover、Focus、键盘遍历和系统减少动态效果已接入
+原生端使用文件版本槽位和可恢复 active 指针，Web 使用版本化键值缓存；坏更新保留旧版本，损坏 active 可以回滚
+主题授权通过独立 Entitlement Provider 判断，离线授权可用，失败按声明 fallback 并最终回到 Lifly Core
+Web 宿主记录 host feedback、entrypoint、engine、Dart entrypoint、first frame、Core usable 和 theme activated 里程碑
+默认 Web 与 Wasm Release 构建均通过；当前 main.dart.js 为 3,526,419 bytes，main.dart.wasm 为 3,187,224 bytes
+scripts/check-web-theme-performance.sh 与 CI 固化启动契约、主题安全、产物预算和双构建检查
+```
+
+验收：
+
+```text
+任意主题失败不阻塞 Lifly Core
+新增主题不要求业务页面新增主题分支
+远程主题是声明式内容，不是插件
+默认主题启动不等待网络、同步、授权或主题缓存
+主题功能在 Web、手机端和桌面端保持一致，平台只调整受控表现
+```
+
+## M8：Desktop Local MCP & Production Hardening
 
 状态：后续。
 

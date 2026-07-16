@@ -1,3 +1,4 @@
+import 'package:client_flutter/app/app_config.dart';
 import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/api/api_diagnostics.dart';
@@ -8,6 +9,7 @@ import 'package:client_flutter/data/powersync/powersync_credentials_service.dart
 import 'package:client_flutter/data/powersync/sync_push_service.dart';
 import 'package:client_flutter/data/powersync/sync_service.dart';
 import 'package:client_flutter/features/import_export/widgets/import_export_settings_section.dart';
+import 'package:client_flutter/features/settings/widgets/theme_settings_section.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -215,6 +217,8 @@ class _SettingsPageState extends State<SettingsPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          const ThemeSettingsSection(),
+          const SizedBox(height: 12),
           _ApiDiagnosticsCard(
             baseUrl: api.baseUrl,
             health: _health,
@@ -260,7 +264,7 @@ class _SettingsPageState extends State<SettingsPage> {
           const ListTile(
             leading: Icon(Icons.info_outline),
             title: Text('关于 Lifly'),
-            subtitle: Text('v0.1.0'),
+            subtitle: Text('v${AppConfig.appVersion}'),
           ),
         ],
       ),
