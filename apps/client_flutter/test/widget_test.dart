@@ -1,4 +1,5 @@
 import 'package:client_flutter/app/data_mode.dart';
+import 'package:client_flutter/app/theme/theme_runtime.dart';
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/local_core/fake_local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
@@ -7,6 +8,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:client_flutter/main.dart';
 import 'package:provider/provider.dart';
+
+class _WidgetThemeResolver implements ThemeResolver {
+  ThemeSnapshot? snapshot;
+
+  @override
+  Future<ThemeSnapshot?> resolve() async => snapshot;
+}
 
 class FakeApiClient extends ApiClient {
   FakeApiClient() : super(baseUrl: 'http://example.invalid/api/v1');
@@ -138,32 +146,56 @@ class FakeApiClient extends ApiClient {
   }
 }
 
+Widget _buildTestApp(ThemeRuntime themeRuntime) {
+  return MultiProvider(
+    providers: [
+      ChangeNotifierProvider<ThemeRuntime>.value(value: themeRuntime),
+      Provider<LiflyDataMode>.value(value: LiflyDataMode.api),
+      Provider<ApiClient>(create: (_) => FakeApiClient()),
+      Provider<LocalCoreBridge>(create: (_) => FakeLocalCoreBridge()),
+      ProxyProvider3<
+        ApiClient,
+        LiflyDataMode,
+        LocalCoreBridge,
+        AiCaptureService
+      >(
+        update: (_, api, dataMode, localCore, _) => AiCaptureService(
+          api: api,
+          dataMode: dataMode,
+          localCore: localCore,
+        ),
+      ),
+    ],
+    child: const LiflyApp(),
+  );
+}
+
+ThemeSnapshot _switchedTheme() {
+  return ThemeSnapshot(
+    familyId: 'test.widget-theme',
+    displayName: 'Widget Test Theme',
+    lightTheme: ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      colorSchemeSeed: Colors.orange,
+    ),
+    darkTheme: ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      colorSchemeSeed: Colors.orange,
+    ),
+    themeMode: ThemeMode.light,
+  );
+}
+
 void main() {
   testWidgets('App displays real API backed shell pages and detail pages', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          Provider<LiflyDataMode>.value(value: LiflyDataMode.api),
-          Provider<ApiClient>(create: (_) => FakeApiClient()),
-          Provider<LocalCoreBridge>(create: (_) => FakeLocalCoreBridge()),
-          ProxyProvider3<
-            ApiClient,
-            LiflyDataMode,
-            LocalCoreBridge,
-            AiCaptureService
-          >(
-            update: (_, api, dataMode, localCore, _) => AiCaptureService(
-              api: api,
-              dataMode: dataMode,
-              localCore: localCore,
-            ),
-          ),
-        ],
-        child: const LiflyApp(),
-      ),
-    );
+    final themeResolver = _WidgetThemeResolver();
+    final themeRuntime = ThemeRuntime(resolver: themeResolver);
+
+    await tester.pumpWidget(_buildTestApp(themeRuntime));
 
     await tester.pump();
 
@@ -213,5 +245,45 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('任务详情'), findsOneWidget);
     expect(find.text('测试描述'), findsOneWidget);
+
+    final switchedTheme = _switchedTheme();
+    themeResolver.snapshot = switchedTheme;
+
+    await themeRuntime.restore();
+    await tester.pump();
+
+    final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.theme, same(switchedTheme.lightTheme));
+    expect(app.darkTheme, same(switchedTheme.darkTheme));
+    expect(app.themeMode, ThemeMode.light);
+    expect(find.text('任务详情'), findsOneWidget);
+    expect(find.text('测试描述'), findsOneWidget);
+  });
+
+  testWidgets('Wide shell keeps NavigationRail while restoring a theme', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final themeResolver = _WidgetThemeResolver();
+    final themeRuntime = ThemeRuntime(resolver: themeResolver);
+    await tester.pumpWidget(_buildTestApp(themeRuntime));
+    await tester.pump();
+
+    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.text('首页'), findsWidgets);
+
+    final switchedTheme = _switchedTheme();
+    themeResolver.snapshot = switchedTheme;
+    await themeRuntime.restore();
+    await tester.pump();
+
+    final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.theme, same(switchedTheme.lightTheme));
+    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.text('首页'), findsWidgets);
   });
 }
