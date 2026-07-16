@@ -58,6 +58,13 @@ class SharedPreferencesThemePackageCache implements ThemePackageCache {
   }
 
   @override
+  Future<List<String>> listThemeIds() async {
+    final themeIds = await _readStringSet(_themeIdsKey);
+    final sorted = themeIds.toList()..sort();
+    return List.unmodifiable(sorted);
+  }
+
+  @override
   Future<List<String>> listVersions(String themeId) async {
     final versions = await _readStringSet(_versionsKey(themeId));
     return List.unmodifiable(versions);

@@ -5,6 +5,8 @@ abstract interface class ThemePackageCache {
 
   Future<ThemePackageBundle?> readVersion(String themeId, String version);
 
+  Future<List<String>> listThemeIds();
+
   Future<List<String>> listVersions(String themeId);
 
   Future<String?> readActiveVersion(String themeId);
@@ -29,6 +31,11 @@ class MemoryThemePackageCache implements ThemePackageCache {
     String version,
   ) async {
     return _versions[themeId]?[version];
+  }
+
+  @override
+  Future<List<String>> listThemeIds() async {
+    return List.unmodifiable(_versions.keys);
   }
 
   @override

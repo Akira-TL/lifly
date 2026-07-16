@@ -1,46 +1,151 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
-
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
-
-  <!-- iOS meta tags & icons -->
+  <meta name="description" content="Lifly - AI-first personal life data system">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="client_flutter">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Lifly">
+  <meta name="theme-color" content="#f8f7ff">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
-
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
-
-  <title>client_flutter</title>
+  <link rel="icon" type="image/png" href="favicon.png">
   <link rel="manifest" href="manifest.json">
+  <title>Lifly</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f8f7ff;
+      color: #1c1b1f;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: inherit;
+    }
+    #lifly-startup-shell {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      display: grid;
+      place-items: center;
+      background: inherit;
+      transition: opacity 120ms ease-out;
+    }
+    #lifly-startup-shell[data-ready="true"] {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .lifly-startup-card {
+      display: grid;
+      justify-items: center;
+      gap: 14px;
+      min-width: 180px;
+      padding: 28px 32px;
+    }
+    .lifly-startup-logo {
+      display: grid;
+      place-items: center;
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: #4f46e5;
+      color: white;
+      font-size: 22px;
+      font-weight: 750;
+      line-height: 1;
+    }
+    .lifly-startup-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 650;
+      letter-spacing: .01em;
+    }
+    .lifly-startup-status {
+      min-height: 18px;
+      margin: 0;
+      color: #605d66;
+      font-size: 12px;
+    }
+    .lifly-startup-progress {
+      width: 160px;
+      height: 3px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e5e1ec;
+    }
+    .lifly-startup-progress::after {
+      content: "";
+      display: block;
+      width: 42%;
+      height: 100%;
+      border-radius: inherit;
+      background: #4f46e5;
+      animation: lifly-progress 900ms ease-in-out infinite alternate;
+    }
+    @keyframes lifly-progress {
+      from { transform: translateX(-20%); }
+      to { transform: translateX(160%); }
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        background: #1c1b1f;
+        color: #e6e1e5;
+      }
+      .lifly-startup-status { color: #cac4d0; }
+      .lifly-startup-progress { background: #49454f; }
+      .lifly-startup-logo { background: #c4c0ff; color: #211a85; }
+      .lifly-startup-progress::after { background: #c4c0ff; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #lifly-startup-shell { transition: none; }
+      .lifly-startup-progress::after { animation: none; width: 100%; }
+    }
+  </style>
+  <script>
+    (() => {
+      const marks = [];
+      const mark = (name, detail) => {
+        marks.push({ name, detail: detail ?? null, at: performance.now() });
+        performance.mark(name, detail === undefined ? undefined : { detail });
+      };
+      const shell = () => document.getElementById('lifly-startup-shell');
+      const status = () => document.getElementById('lifly-startup-status');
+      globalThis.liflyStartup = {
+        marks,
+        mark,
+        setStatus(message) {
+          const element = status();
+          if (element) element.textContent = message;
+        },
+        markCoreUsable() {
+          mark('lifly-core-usable');
+          const element = shell();
+          if (!element) return;
+          element.dataset.ready = 'true';
+          window.setTimeout(() => element.remove(), 140);
+        },
+        markThemeActivated(themeId) {
+          mark('lifly-theme-activated', { themeId });
+        },
+      };
+      mark('lifly-host-feedback');
+    })();
+  </script>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
-
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
+  <div id="lifly-startup-shell" role="status" aria-live="polite">
+    <div class="lifly-startup-card">
+      <div class="lifly-startup-logo" aria-hidden="true">L</div>
+      <p class="lifly-startup-title">Lifly</p>
+      <p id="lifly-startup-status" class="lifly-startup-status">正在启动核心界面</p>
+      <div class="lifly-startup-progress" aria-hidden="true"></div>
+    </div>
+  </div>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

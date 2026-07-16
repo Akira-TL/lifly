@@ -32,14 +32,19 @@ class ThemeRegistry {
 
   final Map<String, ThemePackage> _packages;
 
-  ThemeRegistry({Iterable<ThemePackage> packages = const []})
-    : _packages = {
-        for (final package in packages) package.manifest.themeId: package,
-      } {
-    if (_packages.containsKey(LiflyCoreTheme.familyId)) {
-      throw const ThemeRegistryException(
-        'Lifly Core is built in and cannot be replaced by a package',
-      );
+  ThemeRegistry({Iterable<ThemePackage> packages = const []}) : _packages = {} {
+    registerPackages(packages);
+  }
+
+  void registerPackages(Iterable<ThemePackage> packages) {
+    for (final package in packages) {
+      final themeId = package.manifest.themeId;
+      if (themeId == LiflyCoreTheme.familyId) {
+        throw const ThemeRegistryException(
+          'Lifly Core is built in and cannot be replaced by a package',
+        );
+      }
+      _packages[themeId] = package;
     }
   }
 

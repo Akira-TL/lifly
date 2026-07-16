@@ -4,9 +4,11 @@ on:
   pull_request:
     branches:
       - master
+      - develop/master
   push:
     branches:
       - master
+      - develop/master
 
 permissions:
   contents: read
@@ -99,3 +101,24 @@ jobs:
       - name: Stop local infrastructure
         if: always()
         run: docker compose -f infra/docker-compose.yml down -v
+
+  client:
+    name: Flutter client and Web performance
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.2'
+          channel: stable
+          cache: true
+
+      - name: Run Flutter client checks
+        run: bash scripts/check-client-flutter.sh
+
+      - name: Run Core-first Web performance gate
+        run: bash scripts/check-web-theme-performance.sh

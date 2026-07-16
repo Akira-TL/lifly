@@ -225,6 +225,36 @@ void main() {
     expect(await cache.listVersions('lifly.test.mint'), isEmpty);
   });
 
+  test('oversized assets reject installation before caching', () async {
+    final cache = MemoryThemePackageCache();
+    final store = _store(
+      cache: cache,
+      entitlements: LocalThemeEntitlementProvider(),
+    );
+    final json = _copyFixture();
+    final manifest = json['manifest'] as Map<String, dynamic>;
+    final assets = manifest['assets'] as List<dynamic>;
+    final asset = assets.single as Map<String, dynamic>;
+    asset
+      ..['required'] = true
+      ..['maximum_bytes'] = 1
+      ..['sha256'] = '0' * 64;
+    _resign(json);
+
+    await expectLater(
+      store.installAndActivate(
+        ThemePackageBundle(
+          packageJson: json,
+          assets: {
+            asset['path'] as String: Uint8List.fromList([1, 2]),
+          },
+        ),
+      ),
+      throwsA(isA<ThemePackageIntegrityException>()),
+    );
+    expect(await cache.listVersions('lifly.test.mint'), isEmpty);
+  });
+
   test('incompatible cached package degrades to Lifly Core', () async {
     final cache = MemoryThemePackageCache();
     final store = _store(

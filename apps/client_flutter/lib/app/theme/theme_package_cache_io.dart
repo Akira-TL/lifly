@@ -45,6 +45,17 @@ class FileThemePackageCache implements ThemePackageCache {
   }
 
   @override
+  Future<List<String>> listThemeIds() async {
+    if (!await rootDirectory.exists()) return const [];
+    final themeIds = <String>[];
+    await for (final entity in rootDirectory.list(followLinks: false)) {
+      if (entity is Directory) themeIds.add(p.basename(entity.path));
+    }
+    themeIds.sort();
+    return List.unmodifiable(themeIds);
+  }
+
+  @override
   Future<List<String>> listVersions(String themeId) async {
     final directory = Directory(
       p.join(_themeDirectory(themeId).path, 'versions'),
