@@ -12,6 +12,7 @@ JS_MAX_BYTES="${LIFLY_WEB_JS_MAX_BYTES:-8388608}"
 APP_WASM_MAX_BYTES="${LIFLY_WEB_APP_WASM_MAX_BYTES:-8388608}"
 RENDERER_WASM_MAX_BYTES="${LIFLY_WEB_RENDERER_WASM_MAX_BYTES:-10485760}"
 HOST_MAX_BYTES="${LIFLY_WEB_HOST_MAX_BYTES:-32768}"
+REUSE_BUILDS="${LIFLY_WEB_REUSE_BUILDS:-0}"
 
 fail() {
   echo "[FAIL] $*" >&2
@@ -34,7 +35,9 @@ assert_max_size() {
 }
 
 cd "$CLIENT_DIR"
-rm -rf "$BUILD_ROOT"
+if [[ "$REUSE_BUILDS" != "1" ]]; then
+  rm -rf "$BUILD_ROOT"
+fi
 mkdir -p "$BUILD_ROOT"
 
 for mark in \
@@ -64,24 +67,35 @@ flutter test \
   test/theme_manifest_test.dart \
   test/theme_package_store_test.dart
 
-echo '[2/4] Default Web build'
-default_started="$(date +%s%3N)"
-flutter build web \
-  --release \
-  --no-source-maps \
-  --output "$DEFAULT_BUILD" \
-  --dart-define=LIFLY_APP_VERSION=0.8.0
-default_finished="$(date +%s%3N)"
+default_started=0
+default_finished=0
+wasm_started=0
+wasm_finished=0
+if [[ "$REUSE_BUILDS" == "1" ]]; then
+  [[ -d "$DEFAULT_BUILD" ]] || fail "Reusable default build is missing"
+  [[ -d "$WASM_BUILD" ]] || fail "Reusable Wasm build is missing"
+  echo '[2/4] Reusing existing Default Web build'
+  echo '[3/4] Reusing existing WebAssembly Web build'
+else
+  echo '[2/4] Default Web build'
+  default_started="$(date +%s%3N)"
+  flutter build web \
+    --release \
+    --no-source-maps \
+    --output "$DEFAULT_BUILD" \
+    --dart-define=LIFLY_APP_VERSION=0.8.0
+  default_finished="$(date +%s%3N)"
 
-echo '[3/4] WebAssembly Web build'
-wasm_started="$(date +%s%3N)"
-flutter build web \
-  --release \
-  --wasm \
-  --no-source-maps \
-  --output "$WASM_BUILD" \
-  --dart-define=LIFLY_APP_VERSION=0.8.0
-wasm_finished="$(date +%s%3N)"
+  echo '[3/4] WebAssembly Web build'
+  wasm_started="$(date +%s%3N)"
+  flutter build web \
+    --release \
+    --wasm \
+    --no-source-maps \
+    --output "$WASM_BUILD" \
+    --dart-define=LIFLY_APP_VERSION=0.8.0
+  wasm_finished="$(date +%s%3N)"
+fi
 
 echo '[4/4] Artifact budgets'
 assert_max_size 'Default main.dart.js' "$DEFAULT_BUILD/main.dart.js" "$JS_MAX_BYTES"
@@ -101,7 +115,8 @@ renderer_wasm_bytes="$(file_size "$renderer_wasm")"
 default_duration_ms="$((default_finished - default_started))"
 wasm_duration_ms="$((wasm_finished - wasm_started))"
 
-cat > "$REPORT_FILE" <<EOF
+if [[ "$REUSE_BUILDS" != "1" ]]; then
+  cat > "$REPORT_FILE" <<EOF
 {
   "default": {
     "build_duration_ms": $default_duration_ms,
@@ -125,6 +140,7 @@ cat > "$REPORT_FILE" <<EOF
   ]
 }
 EOF
+fi
 
 echo "[PASS] Web theme performance gate"
 echo "Report: $REPORT_FILE"

@@ -10,7 +10,10 @@ Lifly 需要重点保证：
 - 删除可恢复；
 - CSV 导入可回滚；
 - 附件不破坏正文；
-- MCP 工具行为稳定。
+- MCP 工具行为稳定；
+- 主题失败不阻塞 Core；
+- Web 默认与 Wasm 构建保持兼容；
+- 默认主题启动性能不会被复杂主题拖慢。
 
 ## 2. 测试类型
 
@@ -23,6 +26,8 @@ sync tests
 import tests
 mcp tests
 security tests
+theme contract tests
+startup and performance gates
 ```
 
 ## 3. 单元测试
@@ -107,7 +112,9 @@ security tests
 - token 撤销；
 - MCP token 失效；
 - presigned URL 过期；
-- 日志脱敏。
+- 日志脱敏；
+- 主题路径穿越、未知可执行字段、未声明资源和超限资源；
+- 未配置生产签名验证器时拒绝远程主题。
 
 ## 10. 发布前检查清单
 
@@ -120,7 +127,10 @@ security tests
 - AI 删除进入 AI 回收站；
 - 用户删除进入普通回收站；
 - 附件上传失败不导致 memo 丢失；
-- 多端同步一致。
+- 多端同步一致；
+- Lifly Core 无网络和主题服务时仍可启动；
+- 主题切换保留当前路由和业务服务实例；
+- 主题故障最终回退 Lifly Core。
 
 ## 11. 当前常用检查入口
 
@@ -133,6 +143,8 @@ scripts/check-api.sh
 scripts/check-client-flutter.sh
 scripts/check-powersync-sync-scope.sh
 scripts/check-v0.7-release-gate.sh
+scripts/check-web-theme-performance.sh
+scripts/check-v0.8-release-gate.sh
 scripts/check-v0.4-ai-write.sh
 scripts/smoke-mcp-v0.1.sh
 ```
@@ -185,3 +197,42 @@ Flutter AI 会话消费测试必须覆盖历史入口、连续输入、已设置
 产品地基发布门禁必须检查 Dart/Python 业务文件不超过 800 行，并拒绝首页固定状态占位值和附件占位上传入口
 AI Capture 本地规则拆分必须覆盖 task_create / expense_create / memo_create 候选动作
 ```
+
+## 13. 主题框架质量门槛
+
+主题相关版本必须检查：
+
+```text
+Lifly Core 不依赖远程资源、自定义字体、大型插图和主题授权
+Theme Runtime 启动时同步提供 Core Snapshot
+设备偏好和主题缓存只在 Core 首帧后恢复
+Manifest 必填字段、版本、平台、色彩模式、性能等级和 signer 通过校验
+远程主题不能包含 Dart、script、expression、API path 或 database query
+主题资源必须限制相对路径、SHA-256、最大字节数和声明范围
+失败更新不能替换当前 active 版本
+损坏 active 版本可以回滚到上一已知可用版本
+授权失败按声明 fallback，最终回到 Lifly Core
+主题切换不重建 API、PowerSync、Local Core、AI 服务或当前路由
+页面不得直接依赖 ThemeTokenSet、ThemePackageResolver 或 LiflyCoreTheme
+平台覆盖只能使用 compact / balanced / dashboard
+手机端交互区域不低于 48px
+Web / 桌面端支持 Hover、Focus 和键盘遍历
+系统减少动态效果覆盖主题动效
+HTML 启动壳不加载远程字体和图片
+默认 Web 与 Wasm Release 构建都通过
+Core 主包和宿主文件通过 scripts/check-web-theme-performance.sh 的体积预算
+```
+
+当前已记录的 Web 启动里程碑：
+
+```text
+lifly-host-feedback
+lifly-entrypoint-loaded
+lifly-engine-initialized
+lifly-dart-entrypoint
+lifly-flutter-first-frame
+lifly-core-usable
+lifly-theme-activated
+```
+
+CI 无浏览器时使用启动契约、产物预算和 Release 双构建作为门禁；真实浏览器环境应读取 Performance Marks，补充首帧和可操作时间基线。

@@ -14,19 +14,21 @@ AI Capture parse / commit / undo
 审计 / 回收站 / 撤销
 本地优先 / 云端同步
 Flutter 客户端真实 API 接入
+跨端 Theme Runtime、Lifly Core、主题包缓存与 Core-first Web 启动
 ```
 
-## 2. 近期路线：客户端体验与手机端产品地基
+## 2. 近期路线：Web UI/UX 与真实数据消费
 
-近期重点不是继续堆页面，而是补齐手机端真实产品页面需要的数据地基。
+v0.7.0 已完成产品数据地基，v0.8.0 已完成跨端主题应用框架。下一阶段正式进入 Web UI/UX，但页面必须继续消费既有真实 read model，不回退到假数据和纯视觉原型。
 
 ```text
-首页 Home Overview read model
-记账预算、分类统计、消费洞察
-备忘 AI 自动分类、标签元数据
-任务 AI 预警策略
-AI Capture 聊天式体验
-手机端 5 底部导航：首页 / 备忘 / AI / 记账 / 任务
+Web 极简 Shell 与全局导航
+Web 首页注意力分发与真实 Home Overview 消费
+Web 备忘高密度列表、AI 分类与标签消费
+Web 记账预算、分类占比和洞察消费
+Web 任务预警与提醒策略消费
+Web AI、附件、导入导出、搜索和诊断体验
+多端响应式与发布门禁
 ```
 
 验收原则：
@@ -166,7 +168,30 @@ AI Capture 聊天式体验
 - 云端 API 与本地 read model 字段同构；
 - 手机端底部导航为 5 个入口。
 
-## 10. Phase 7：第三方生态
+## 10. Phase 7：跨端主题应用框架
+
+状态：已完成。
+
+目标：
+
+- Lifly Core 极简默认主题；
+- 声明式 Theme Manifest 与 Semantic Tokens；
+- Web、手机端、桌面端共享 Theme Runtime；
+- 主题选择和色彩模式；
+- 平台 Profile 与受控布局；
+- 版本缓存、完整性、授权占位、回滚与 fallback；
+- Web Core-first 启动；
+- 默认 Web / Wasm 构建门禁。
+
+验收：
+
+- 默认 Core 不等待网络、同步、授权或缓存；
+- 主题失败最终降级 Core；
+- 新增主题不修改业务页面；
+- 远程主题不执行任意代码；
+- 复杂主题不能放宽 Core 性能预算。
+
+## 11. Phase 8：第三方生态
 
 目标：
 
@@ -177,7 +202,7 @@ AI Capture 聊天式体验
 - 机器人模板；
 - 插件机制。
 
-## 11. Phase 8：商业化准备
+## 12. Phase 9：商业化准备
 
 目标：
 

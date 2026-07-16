@@ -11,6 +11,8 @@ v0.3 Cloud Sync
 v0.4 AI Write / MCP
 v0.5 Assets & Import / Export
 v0.6 Import / Export / Asset Experience
+v0.7 Product Foundation
+v0.8 Cross-platform Theme Application Framework
 ```
 
 已完成能力包括：
@@ -26,9 +28,46 @@ capture_parse / capture_commit / capture_undo
 导入预览 / 提交 / 回滚
 导出基础能力
 Flutter 真实 API 接入和导入导出体验层
+首页、预算、分类、任务预警与聊天式 AI Capture 数据地基
+跨端 Theme Runtime、主题包缓存、受控布局和 Web Core-first 启动
 ```
 
-## 2. 当前任务池：客户端体验与手机端产品地基
+## 2. 当前任务池：Web UI/UX 与产品消费层
+
+### LC-0800 Cross-platform theme application framework
+
+状态：已完成。
+
+目标：建立可扩展、可授权、可商业化预留的跨端主题框架，同时保证默认 Lifly Core 极致轻量。
+
+验收：
+
+```text
+Lifly Core 内置、不可卸载、无远程资源和自定义字体依赖
+Theme Manifest / Semantic Tokens / Platform Overrides 严格校验
+主题选择和色彩模式设备本地持久化
+Web / phone / desktop 使用共享 Runtime 和受控布局
+坏更新保留上一 active 版本，损坏版本可以回滚
+授权失败按声明 fallback，最终回到 Core
+Web HTML 启动壳和 Flutter Core 首帧不等待主题缓存
+默认 Web 与 Wasm Release 构建通过性能门禁
+```
+
+后续主题商业能力：正式主题目录、生产签名公钥、付费授权 API、订阅与恢复购买、主题推荐、第三方投稿和审核。这些能力必须复用现有 Theme Package 与 Entitlement 边界，不能把远程主题升级为任意代码插件。
+
+### Web UI/UX 后续切片
+
+```text
+Web 极简 Shell 与全局导航
+Web 首页真实 Home Overview 消费
+Web 备忘 AI 分类和标签消费
+Web 记账预算、分类占比和洞察消费
+Web 任务预警策略和提醒状态消费
+Web AI、附件、导入导出、搜索、设置和诊断
+多端响应式、键鼠、可访问性和发布门禁
+```
+
+### 既有 v0.7 产品地基后续
 
 ### LC-0701 Local Home Overview read model
 

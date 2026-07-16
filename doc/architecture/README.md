@@ -16,6 +16,7 @@ sync-and-offline.md
 local-mcp-desktop.md
 monorepo-setup.md
 tech-stack.md
+theme-application-framework.md
 decision-record.md
 adr-template.md
 ```

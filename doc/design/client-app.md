@@ -2,17 +2,16 @@
 
 ## 1. 平台
 
-MVP 支持：
+当前产品基线：
 
 - Windows；
 - Android。
 
-后续支持：
+当前完整 UI/UX 与启动验证平台：
 
-- macOS；
-- iOS；
-- Linux；
 - Web。
+
+共享 Flutter 主题 Runtime 与平台 Profile 已覆盖 Web、手机端和桌面端语义。macOS、iOS、Linux 仍需在对应真实构建环境完成发布验证，不能仅凭共享代码视为正式支持。
 
 ## 2. 客户端职责
 
@@ -26,7 +25,8 @@ MVP 支持：
 - 同步状态展示；
 - AI/MCP 调用入口；
 - 数据查看、编辑、恢复、导出；
-- 本地 read model 计算，包括首页概览、预算进度、分类占比、最近混合内容流、任务预警分组和标签统计。
+- 本地 read model 计算，包括首页概览、预算进度、分类占比、最近混合内容流、任务预警分组和标签统计；
+- 跨端 Theme Runtime、主题包解析、设备偏好、平台 Profile、主题降级和 Core-first 启动。
 
 客户端不负责：
 
@@ -45,6 +45,7 @@ MVP 支持：
 lib/
 ├─ app/
 │  ├─ router/
+│  ├─ startup/
 │  ├─ theme/
 │  └─ shell/
 ├─ features/
@@ -83,7 +84,7 @@ lib/
 
 AI 是居中主按钮。搜索和设置不占手机端底部一级入口。
 
-当前 Flutter `AppShell` 已按该结构落地：手机端使用五入口底栏，AI 为中间强化按钮；首页顶部提供全局搜索和设置入口；宽屏 Flutter 形态使用同一组核心入口的 `NavigationRail` 作为基础适配。
+当前 Flutter `AppShell` 已按该结构落地：手机端使用五入口底栏，AI 为中间强化按钮；首页顶部提供全局搜索和设置入口；宽屏 Flutter 使用受控 `compact / balanced / dashboard` 布局策略。Web 可以展开侧栏，桌面端可以使用紧凑侧栏，手机端保持不低于 48px 的交互区域。
 
 ### 4.2 页面集合
 
@@ -181,11 +182,62 @@ upload-complete 校验对象并把 sync_status 更新为 synced
 
 ## 10. 性能要求
 
-MVP 基础要求：
+基础要求：
 
-- 冷启动尽量控制在可接受范围；
+- Lifly Core 不依赖网络、自定义字体、大型装饰资源或主题授权；
+- Web 先显示内联 HTML 启动壳，再显示 Flutter Core Shell；
+- 设备主题偏好和缓存主题只能在 Core 首帧后恢复；
 - 首页查询走本地 SQLite；
 - 大列表分页；
 - Markdown 预览懒加载；
 - 图片缩略图优先；
 - 附件不自动全量下载。
+
+当前 Web 初始产物预算：
+
+```text
+Default main.dart.js        <= 8 MiB
+Application main.dart.wasm  <= 8 MiB
+CanvasKit renderer Wasm     <= 10 MiB
+index.html / bootstrap      <= 32 KiB each
+```
+
+默认 Web 和 Wasm 构建都必须通过 `scripts/check-web-theme-performance.sh`，生产渲染器选择继续以真实设备、网络和兼容性测量为准。
+
+## 11. 主题应用框架
+
+客户端主题入口统一为 Theme Runtime：
+
+```text
+Lifly Core 同步可用
+  ↓
+设备偏好恢复
+  ↓
+已安装主题包解析
+  ↓
+平台 Profile 与色彩模式解析
+  ↓
+不可变 Theme Snapshot
+```
+
+业务页面不得解析 Manifest、验证签名或自行维护主题家族分支。业务组件通过 Flutter Theme 和语义 Token 获取样式。
+
+主题切换不得重建 API Client、PowerSync、Local Core、AI 服务或当前路由。主题故障必须保留当前业务功能并最终回退 `Lifly Core`。
+
+完整协议和安全边界见 `doc/architecture/theme-application-framework.md`。
+
+## 12. Web Core-first 启动
+
+Web 启动记录以下里程碑：
+
+```text
+lifly-host-feedback
+lifly-entrypoint-loaded
+lifly-engine-initialized
+lifly-dart-entrypoint
+lifly-flutter-first-frame
+lifly-core-usable
+lifly-theme-activated
+```
+
+HTML 启动壳不加载远程字体和插图。Flutter 首帧后才读取 SharedPreferences、打开主题缓存并验证可选主题。主题恢复失败只记录诊断，不显示阻塞启动弹窗。
