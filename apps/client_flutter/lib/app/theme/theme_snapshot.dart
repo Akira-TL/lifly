@@ -1,4 +1,5 @@
 import 'package:client_flutter/app/theme/theme_package.dart';
+import 'package:client_flutter/app/theme/theme_platform_profile.dart';
 import 'package:client_flutter/app/theme/theme_tokens.dart';
 import 'package:flutter/material.dart';
 
@@ -9,6 +10,7 @@ class ThemeSnapshot {
   final String packageVersion;
   final ThemePerformanceClass performanceClass;
   final ThemePackageColorMode colorMode;
+  final ThemePlatformProfile platformProfile;
   final ThemeTokenSet tokens;
   final ThemeData lightTheme;
   final ThemeData darkTheme;
@@ -20,6 +22,7 @@ class ThemeSnapshot {
     required this.packageVersion,
     required this.performanceClass,
     required this.colorMode,
+    required this.platformProfile,
     required this.tokens,
     required this.lightTheme,
     required this.darkTheme,
@@ -36,6 +39,7 @@ class ThemeSnapshot {
       packageVersion: packageVersion,
       performanceClass: performanceClass,
       colorMode: colorMode ?? this.colorMode,
+      platformProfile: platformProfile,
       tokens: tokens,
       lightTheme: lightTheme,
       darkTheme: darkTheme,

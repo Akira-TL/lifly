@@ -11,6 +11,7 @@ import 'package:client_flutter/app/theme/theme_platform.dart';
 import 'package:client_flutter/app/theme/theme_preferences.dart';
 import 'package:client_flutter/app/theme/theme_registry.dart';
 import 'package:client_flutter/app/theme/theme_runtime.dart';
+import 'package:client_flutter/app/theme/theme_tokens.dart';
 import 'package:client_flutter/app/theme/themes/lifly_test_theme.dart';
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
@@ -91,6 +92,14 @@ class LiflyApp extends StatelessWidget {
       theme: theme.lightTheme,
       darkTheme: theme.darkTheme,
       themeMode: theme.themeMode,
+      builder: (context, child) {
+        final content = child ?? const SizedBox.shrink();
+        if (!MediaQuery.disableAnimationsOf(context)) return content;
+        return Theme(
+          data: themeWithReducedMotion(Theme.of(context)),
+          child: content,
+        );
+      },
       home: const AppShell(),
       debugShowCheckedModeBanner: false,
     );

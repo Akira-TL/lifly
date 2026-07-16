@@ -106,7 +106,7 @@ class ThemePackageStore {
         diagnostics.add('Fallback cycle detected for $themeId');
       }
       return ThemePackageResolution(
-        snapshot: _coreSnapshot(requestedColorMode),
+        snapshot: _coreSnapshot(requestedColorMode, platform),
         degraded: degraded || themeId != LiflyCoreTheme.familyId,
         diagnostics: List.unmodifiable(diagnostics),
       );
@@ -164,7 +164,7 @@ class ThemePackageStore {
 
     diagnostics.add('Falling back from $themeId to Lifly Core');
     return ThemePackageResolution(
-      snapshot: _coreSnapshot(requestedColorMode),
+      snapshot: _coreSnapshot(requestedColorMode, platform),
       degraded: true,
       diagnostics: List.unmodifiable(diagnostics),
     );
@@ -189,16 +189,18 @@ class ThemePackageStore {
   }
 }
 
-ThemeSnapshot _coreSnapshot(ThemePackageColorMode requestedColorMode) {
+ThemeSnapshot _coreSnapshot(
+  ThemePackageColorMode requestedColorMode,
+  ThemeTargetPlatform platform,
+) {
   final resolved = resolveThemeColorMode(requestedColorMode, const {
     ThemePackageColorMode.system,
     ThemePackageColorMode.light,
     ThemePackageColorMode.dark,
   });
-  return LiflyCoreTheme.snapshot.copyWith(
-    colorMode: resolved,
-    themeMode: materialThemeMode(resolved),
-  );
+  return LiflyCoreTheme.snapshotFor(
+    platform,
+  ).copyWith(colorMode: resolved, themeMode: materialThemeMode(resolved));
 }
 
 List<String> _orderedVersions(String? active, Iterable<String> versions) {

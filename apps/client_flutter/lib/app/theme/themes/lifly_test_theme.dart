@@ -22,6 +22,32 @@ const liflyTestThemePackageJson = <String, dynamic>{
     ],
     'fallback_theme_id': 'lifly.core',
     'entitlement_type': 'free',
+    'platform_overrides': <String, dynamic>{
+      'web': <String, dynamic>{
+        'layout_variant': 'dashboard',
+        'visual_density_adjustment': -0.5,
+        'minimum_interactive_dimension': 40,
+        'focus_ring_width': 2,
+        'hover_enabled': true,
+        'keyboard_navigation': true,
+      },
+      'phone': <String, dynamic>{
+        'layout_variant': 'balanced',
+        'visual_density_adjustment': 0,
+        'minimum_interactive_dimension': 44,
+        'focus_ring_width': 2,
+        'hover_enabled': false,
+        'keyboard_navigation': false,
+      },
+      'desktop': <String, dynamic>{
+        'layout_variant': 'compact',
+        'visual_density_adjustment': -1,
+        'minimum_interactive_dimension': 40,
+        'focus_ring_width': 2,
+        'hover_enabled': true,
+        'keyboard_navigation': true,
+      },
+    },
     'integrity': <String, dynamic>{
       'algorithm': 'sha256',
       'digest':

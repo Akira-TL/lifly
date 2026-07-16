@@ -18,7 +18,7 @@ class ThemeRuntime extends ChangeNotifier {
   final String? _appVersion;
   final ThemeTargetPlatform? _platform;
 
-  ThemeSnapshot _snapshot = LiflyCoreTheme.snapshot;
+  late ThemeSnapshot _snapshot;
   ThemePreference _preference = ThemePreference.core;
   Object? _lastRestoreError;
 
@@ -45,13 +45,17 @@ class ThemeRuntime extends ChangeNotifier {
     this._preferenceStore,
     this._appVersion,
     this._platform,
-  ) : _resolver = null;
+  ) : _resolver = null {
+    _snapshot = LiflyCoreTheme.snapshotFor(_platform!);
+  }
 
   ThemeRuntime._resolver(this._resolver)
     : _registry = null,
       _preferenceStore = null,
       _appVersion = null,
-      _platform = null;
+      _platform = null {
+    _snapshot = LiflyCoreTheme.snapshot;
+  }
 
   ThemeSnapshot get snapshot => _snapshot;
 
@@ -75,7 +79,7 @@ class ThemeRuntime extends ChangeNotifier {
       await _activatePreference(loaded, persist: false);
     } catch (error) {
       _preference = ThemePreference.core;
-      _snapshot = LiflyCoreTheme.snapshot;
+      _snapshot = LiflyCoreTheme.snapshotFor(_platform!);
       _lastRestoreError = error;
       notifyListeners();
     }

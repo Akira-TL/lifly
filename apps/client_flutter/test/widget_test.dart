@@ -2,6 +2,7 @@ import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/app/theme/app_theme.dart';
 import 'package:client_flutter/app/theme/theme_package.dart';
 import 'package:client_flutter/app/theme/theme_package_resolver.dart';
+import 'package:client_flutter/app/theme/theme_platform_profile.dart';
 import 'package:client_flutter/app/theme/theme_preferences.dart';
 import 'package:client_flutter/app/theme/theme_registry.dart';
 import 'package:client_flutter/app/theme/theme_runtime.dart';
@@ -196,6 +197,7 @@ ThemeSnapshot _switchedTheme() {
     packageVersion: '1.0.0',
     performanceClass: ThemePerformanceClass.standard,
     colorMode: ThemePackageColorMode.light,
+    platformProfile: ThemePlatformProfile.defaults(ThemeTargetPlatform.phone),
     tokens: LiflyCoreTheme.tokens,
     lightTheme: ThemeData(
       useMaterial3: true,
@@ -351,6 +353,86 @@ void main() {
       expect(find.text('测试描述'), findsOneWidget);
       expect(apiAfter, same(apiBefore));
       expect(apiAfter, same(api));
+    },
+  );
+
+  testWidgets('Web dashboard profile extends the rail without losing modules', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final runtime = ThemeRuntime.withResolver(
+      ThemePackageResolver(
+        package: ThemePackage.fromJson(liflyTestThemePackageJson),
+        appVersion: '0.8.0',
+        platform: ThemeTargetPlatform.web,
+      ),
+    );
+    await tester.pumpWidget(_buildTestApp(runtime));
+    await runtime.restore();
+    await tester.pumpAndSettle();
+
+    final rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
+    expect(rail.extended, isTrue);
+    expect(rail.destinations, hasLength(5));
+    expect(find.text('首页'), findsWidgets);
+    expect(find.text('备忘'), findsWidgets);
+    expect(find.text('AI'), findsOneWidget);
+    expect(find.text('记账'), findsWidgets);
+    expect(find.text('任务'), findsWidgets);
+  });
+
+  testWidgets('Desktop compact profile keeps a narrow keyboard-ready rail', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final runtime = ThemeRuntime.withResolver(
+      ThemePackageResolver(
+        package: ThemePackage.fromJson(liflyTestThemePackageJson),
+        appVersion: '0.8.0',
+        platform: ThemeTargetPlatform.desktop,
+      ),
+    );
+    await tester.pumpWidget(_buildTestApp(runtime));
+    await runtime.restore();
+    await tester.pumpAndSettle();
+
+    final rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
+    expect(rail.extended, isFalse);
+    expect(rail.labelType, NavigationRailLabelType.none);
+    expect(rail.minWidth, 64);
+    expect(find.byType(FocusTraversalGroup), findsWidgets);
+  });
+
+  testWidgets(
+    'Phone shell keeps every destination touch target at least 48px',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final runtime = ThemeRuntime(
+        registry: ThemeRegistry(),
+        preferenceStore: _MemoryThemePreferenceStore(),
+        appVersion: '0.8.0',
+        platform: ThemeTargetPlatform.phone,
+      );
+      await tester.pumpWidget(_buildTestApp(runtime));
+      await tester.pump();
+
+      for (final label in ['首页', '备忘', 'AI', '记账', '任务']) {
+        final target = find.byKey(Key('shell_destination_$label'));
+        expect(target, findsOneWidget);
+        expect(tester.getSize(target).height, greaterThanOrEqualTo(48));
+      }
     },
   );
 

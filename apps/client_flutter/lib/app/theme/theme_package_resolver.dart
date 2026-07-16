@@ -1,5 +1,6 @@
 import 'package:client_flutter/app/theme/theme_color_mode.dart';
 import 'package:client_flutter/app/theme/theme_package.dart';
+import 'package:client_flutter/app/theme/theme_platform_profile.dart';
 import 'package:client_flutter/app/theme/theme_runtime.dart';
 import 'package:flutter/material.dart';
 
@@ -34,15 +35,26 @@ class ThemePackageResolver implements ThemeResolver {
       requestedColorMode,
       manifest.supportedColorModes,
     );
+    final platformProfile = ThemePlatformProfile.resolve(
+      platform,
+      manifest.platformOverrides[platform],
+    );
     return ThemeSnapshot(
       familyId: manifest.themeId,
       displayName: manifest.displayName,
       packageVersion: manifest.version,
       performanceClass: manifest.performanceClass,
       colorMode: resolvedColorMode,
+      platformProfile: platformProfile,
       tokens: package.tokens,
-      lightTheme: package.tokens.buildTheme(Brightness.light),
-      darkTheme: package.tokens.buildTheme(Brightness.dark),
+      lightTheme: package.tokens.buildTheme(
+        Brightness.light,
+        platformProfile: platformProfile,
+      ),
+      darkTheme: package.tokens.buildTheme(
+        Brightness.dark,
+        platformProfile: platformProfile,
+      ),
       themeMode: materialThemeMode(resolvedColorMode),
     );
   }

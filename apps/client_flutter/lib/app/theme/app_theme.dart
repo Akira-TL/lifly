@@ -1,4 +1,5 @@
 import 'package:client_flutter/app/theme/theme_package.dart';
+import 'package:client_flutter/app/theme/theme_platform_profile.dart';
 import 'package:client_flutter/app/theme/theme_snapshot.dart';
 import 'package:client_flutter/app/theme/theme_tokens.dart';
 import 'package:flutter/material.dart';
@@ -67,15 +68,30 @@ class LiflyCoreTheme {
     ),
   );
 
-  static final ThemeSnapshot snapshot = ThemeSnapshot(
-    familyId: familyId,
-    displayName: 'Lifly Core',
-    packageVersion: 'builtin',
-    performanceClass: ThemePerformanceClass.core,
-    colorMode: ThemePackageColorMode.system,
-    tokens: tokens,
-    lightTheme: tokens.buildTheme(Brightness.light),
-    darkTheme: tokens.buildTheme(Brightness.dark),
-    themeMode: ThemeMode.system,
-  );
+  static final Map<ThemeTargetPlatform, ThemeSnapshot> _snapshots = {
+    for (final platform in ThemeTargetPlatform.values)
+      platform: _buildSnapshot(platform),
+  };
+
+  static ThemeSnapshot get snapshot => snapshotFor(ThemeTargetPlatform.web);
+
+  static ThemeSnapshot snapshotFor(ThemeTargetPlatform platform) {
+    return _snapshots[platform]!;
+  }
+
+  static ThemeSnapshot _buildSnapshot(ThemeTargetPlatform platform) {
+    final profile = ThemePlatformProfile.defaults(platform);
+    return ThemeSnapshot(
+      familyId: familyId,
+      displayName: 'Lifly Core',
+      packageVersion: 'builtin',
+      performanceClass: ThemePerformanceClass.core,
+      colorMode: ThemePackageColorMode.system,
+      platformProfile: profile,
+      tokens: tokens,
+      lightTheme: tokens.buildTheme(Brightness.light, platformProfile: profile),
+      darkTheme: tokens.buildTheme(Brightness.dark, platformProfile: profile),
+      themeMode: ThemeMode.system,
+    );
+  }
 }

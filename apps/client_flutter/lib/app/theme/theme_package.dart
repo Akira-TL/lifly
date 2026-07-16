@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 
 enum ThemeTargetPlatform { web, phone, desktop }
 
+enum ThemeLayoutVariant { compact, balanced, dashboard }
+
 enum ThemePackageColorMode { system, light, dark, oled, highContrast }
 
 enum ThemePerformanceClass { core, standard, rich }
@@ -42,6 +44,7 @@ class ThemeManifest {
   final List<ThemeAssetDeclaration> assets;
   final String fallbackThemeId;
   final ThemeEntitlementType entitlementType;
+  final Map<ThemeTargetPlatform, ThemePlatformOverride> platformOverrides;
   final ThemeIntegrityMetadata integrity;
 
   const ThemeManifest({
@@ -57,6 +60,7 @@ class ThemeManifest {
     required this.assets,
     required this.fallbackThemeId,
     required this.entitlementType,
+    required this.platformOverrides,
     required this.integrity,
   });
 
@@ -74,6 +78,7 @@ class ThemeManifest {
       'assets',
       'fallback_theme_id',
       'entitlement_type',
+      'platform_overrides',
       'integrity',
     }, 'theme manifest');
 
@@ -145,9 +150,62 @@ class ThemeManifest {
         'entitlement_type',
         _entitlementTypeByName,
       ),
+      platformOverrides: _platformOverrides(json['platform_overrides']),
       integrity: ThemeIntegrityMetadata.fromJson(
         _requiredMap(json, 'integrity'),
       ),
+    );
+  }
+}
+
+@immutable
+class ThemePlatformOverride {
+  final ThemeLayoutVariant? layoutVariant;
+  final double? visualDensityAdjustment;
+  final double? minimumInteractiveDimension;
+  final double? focusRingWidth;
+  final bool? hoverEnabled;
+  final bool? keyboardNavigation;
+
+  const ThemePlatformOverride({
+    this.layoutVariant,
+    this.visualDensityAdjustment,
+    this.minimumInteractiveDimension,
+    this.focusRingWidth,
+    this.hoverEnabled,
+    this.keyboardNavigation,
+  });
+
+  factory ThemePlatformOverride.fromJson(Map<String, dynamic> json) {
+    _rejectUnknownKeys(json, const {
+      'layout_variant',
+      'visual_density_adjustment',
+      'minimum_interactive_dimension',
+      'focus_ring_width',
+      'hover_enabled',
+      'keyboard_navigation',
+    }, 'theme platform override');
+    return ThemePlatformOverride(
+      layoutVariant: _optionalEnum(
+        json,
+        'layout_variant',
+        _layoutVariantByName,
+      ),
+      visualDensityAdjustment: _optionalRangedDouble(
+        json,
+        'visual_density_adjustment',
+        -4,
+        4,
+      ),
+      minimumInteractiveDimension: _optionalRangedDouble(
+        json,
+        'minimum_interactive_dimension',
+        36,
+        64,
+      ),
+      focusRingWidth: _optionalRangedDouble(json, 'focus_ring_width', 0, 6),
+      hoverEnabled: _optionalBool(json, 'hover_enabled'),
+      keyboardNavigation: _optionalBool(json, 'keyboard_navigation'),
     );
   }
 }
@@ -278,6 +336,12 @@ const _platformByName = {
   'desktop': ThemeTargetPlatform.desktop,
 };
 
+const _layoutVariantByName = {
+  'compact': ThemeLayoutVariant.compact,
+  'balanced': ThemeLayoutVariant.balanced,
+  'dashboard': ThemeLayoutVariant.dashboard,
+};
+
 const _colorModeByName = {
   'system': ThemePackageColorMode.system,
   'light': ThemePackageColorMode.light,
@@ -388,6 +452,68 @@ T _requiredEnum<T>(
     throw ThemePackageFormatException('$key contains unsupported value: $raw');
   }
   return values[raw] as T;
+}
+
+T? _optionalEnum<T>(
+  Map<String, dynamic> json,
+  String key,
+  Map<String, T> values,
+) {
+  final raw = json[key];
+  if (raw == null) return null;
+  if (raw is! String || values[raw] == null) {
+    throw ThemePackageFormatException('$key contains unsupported value: $raw');
+  }
+  return values[raw];
+}
+
+bool? _optionalBool(Map<String, dynamic> json, String key) {
+  final raw = json[key];
+  if (raw == null) return null;
+  if (raw is! bool) {
+    throw ThemePackageFormatException('$key must be a bool');
+  }
+  return raw;
+}
+
+double? _optionalRangedDouble(
+  Map<String, dynamic> json,
+  String key,
+  double minimum,
+  double maximum,
+) {
+  final raw = json[key];
+  if (raw == null) return null;
+  if (raw is! num || raw < minimum || raw > maximum) {
+    throw ThemePackageFormatException(
+      '$key must be between $minimum and $maximum',
+    );
+  }
+  return raw.toDouble();
+}
+
+Map<ThemeTargetPlatform, ThemePlatformOverride> _platformOverrides(
+  Object? raw,
+) {
+  if (raw == null) return const {};
+  if (raw is! Map) {
+    throw const ThemePackageFormatException(
+      'platform_overrides must be an object',
+    );
+  }
+  final result = <ThemeTargetPlatform, ThemePlatformOverride>{};
+  for (final entry in raw.entries) {
+    final platform = _platformByName[entry.key];
+    if (platform == null || entry.value is! Map) {
+      throw ThemePackageFormatException(
+        'platform_overrides contains unsupported platform: ${entry.key}',
+      );
+    }
+    result[platform] = ThemePlatformOverride.fromJson(
+      (entry.value as Map).cast<String, dynamic>(),
+    );
+  }
+  return Map.unmodifiable(result);
 }
 
 void _rejectUnknownKeys(

@@ -94,10 +94,9 @@ class ThemeRegistry {
         preference.colorMode,
         coreColorModes,
       );
-      return LiflyCoreTheme.snapshot.copyWith(
-        colorMode: resolved,
-        themeMode: materialThemeMode(resolved),
-      );
+      return LiflyCoreTheme.snapshotFor(
+        platform,
+      ).copyWith(colorMode: resolved, themeMode: materialThemeMode(resolved));
     }
 
     final package = _packages[preference.familyId];

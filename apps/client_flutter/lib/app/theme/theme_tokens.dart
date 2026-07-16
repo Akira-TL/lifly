@@ -1,3 +1,5 @@
+import 'package:client_flutter/app/theme/theme_package.dart';
+import 'package:client_flutter/app/theme/theme_platform_profile.dart';
 import 'package:flutter/material.dart';
 
 class ThemeTokenSet {
@@ -13,8 +15,22 @@ class ThemeTokenSet {
     );
   }
 
-  ThemeData buildTheme(Brightness brightness) {
+  ThemeData buildTheme(
+    Brightness brightness, {
+    required ThemePlatformProfile platformProfile,
+  }) {
     final tokens = brightness == Brightness.light ? light : dark;
+    final density =
+        (tokens.density.visual + platformProfile.visualDensityAdjustment)
+            .clamp(-4, 4)
+            .toDouble();
+    final focusColor = tokens.colors.primary.withValues(alpha: 0.24);
+    final hoverColor = platformProfile.hoverEnabled
+        ? tokens.colors.primary.withValues(alpha: 0.08)
+        : Colors.transparent;
+    final minimumSize = Size.square(
+      platformProfile.minimumInteractiveDimension,
+    );
     final base = ThemeData(
       useMaterial3: true,
       brightness: brightness,
@@ -30,9 +46,24 @@ class ThemeTokenSet {
             onSurface: tokens.colors.onSurface,
             error: tokens.colors.critical,
           ),
-      visualDensity: VisualDensity(
-        horizontal: tokens.density.visual,
-        vertical: tokens.density.visual,
+      visualDensity: VisualDensity(horizontal: density, vertical: density),
+      materialTapTargetSize:
+          platformProfile.platform == ThemeTargetPlatform.phone
+          ? MaterialTapTargetSize.padded
+          : MaterialTapTargetSize.shrinkWrap,
+      focusColor: focusColor,
+      hoverColor: hoverColor,
+      iconButtonTheme: IconButtonThemeData(
+        style: ButtonStyle(minimumSize: WidgetStatePropertyAll(minimumSize)),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: ButtonStyle(minimumSize: WidgetStatePropertyAll(minimumSize)),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ButtonStyle(minimumSize: WidgetStatePropertyAll(minimumSize)),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: ButtonStyle(minimumSize: WidgetStatePropertyAll(minimumSize)),
       ),
       cardTheme: CardThemeData(
         elevation: tokens.elevation.card,
@@ -49,17 +80,18 @@ class ThemeTokenSet {
     );
 
     return base.copyWith(
+      extensions: [platformProfile],
       textTheme: _scaledTextTheme(base.textTheme, tokens.typography),
       pageTransitionsTheme: tokens.motion.enabled
           ? base.pageTransitionsTheme
           : const PageTransitionsTheme(
               builders: {
-                TargetPlatform.android: _NoAnimationPageTransitionsBuilder(),
-                TargetPlatform.fuchsia: _NoAnimationPageTransitionsBuilder(),
-                TargetPlatform.iOS: _NoAnimationPageTransitionsBuilder(),
-                TargetPlatform.linux: _NoAnimationPageTransitionsBuilder(),
-                TargetPlatform.macOS: _NoAnimationPageTransitionsBuilder(),
-                TargetPlatform.windows: _NoAnimationPageTransitionsBuilder(),
+                TargetPlatform.android: ReducedMotionPageTransitionsBuilder(),
+                TargetPlatform.fuchsia: ReducedMotionPageTransitionsBuilder(),
+                TargetPlatform.iOS: ReducedMotionPageTransitionsBuilder(),
+                TargetPlatform.linux: ReducedMotionPageTransitionsBuilder(),
+                TargetPlatform.macOS: ReducedMotionPageTransitionsBuilder(),
+                TargetPlatform.windows: ReducedMotionPageTransitionsBuilder(),
               },
             ),
     );
@@ -333,8 +365,23 @@ TextTheme _scaledTextTheme(TextTheme source, ThemeTypographyTokens typography) {
   );
 }
 
-class _NoAnimationPageTransitionsBuilder extends PageTransitionsBuilder {
-  const _NoAnimationPageTransitionsBuilder();
+ThemeData themeWithReducedMotion(ThemeData theme) {
+  return theme.copyWith(
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {
+        TargetPlatform.android: ReducedMotionPageTransitionsBuilder(),
+        TargetPlatform.fuchsia: ReducedMotionPageTransitionsBuilder(),
+        TargetPlatform.iOS: ReducedMotionPageTransitionsBuilder(),
+        TargetPlatform.linux: ReducedMotionPageTransitionsBuilder(),
+        TargetPlatform.macOS: ReducedMotionPageTransitionsBuilder(),
+        TargetPlatform.windows: ReducedMotionPageTransitionsBuilder(),
+      },
+    ),
+  );
+}
+
+class ReducedMotionPageTransitionsBuilder extends PageTransitionsBuilder {
+  const ReducedMotionPageTransitionsBuilder();
 
   @override
   Widget buildTransitions<T>(

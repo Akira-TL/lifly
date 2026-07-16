@@ -111,6 +111,19 @@ void main() {
     );
   });
 
+  test('manifest rejects unapproved platform layout overrides', () {
+    final json = _fixtureCopy();
+    final manifest = json['manifest'] as Map<String, dynamic>;
+    final overrides = manifest['platform_overrides'] as Map<String, dynamic>;
+    final web = overrides['web'] as Map<String, dynamic>;
+    web['layout_variant'] = 'arbitrary_page_replacement';
+
+    expect(
+      () => ThemePackage.fromJson(json),
+      throwsA(isA<ThemePackageFormatException>()),
+    );
+  });
+
   test('resolver rejects incompatible app versions and platforms', () async {
     final package = ThemePackage.fromJson(_fixtureCopy());
 
