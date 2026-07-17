@@ -441,12 +441,33 @@ void main() {
       expect(find.text('生活数据中心'), findsOneWidget);
       expect(find.text('搜索'), findsOneWidget);
       expect(find.text('快速记录'), findsOneWidget);
-      expect(find.text('附件'), findsOneWidget);
-      expect(find.text('设置'), findsOneWidget);
+      expect(find.text('管理'), findsOneWidget);
+      expect(find.text('附件'), findsNothing);
+      expect(find.text('设置'), findsNothing);
 
       await tester.tap(find.text('搜索'));
       await tester.pumpAndSettle();
       expect(find.widgetWithText(AppBar, '搜索'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('管理'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(AppBar, '管理中心'), findsOneWidget);
+      expect(find.text('数据流转'), findsOneWidget);
+      expect(find.text('数据资产'), findsOneWidget);
+      expect(find.text('系统与诊断'), findsOneWidget);
+      expect(find.text('账单导入'), findsOneWidget);
+      expect(find.text('导入批次'), findsOneWidget);
+      expect(find.text('数据导出'), findsOneWidget);
+      expect(find.text('附件库'), findsOneWidget);
+      expect(find.text('设置与诊断'), findsOneWidget);
+
+      await tester.tap(find.text('附件库'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(AppBar, '附件库'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
       await tester.pageBack();
       await tester.pumpAndSettle();
 

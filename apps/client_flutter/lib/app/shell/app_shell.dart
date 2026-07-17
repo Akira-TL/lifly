@@ -6,12 +6,11 @@ import 'package:client_flutter/app/shell/wide_shell.dart';
 import 'package:client_flutter/app/theme/theme_package.dart';
 import 'package:client_flutter/app/theme/theme_platform_profile.dart';
 import 'package:client_flutter/features/ai_capture/pages/ai_capture_page.dart';
-import 'package:client_flutter/features/asset/pages/asset_list_page.dart';
 import 'package:client_flutter/features/home/pages/home_page.dart';
 import 'package:client_flutter/features/ledger/pages/ledger_list_page.dart';
+import 'package:client_flutter/features/management/pages/management_hub_page.dart';
 import 'package:client_flutter/features/memo/pages/memo_list_page.dart';
 import 'package:client_flutter/features/search/pages/search_page.dart';
-import 'package:client_flutter/features/settings/settings_page.dart';
 import 'package:client_flutter/features/task/pages/task_list_page.dart';
 import 'package:flutter/material.dart';
 
@@ -127,8 +126,8 @@ class _AppShellState extends State<AppShell> {
             onDestinationSelected: _selectDestination,
             onQuickCapture: () => _selectDestination(_primaryDestinationIndex),
             onOpenSearch: () => _openPage(context, const SearchPage()),
-            onOpenAssets: () => _openPage(context, const AssetListPage()),
-            onOpenSettings: () => _openPage(context, const SettingsPage()),
+            onOpenManagement: () =>
+                _openPage(context, const ManagementHubPage()),
             onToggleSidebar: _toggleSidebar,
           );
         }

@@ -36,8 +36,7 @@ class WideShell extends StatelessWidget {
   final ValueChanged<int> onDestinationSelected;
   final VoidCallback onQuickCapture;
   final VoidCallback onOpenSearch;
-  final VoidCallback onOpenAssets;
-  final VoidCallback onOpenSettings;
+  final VoidCallback onOpenManagement;
   final VoidCallback onToggleSidebar;
 
   const WideShell({
@@ -50,8 +49,7 @@ class WideShell extends StatelessWidget {
     required this.onDestinationSelected,
     required this.onQuickCapture,
     required this.onOpenSearch,
-    required this.onOpenAssets,
-    required this.onOpenSettings,
+    required this.onOpenManagement,
     required this.onToggleSidebar,
   });
 
@@ -69,8 +67,7 @@ class WideShell extends StatelessWidget {
           onDestinationSelected: onDestinationSelected,
           onQuickCapture: onQuickCapture,
           onOpenSearch: onOpenSearch,
-          onOpenAssets: onOpenAssets,
-          onOpenSettings: onOpenSettings,
+          onOpenManagement: onOpenManagement,
           onToggleSidebar: onToggleSidebar,
         ),
         VerticalDivider(
@@ -151,8 +148,7 @@ class _WebNavigationPanel extends StatelessWidget {
   final ValueChanged<int> onDestinationSelected;
   final VoidCallback onQuickCapture;
   final VoidCallback onOpenSearch;
-  final VoidCallback onOpenAssets;
-  final VoidCallback onOpenSettings;
+  final VoidCallback onOpenManagement;
   final VoidCallback onToggleSidebar;
 
   const _WebNavigationPanel({
@@ -163,8 +159,7 @@ class _WebNavigationPanel extends StatelessWidget {
     required this.onDestinationSelected,
     required this.onQuickCapture,
     required this.onOpenSearch,
-    required this.onOpenAssets,
-    required this.onOpenSettings,
+    required this.onOpenManagement,
     required this.onToggleSidebar,
   });
 
@@ -193,8 +188,7 @@ class _WebNavigationPanel extends StatelessWidget {
         ),
         trailing: _WebNavigationTrailing(
           extended: extended,
-          onOpenAssets: onOpenAssets,
-          onOpenSettings: onOpenSettings,
+          onOpenManagement: onOpenManagement,
           onToggleSidebar: layout.railExtended ? onToggleSidebar : null,
         ),
         destinations: destinations
@@ -257,14 +251,12 @@ class _WebNavigationLeading extends StatelessWidget {
 
 class _WebNavigationTrailing extends StatelessWidget {
   final bool extended;
-  final VoidCallback onOpenAssets;
-  final VoidCallback onOpenSettings;
+  final VoidCallback onOpenManagement;
   final VoidCallback? onToggleSidebar;
 
   const _WebNavigationTrailing({
     required this.extended,
-    required this.onOpenAssets,
-    required this.onOpenSettings,
+    required this.onOpenManagement,
     required this.onToggleSidebar,
   });
 
@@ -278,18 +270,10 @@ class _WebNavigationTrailing extends StatelessWidget {
           const Divider(),
           _SidebarActionButton(
             extended: extended,
-            icon: Icons.attach_file_outlined,
-            label: '附件',
-            tooltip: '附件管理',
-            onPressed: onOpenAssets,
-          ),
-          const SizedBox(height: 4),
-          _SidebarActionButton(
-            extended: extended,
-            icon: Icons.settings_outlined,
-            label: '设置',
-            tooltip: '设置与诊断',
-            onPressed: onOpenSettings,
+            icon: Icons.dashboard_customize_outlined,
+            label: '管理',
+            tooltip: '管理中心',
+            onPressed: onOpenManagement,
           ),
           if (onToggleSidebar != null) ...[
             const SizedBox(height: 4),
