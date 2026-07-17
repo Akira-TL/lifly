@@ -25,6 +25,28 @@ class _QuickCaptureIntent extends Intent {
   const _QuickCaptureIntent();
 }
 
+class _EditableAwareAction<T extends Intent> extends Action<T> {
+  final VoidCallback onInvoke;
+
+  _EditableAwareAction(this.onInvoke);
+
+  @override
+  bool isEnabled(T intent) => !_hasEditableTextFocus();
+
+  @override
+  Object? invoke(T intent) {
+    onInvoke();
+    return null;
+  }
+}
+
+bool _hasEditableTextFocus() {
+  final context = FocusManager.instance.primaryFocus?.context;
+  if (context == null) return false;
+  if (context.widget is EditableText) return true;
+  return context.findAncestorWidgetOfExactType<EditableText>() != null;
+}
+
 class WideShell extends StatelessWidget {
   static const _maximumContentWidth = 1600.0;
 
@@ -112,17 +134,11 @@ class WideShell extends StatelessWidget {
       },
       child: Actions(
         actions: <Type, Action<Intent>>{
-          _OpenSearchIntent: CallbackAction<_OpenSearchIntent>(
-            onInvoke: (_) {
-              onOpenSearch();
-              return null;
-            },
+          _OpenSearchIntent: _EditableAwareAction<_OpenSearchIntent>(
+            onOpenSearch,
           ),
-          _QuickCaptureIntent: CallbackAction<_QuickCaptureIntent>(
-            onInvoke: (_) {
-              onQuickCapture();
-              return null;
-            },
+          _QuickCaptureIntent: _EditableAwareAction<_QuickCaptureIntent>(
+            onQuickCapture,
           ),
         },
         child: Focus(autofocus: keyboardNavigation, child: content),

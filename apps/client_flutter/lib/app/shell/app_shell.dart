@@ -75,22 +75,40 @@ class _AppShellState extends State<AppShell> {
         _preferenceStore = const NoopShellPreferenceStore();
       }
     }
-    unawaited(_restoreSidebarPreference());
+    unawaited(_restoreShellPreferences());
   }
 
-  Future<void> _restoreSidebarPreference() async {
+  Future<void> _restoreShellPreferences() async {
+    bool? collapsed;
+    int? destinationIndex;
     try {
-      final collapsed = await _preferenceStore.loadSidebarCollapsed();
-      if (!mounted || collapsed == null) return;
-      setState(() => _sidebarCollapsed = collapsed);
+      collapsed = await _preferenceStore.loadSidebarCollapsed();
     } catch (_) {
       // A preference failure must not block the product shell.
     }
+    try {
+      destinationIndex = await _preferenceStore.loadDestinationIndex();
+    } catch (_) {
+      // A preference failure must not block the product shell.
+    }
+    if (!mounted) return;
+    final validDestination =
+        destinationIndex != null &&
+        destinationIndex >= 0 &&
+        destinationIndex < _destinations.length;
+    if (collapsed == null && !validDestination) return;
+    setState(() {
+      if (collapsed != null) _sidebarCollapsed = collapsed;
+      if (validDestination) _currentIndex = destinationIndex!;
+    });
   }
 
   void _selectDestination(int index) {
-    if (_currentIndex == index) return;
+    if (index < 0 || index >= _destinations.length || _currentIndex == index) {
+      return;
+    }
     setState(() => _currentIndex = index);
+    unawaited(_preferenceStore.saveDestinationIndex(index).catchError((_) {}));
   }
 
   void _toggleSidebar() {

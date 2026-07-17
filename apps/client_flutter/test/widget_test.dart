@@ -14,6 +14,7 @@ import 'package:client_flutter/data/local_core/fake_local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/features/ai_capture/data/ai_capture_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:client_flutter/main.dart';
 import 'package:provider/provider.dart';
@@ -27,6 +28,7 @@ class _WidgetThemeResolver implements ThemeResolver {
 
 class _MemoryShellPreferenceStore implements ShellPreferenceStore {
   bool? collapsed;
+  int? destinationIndex;
 
   _MemoryShellPreferenceStore();
 
@@ -36,6 +38,14 @@ class _MemoryShellPreferenceStore implements ShellPreferenceStore {
   @override
   Future<void> saveSidebarCollapsed(bool collapsed) async {
     this.collapsed = collapsed;
+  }
+
+  @override
+  Future<int?> loadDestinationIndex() async => destinationIndex;
+
+  @override
+  Future<void> saveDestinationIndex(int index) async {
+    destinationIndex = index;
   }
 }
 
@@ -179,6 +189,15 @@ class FakeApiClient extends ApiClient {
     }
     return {'success': true, 'data': {}};
   }
+}
+
+Future<void> _pressControlShortcut(
+  WidgetTester tester,
+  LogicalKeyboardKey key,
+) async {
+  await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+  await tester.sendKeyEvent(key);
+  await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
 }
 
 Widget _buildTestApp(
@@ -422,6 +441,7 @@ void main() {
       );
       await runtime.restore();
       final preferences = _MemoryShellPreferenceStore();
+      final api = FakeApiClient();
 
       Widget shell() {
         return MaterialApp(
@@ -432,7 +452,9 @@ void main() {
         );
       }
 
-      await tester.pumpWidget(_buildTestApp(runtime, child: shell()));
+      await tester.pumpWidget(
+        _buildTestApp(runtime, apiClient: api, child: shell()),
+      );
       await tester.pumpAndSettle();
 
       var rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
@@ -475,6 +497,23 @@ void main() {
       await tester.pump();
       expect(find.text('AI 对话'), findsOneWidget);
 
+      await tester.tap(find.text('任务').last);
+      await tester.pump();
+      expect(find.text('测试任务'), findsOneWidget);
+      expect(preferences.destinationIndex, 4);
+      final apiBefore = tester.element(find.byType(AppShell)).read<ApiClient>();
+
+      await tester.tap(find.text('管理'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(AppBar, '管理中心'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('测试任务'), findsOneWidget);
+      expect(
+        tester.element(find.byType(AppShell)).read<ApiClient>(),
+        same(apiBefore),
+      );
+
       await tester.tap(find.text('收起侧栏'));
       await tester.pumpAndSettle();
       rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
@@ -484,13 +523,102 @@ void main() {
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
-      await tester.pumpWidget(_buildTestApp(runtime, child: shell()));
+      await tester.pumpWidget(
+        _buildTestApp(runtime, apiClient: api, child: shell()),
+      );
       await tester.pumpAndSettle();
 
       rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
       expect(rail.extended, isFalse);
+      expect(find.text('测试任务'), findsOneWidget);
+      expect(preferences.destinationIndex, 4);
+      expect(
+        tester.element(find.byType(AppShell)).read<ApiClient>(),
+        same(apiBefore),
+      );
     },
   );
+
+  testWidgets('Web shell shortcuts yield to focused text inputs', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final runtime = ThemeRuntime.withResolver(
+      ThemePackageResolver(
+        package: ThemePackage.fromJson(liflyTestThemePackageJson),
+        appVersion: '0.8.1',
+        platform: ThemeTargetPlatform.web,
+      ),
+    );
+    await runtime.restore();
+    await tester.pumpWidget(_buildTestApp(runtime));
+    await tester.pumpAndSettle();
+
+    await _pressControlShortcut(tester, LogicalKeyboardKey.keyK);
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(AppBar, '搜索'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('快速记录'));
+    await tester.pumpAndSettle();
+    final composer = find.byKey(const Key('ai_capture_composer'));
+    expect(composer, findsOneWidget);
+    await tester.tap(composer);
+    await tester.pump();
+
+    await _pressControlShortcut(tester, LogicalKeyboardKey.keyK);
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(AppBar, '搜索'), findsNothing);
+    expect(find.text('AI 对话'), findsOneWidget);
+
+    await _pressControlShortcut(tester, LogicalKeyboardKey.keyN);
+    await tester.pumpAndSettle();
+    expect(find.text('AI 对话'), findsOneWidget);
+    expect(composer, findsOneWidget);
+  });
+
+  testWidgets('Web theme switch preserves the selected destination and API', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final runtime = ThemeRuntime(
+      registry: ThemeRegistry(
+        packages: [ThemePackage.fromJson(liflyTestThemePackageJson)],
+      ),
+      preferenceStore: _MemoryThemePreferenceStore(),
+      appVersion: '0.8.1',
+      platform: ThemeTargetPlatform.web,
+    );
+    final api = FakeApiClient();
+    await tester.pumpWidget(_buildTestApp(runtime, apiClient: api));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('任务').last);
+    await tester.pump();
+    expect(find.text('测试任务'), findsOneWidget);
+    final apiBefore = tester.element(find.byType(LiflyApp)).read<ApiClient>();
+
+    await runtime.selectFamily('lifly.test.mint');
+    await runtime.selectColorMode(ThemePackageColorMode.dark);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.text('测试任务'), findsOneWidget);
+    expect(
+      tester.element(find.byType(LiflyApp)).read<ApiClient>(),
+      same(apiBefore),
+    );
+    expect(apiBefore, same(api));
+  });
 
   testWidgets('Desktop compact profile keeps a narrow keyboard-ready rail', (
     WidgetTester tester,
