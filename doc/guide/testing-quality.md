@@ -145,6 +145,7 @@ scripts/check-powersync-sync-scope.sh
 scripts/check-v0.7-release-gate.sh
 scripts/check-web-theme-performance.sh
 scripts/check-v0.8-release-gate.sh
+scripts/check-v0.8.1-release-gate.sh
 scripts/check-v0.4-ai-write.sh
 scripts/smoke-mcp-v0.1.sh
 ```
@@ -236,3 +237,31 @@ lifly-theme-activated
 ```
 
 CI 无浏览器时使用启动契约、产物预算和 Release 双构建作为门禁；真实浏览器环境应读取 Performance Marks，补充首帧和可操作时间基线。
+
+## 14. Web Shell 质量门槛
+
+Web Shell 和全局导航相关版本必须检查：
+
+```text
+Web dashboard、桌面 compact 和手机五入口分别使用适合平台的布局
+五个核心入口固定为首页 / 备忘 / AI / 记账 / 任务
+低频能力通过单一管理中心组织，不进入核心导航
+管理中心不得依赖 Repository、ApiClient、Local Core 或 PowerSync
+当前核心入口和侧栏折叠通过 ShellPreferenceStore 持久化
+只恢复 0..4 范围内的合法核心入口索引
+管理页返回和主题切换保持当前核心页与业务服务实例
+Ctrl+K / Ctrl+N 在无编辑焦点时生效
+EditableText 聚焦时全局快捷键必须让路
+Loading / Empty / Error / Offline 使用共享页面状态
+共享页面状态必须提供语义说明、可读宽度和必要恢复操作
+Shell、管理中心和共享状态不得硬编码绕过主题系统的颜色
+默认 Web 与 Wasm Release 构建必须通过
+```
+
+发布入口：
+
+```text
+scripts/check-v0.8.1-release-gate.sh
+```
+
+该脚本统一运行 Flutter 全量检查、Shell 行为契约、共享状态消费、主题边界、默认 Web/Wasm 构建、文档清理和源码体积门禁。

@@ -13,6 +13,7 @@ v0.5 Assets & Import / Export
 v0.6 Import / Export / Asset Experience
 v0.7 Product Foundation
 v0.8 Cross-platform Theme Application Framework
+v0.8.1 Web Minimal Shell & Global Navigation
 ```
 
 已完成能力包括：
@@ -30,6 +31,7 @@ capture_parse / capture_commit / capture_undo
 Flutter 真实 API 接入和导入导出体验层
 首页、预算、分类、任务预警与聊天式 AI Capture 数据地基
 跨端 Theme Runtime、主题包缓存、受控布局和 Web Core-first 启动
+Web 极简 Shell、全局管理中心、共享页面状态和导航持久化
 ```
 
 ## 2. 当前任务池：Web UI/UX 与产品消费层
@@ -55,11 +57,31 @@ Web HTML 启动壳和 Flutter Core 首帧不等待主题缓存
 
 后续主题商业能力：正式主题目录、生产签名公钥、付费授权 API、订阅与恢复购买、主题推荐、第三方投稿和审核。这些能力必须复用现有 Theme Package 与 Entitlement 边界，不能把远程主题升级为任意代码插件。
 
+### LC-0810 Web minimal shell and global navigation
+
+状态：已完成。
+
+目标：为后续 Web 首页、备忘、记账、任务和 AI 页面改造提供稳定宽屏外壳。
+
+验收：
+
+```text
+Web dashboard 使用 248px 可折叠侧栏，桌面 compact 和手机五入口保持独立布局
+首页、备忘、AI、记账、任务五个核心入口不被低频管理能力挤占
+搜索、快速记录和管理中心可达
+管理中心组织账单导入、导入批次、数据导出、附件库、设置与诊断
+侧栏折叠和当前核心入口跨 AppShell 重建恢复
+管理页返回和主题切换保持当前核心页与 API 实例
+Ctrl+K / Ctrl+N 在输入框聚焦时让路
+Loading / Empty / Error / Offline 使用共享页面状态
+默认 Web 与 Wasm Release 构建通过 v0.8.1 发布门禁
+```
+
 ### Web UI/UX 后续切片
 
 ```text
-Web 极简 Shell 与全局导航
-Web 首页真实 Home Overview 消费
+Web 极简 Shell 与全局导航（已完成）
+Web 首页真实 Home Overview 消费（下一阶段）
 Web 备忘 AI 分类和标签消费
 Web 记账预算、分类占比和洞察消费
 Web 任务预警策略和提醒状态消费

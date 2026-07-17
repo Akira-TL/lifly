@@ -117,8 +117,5 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Run Flutter client checks
-        run: bash scripts/check-client-flutter.sh
-
-      - name: Run Core-first Web performance gate
-        run: bash scripts/check-web-theme-performance.sh
+      - name: Run v0.8.1 Web Shell release gate
+        run: bash scripts/check-v0.8.1-release-gate.sh
