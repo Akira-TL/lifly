@@ -5,6 +5,7 @@ import 'package:client_flutter/data/repositories/asset_repository.dart';
 import 'package:client_flutter/domain/entities/asset.dart';
 import 'package:client_flutter/features/asset/data/asset_file_picker.dart';
 import 'package:client_flutter/shared/widgets/asset_card.dart';
+import 'package:client_flutter/shared/widgets/async_content.dart';
 
 class AssetListPage extends StatefulWidget {
   const AssetListPage({super.key});
@@ -29,12 +30,21 @@ class _AssetListPageState extends State<AssetListPage> {
   }
 
   Future<void> _load() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final assets = await _repo.list();
-      setState(() { _assets = assets; _loading = false; });
-    } catch (e) {
-      setState(() { _error = e.toString(); _loading = false; });
+      setState(() {
+        _assets = assets;
+        _loading = false;
+      });
+    } catch (error) {
+      setState(() {
+        _error = '附件加载失败：$error';
+        _loading = false;
+      });
     }
   }
 
@@ -52,16 +62,24 @@ class _AssetListPageState extends State<AssetListPage> {
   }
 
   Widget _buildBody() {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return Center(child: Text('加载失败: $_error'));
-    if (_assets.isEmpty) return const Center(child: Text('暂无附件'));
-    return RefreshIndicator(
+    return AsyncContentScaffold(
+      isLoading: _loading,
+      error: _error,
+      isEmpty: _assets.isEmpty,
       onRefresh: _load,
+      loadingMessage: '正在读取附件',
+      emptyIcon: Icons.attach_file_outlined,
+      emptyTitle: '还没有附件',
+      emptySubtitle: '上传文件或登记外部链接，正文之外的数据也能统一管理。',
+      emptyActionLabel: '添加附件',
+      onEmptyAction: () => _showAddSheet(context),
       child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
         itemCount: _assets.length,
-        itemBuilder: (_, i) => AssetCard(
-          asset: _assets[i],
-          onTap: () => _showDetail(_assets[i]),
+        itemBuilder: (_, index) => AssetCard(
+          asset: _assets[index],
+          onTap: () => _showDetail(_assets[index]),
         ),
       ),
     );
@@ -88,7 +106,10 @@ class _AssetListPageState extends State<AssetListPage> {
             ListTile(
               leading: const Icon(Icons.link),
               title: const Text('添加外链'),
-              onTap: () { Navigator.pop(ctx); _showExternalLinkDialog(); },
+              onTap: () {
+                Navigator.pop(ctx);
+                _showExternalLinkDialog();
+              },
             ),
           ],
         ),
@@ -112,14 +133,14 @@ class _AssetListPageState extends State<AssetListPage> {
       );
       if (!mounted) return;
       setState(() => _assets.insert(0, asset));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已上传 ${asset.displayName}')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已上传 ${asset.displayName}')));
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('上传失败：$error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('上传失败：$error')));
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
@@ -135,12 +156,21 @@ class _AssetListPageState extends State<AssetListPage> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: titleCtl, decoration: const InputDecoration(labelText: '标题')),
-            TextField(controller: urlCtl, decoration: const InputDecoration(labelText: 'URL')),
+            TextField(
+              controller: titleCtl,
+              decoration: const InputDecoration(labelText: '标题'),
+            ),
+            TextField(
+              controller: urlCtl,
+              decoration: const InputDecoration(labelText: 'URL'),
+            ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
           FilledButton(
             onPressed: () async {
               Navigator.pop(ctx);
@@ -175,7 +205,10 @@ class _AssetListPageState extends State<AssetListPage> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('关闭')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('关闭'),
+          ),
         ],
       ),
     );
