@@ -1,3 +1,4 @@
+import 'package:client_flutter/app/theme/lifly_semantic_colors.dart';
 import 'package:client_flutter/app/theme/theme_package.dart';
 import 'package:client_flutter/app/theme/theme_platform_profile.dart';
 import 'package:flutter/material.dart';
@@ -80,7 +81,16 @@ class ThemeTokenSet {
     );
 
     return base.copyWith(
-      extensions: [platformProfile],
+      extensions: [
+        platformProfile,
+        LiflySemanticColors(
+          critical: tokens.colors.critical,
+          warning: tokens.colors.warning,
+          success: tokens.colors.success,
+          info: tokens.colors.info,
+          neutral: tokens.colors.neutral,
+        ),
+      ],
       textTheme: _scaledTextTheme(base.textTheme, tokens.typography),
       pageTransitionsTheme: tokens.motion.enabled
           ? base.pageTransitionsTheme
