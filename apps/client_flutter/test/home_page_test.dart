@@ -1,0 +1,225 @@
+import 'package:client_flutter/app/theme/app_theme.dart';
+import 'package:client_flutter/app/theme/lifly_semantic_colors.dart';
+import 'package:client_flutter/app/theme/theme_package.dart';
+import 'package:client_flutter/app/theme/theme_platform_profile.dart';
+import 'package:client_flutter/domain/entities/home_overview.dart';
+import 'package:client_flutter/features/home/pages/home_page.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  late ThemeData webTheme;
+
+  setUp(() {
+    webTheme = LiflyCoreTheme.tokens.buildTheme(
+      Brightness.light,
+      platformProfile: ThemePlatformProfile.defaults(ThemeTargetPlatform.web),
+    );
+  });
+
+  tearDown(() {
+    TestWidgetsFlutterBinding.instance.platformDispatcher.clearAllTestValues();
+  });
+
+  test('Core theme exposes semantic status colors to business widgets', () {
+    final semantic = webTheme.extension<LiflySemanticColors>();
+
+    expect(semantic, isNotNull);
+    expect(semantic!.critical, LiflyCoreTheme.tokens.light.colors.critical);
+    expect(semantic.warning, LiflyCoreTheme.tokens.light.colors.warning);
+    expect(semantic.success, LiflyCoreTheme.tokens.light.colors.success);
+    expect(semantic.info, LiflyCoreTheme.tokens.light.colors.info);
+    expect(semantic.neutral, LiflyCoreTheme.tokens.light.colors.neutral);
+  });
+
+  testWidgets('Web home uses the wide workbench and real overview fields', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+
+    await tester.pumpWidget(_testApp(_overview()));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('home_layout_wide')), findsOneWidget);
+    expect(find.byKey(const Key('home_layout_compact')), findsNothing);
+    expect(find.byKey(const Key('home_attention_panel')), findsOneWidget);
+    expect(find.byKey(const Key('home_finance_panel')), findsOneWidget);
+    expect(find.byKey(const Key('home_recent_activity_panel')), findsOneWidget);
+    expect(find.text('确认 Web 首页布局'), findsOneWidget);
+    expect(find.text('餐饮'), findsWidgets);
+    expect(find.text('支出接近预算上限'), findsOneWidget);
+    expect(find.text('更新 Web 信息架构'), findsOneWidget);
+    expect(find.byType(Card), findsNothing);
+  });
+
+  testWidgets('Narrow home degrades to one continuous column', (tester) async {
+    tester.view.physicalSize = const Size(700, 1000);
+    tester.view.devicePixelRatio = 1;
+
+    await tester.pumpWidget(_testApp(_overview()));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('home_layout_compact')), findsOneWidget);
+    expect(find.byKey(const Key('home_layout_wide')), findsNothing);
+    expect(find.text('今天需要你关注的内容'), findsOneWidget);
+    expect(find.text('近七日支出'), findsOneWidget);
+  });
+}
+
+Widget _testApp(HomeOverview overview) {
+  final theme = LiflyCoreTheme.tokens.buildTheme(
+    Brightness.light,
+    platformProfile: ThemePlatformProfile.defaults(ThemeTargetPlatform.web),
+  );
+  return MaterialApp(
+    theme: theme,
+    home: HomePage(loadOverview: (_) async => overview),
+  );
+}
+
+HomeOverview _overview() {
+  final now = DateTime.utc(2026, 7, 30, 8, 30);
+  return HomeOverview(
+    schemaVersion: 'home_overview.v1',
+    generatedAt: now,
+    userTimezone: 'Asia/Shanghai',
+    sourceMode: 'local',
+    todayMetrics: const HomeTodayMetrics(
+      memoTotal: 18,
+      taskTodo: 7,
+      taskTotal: 24,
+      taskOverdue: 1,
+      taskDueToday: 3,
+    ),
+    financeOverview: const HomeFinanceOverview(
+      monthIncome: 8200,
+      monthExpense: 1280.5,
+      transactionCount: 32,
+      budgetState: 'active',
+      budgetAmount: 2000,
+      budgetUsed: 1280.5,
+      budgetProgress: 0.64,
+      budgetRemaining: 719.5,
+      currency: 'CNY',
+      categoryBreakdown: [
+        HomeFinanceCategory(
+          categoryId: 'food',
+          categoryName: '餐饮',
+          direction: 'expense',
+          amount: 620,
+          ratio: 0.48,
+          transactionCount: 16,
+          colorToken: 'warning',
+          iconToken: 'food',
+        ),
+        HomeFinanceCategory(
+          categoryId: 'transport',
+          categoryName: '交通',
+          direction: 'expense',
+          amount: 260,
+          ratio: 0.2,
+          transactionCount: 8,
+          colorToken: 'info',
+          iconToken: 'transport',
+        ),
+      ],
+      insights: [
+        HomeFinanceInsight(
+          id: 'budget-warning',
+          type: 'budget',
+          level: 'warning',
+          title: '支出接近预算上限',
+          description: '本月预算已经使用 64%。',
+        ),
+      ],
+    ),
+    attentionItems: [
+      HomeAttentionItem(
+        id: 'task-1',
+        type: 'task_overdue',
+        level: 'critical',
+        title: '确认 Web 首页布局',
+        description: '产品设计评审已经逾期。',
+        entityType: 'task',
+        entityId: 'task-1',
+        occurredAt: now.subtract(const Duration(hours: 2)),
+      ),
+      HomeAttentionItem(
+        id: 'task-2',
+        type: 'task_due_today',
+        level: 'warning',
+        title: '整理导入异常记录',
+        description: '今天 18:00 前完成。',
+        entityType: 'task',
+        entityId: 'task-2',
+        occurredAt: now,
+      ),
+    ],
+    dailyTrend: List.generate(
+      7,
+      (index) => HomeDailyTrendItem(
+        day: now.subtract(Duration(days: 6 - index)),
+        total: 80 + index * 20,
+      ),
+    ),
+    recentActivity: [
+      HomeActivityItem(
+        id: 'memo-1',
+        entityType: 'memo',
+        entityId: 'memo-1',
+        title: '更新 Web 信息架构',
+        subtitle: '产品设计',
+        occurredAt: now,
+      ),
+      HomeActivityItem(
+        id: 'ledger-1',
+        entityType: 'ledger_transaction',
+        entityId: 'ledger-1',
+        title: '食堂',
+        subtitle: '餐饮',
+        occurredAt: now.subtract(const Duration(hours: 1)),
+        amount: 18,
+        direction: 'expense',
+      ),
+    ],
+    syncSummary: HomeSyncSummary(
+      status: 'connected',
+      mode: 'local',
+      connected: true,
+      connecting: false,
+      downloading: false,
+      uploading: false,
+      hasSynced: true,
+      lastSyncedAt: now,
+      error: null,
+      powerSyncConfigured: true,
+      pendingAssetCount: 0,
+      failedAssetCount: 0,
+      syncedAssetCount: 12,
+    ),
+    importSummary: HomeImportSummary(
+      status: 'committed',
+      latestBatchId: 'batch-1',
+      sourceProvider: 'wechat',
+      filename: '微信支付账单.csv',
+      totalRows: 120,
+      validRows: 116,
+      duplicateRows: 4,
+      createdAt: now,
+      committedAt: now,
+      rolledBackAt: null,
+    ),
+    settingsSummary: const HomeSettingsSummary(
+      status: 'ok',
+      mode: 'local',
+      dataMode: 'local',
+      localCoreAvailable: true,
+      databasePath: null,
+      timezone: 'Asia/Shanghai',
+      databaseConfigured: true,
+      powerSyncConfigured: true,
+      objectStorageConfigured: true,
+    ),
+  );
+}
