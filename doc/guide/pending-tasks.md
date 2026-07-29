@@ -80,9 +80,9 @@ Loading / Empty / Error / Offline 使用共享页面状态
 ### Web UI/UX 后续切片
 
 ```text
-Web 极简 Shell 与全局导航（已完成）
-Web 首页真实 Home Overview 消费（下一阶段）
-Web 备忘 AI 分类和标签消费
+Web 极简 Shell 与全局导航（v0.8.1 已完成）
+Web 首页清晰工作台与真实 Home Overview 消费（v0.8.2 已完成代码与自动检查）
+Web 备忘 AI 分类和标签消费（下一阶段）
 Web 记账预算、分类占比和洞察消费
 Web 任务预警策略和提醒状态消费
 Web AI、附件、导入导出、搜索、设置和诊断
@@ -93,7 +93,7 @@ Web AI、附件、导入导出、搜索、设置和诊断
 
 ### LC-0701 Local Home Overview read model
 
-状态：云端 /api/v1/home/overview 与本地 fallback 基础链路已完成，预算进度、分类占比、财务洞察和真实状态摘要已扩展；首页 UI 消费扩展字段与未来任务预警排序待补。
+状态：云端 `/api/v1/home/overview` 与本地 fallback 基础链路已完成；v0.8.2 Web 首页已消费 attention、今日指标、预算进度、分类占比、财务洞察、七日趋势、最近混合活动和真实状态摘要。未来仍需补充更细的任务预警排序与待确认动作聚合。
 
 目标：新增云端同步优先、本地失败兜底的产品化首页 read model，支撑今日关注、紧急事项、混合最近内容流和数据状态摘要。
 

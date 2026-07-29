@@ -47,3 +47,5 @@ API 契约 -> doc/api/
 `theme-application-framework.md` 对应的 v0.8.0 跨端主题应用框架已经完成并回写到主题架构、Flutter 客户端、UI 信息架构、测试、路线图和当前状态文档，发布门禁由 `scripts/check-v0.8-release-gate.sh` 长期维护，因此计划文件已删除。
 
 `web-shell-navigation.md` 对应的 v0.8.1 Web 极简 Shell 与全局导航已经完成并回写到 Flutter 客户端、UI 信息架构、测试、路线图、任务池和当前状态文档，发布门禁由 `scripts/check-v0.8.1-release-gate.sh` 长期维护，因此计划文件已删除。
+
+`web-home-workbench.md` 对应的 v0.8.2 Web 首页清晰工作台已经完成代码、测试和构建检查，并回写到客户端设计、UI 信息架构、路线图、任务池和当前状态文档，因此计划文件已删除；浏览器视觉验收在版本收口前完成。

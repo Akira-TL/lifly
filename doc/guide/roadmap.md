@@ -16,16 +16,17 @@ AI Capture parse / commit / undo
 Flutter 客户端真实 API 接入
 跨端 Theme Runtime、Lifly Core、主题包缓存与 Core-first Web 启动
 Web 极简 Shell、全局管理中心、共享页面状态与导航持久化
+Web 首页清晰工作台、真实 Home Overview 消费与语义状态色
 ```
 
 ## 2. 近期路线：Web UI/UX 与真实数据消费
 
-v0.7.0 已完成产品数据地基，v0.8.0 已完成跨端主题应用框架，v0.8.1 已完成 Web 极简 Shell 与全局导航。下一阶段进入 Web 首页真实数据消费，页面必须继续使用既有 read model，不回退到假数据和纯视觉原型。
+v0.7.0 已完成产品数据地基，v0.8.0 已完成跨端主题应用框架，v0.8.1 已完成 Web 极简 Shell 与全局导航，v0.8.2 已把 A 方向“清晰工作台”落到真实 Web 首页。后续页面必须继续使用既有 read model，不回退到假数据和纯视觉原型。
 
 ```text
 Web 极简 Shell 与全局导航（v0.8.1 已完成）
-Web 首页注意力分发与真实 Home Overview 消费（下一阶段）
-Web 备忘高密度列表、AI 分类与标签消费
+Web 首页注意力分发与真实 Home Overview 消费（v0.8.2 已完成代码与自动检查）
+Web 备忘高密度列表、AI 分类与标签消费（下一阶段）
 Web 记账预算、分类占比和洞察消费
 Web 任务预警与提醒策略消费
 Web AI、附件、导入导出、搜索和诊断体验

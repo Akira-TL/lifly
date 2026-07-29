@@ -217,7 +217,43 @@ Flutter analyze 与 143 项客户端测试通过，v0.8.1 发布门禁同时覆�
 Web、桌面 compact 和手机端无导航回归
 ```
 
-## M9：Desktop Local MCP & Production Hardening
+## M9：Web Home Attention Workbench
+
+状态：已完成代码与自动检查，待浏览器视觉验收。
+
+目标：把已确认的 A 方向“清晰工作台”落到真实 Web 首页，建立后续核心页面复用的视觉与语义基础。
+
+范围：
+
+```text
+ThemeData 公开 critical / warning / success / info / neutral 语义色
+WorkspacePanel 连续分组面板
+Web 首页 1080px 主次两栏与窄屏单列
+真实 HomeOverview attention / finance / trend / activity / status 消费
+首页无逐条 Card、无硬编码状态色、无装饰性渐变
+```
+
+当前进展：
+
+```text
+首页顶部集中展示数据来源、PowerSync 状态、最近导入和运行环境摘要
+逾期、今天截止、待处理、任务总数和备忘使用连续统计条
+今日关注按 critical / warning 等语义排序展示；收支区消费预算、分类占比和财务洞察；最近活动混合展示备忘、任务和流水
+主题包语义色通过 LiflySemanticColors 注入 ThemeData，业务页面不解析主题包，也不写死红、橙、绿
+首页源码按主布局、财务区、活动趋势区拆分，最大文件 594 行
+Flutter analyze 与 146 项测试通过；默认 Web main.dart.js 为 3,585,209 bytes，应用 main.dart.wasm 为 3,244,052 bytes，均通过既有预算
+```
+
+验收：
+
+```text
+宽屏和窄屏布局回归测试通过
+首页真实字段可见且云端失败后仍由既有 Local Core fallback 提供
+业务页面不创建 Material Card 堆叠，不硬编码状态色或渐变
+后续备忘、记账、任务和 AI 页面可复用语义色与 WorkspacePanel
+```
+
+## M10：Desktop Local MCP & Production Hardening
 
 状态：后续。
 
