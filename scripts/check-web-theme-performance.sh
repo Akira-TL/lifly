@@ -13,6 +13,7 @@ APP_WASM_MAX_BYTES="${LIFLY_WEB_APP_WASM_MAX_BYTES:-8388608}"
 RENDERER_WASM_MAX_BYTES="${LIFLY_WEB_RENDERER_WASM_MAX_BYTES:-10485760}"
 HOST_MAX_BYTES="${LIFLY_WEB_HOST_MAX_BYTES:-32768}"
 REUSE_BUILDS="${LIFLY_WEB_REUSE_BUILDS:-0}"
+APP_VERSION="${LIFLY_APP_VERSION:-0.8.1}"
 
 fail() {
   echo "[FAIL] $*" >&2
@@ -83,7 +84,7 @@ else
     --release \
     --no-source-maps \
     --output "$DEFAULT_BUILD" \
-    --dart-define=LIFLY_APP_VERSION=0.8.0
+    --dart-define=LIFLY_APP_VERSION="$APP_VERSION"
   default_finished="$(date +%s%3N)"
 
   echo '[3/4] WebAssembly Web build'
@@ -93,7 +94,7 @@ else
     --wasm \
     --no-source-maps \
     --output "$WASM_BUILD" \
-    --dart-define=LIFLY_APP_VERSION=0.8.0
+    --dart-define=LIFLY_APP_VERSION="$APP_VERSION"
   wasm_finished="$(date +%s%3N)"
 fi
 
@@ -118,6 +119,7 @@ wasm_duration_ms="$((wasm_finished - wasm_started))"
 if [[ "$REUSE_BUILDS" != "1" ]]; then
   cat > "$REPORT_FILE" <<EOF
 {
+  "app_version": "$APP_VERSION",
   "default": {
     "build_duration_ms": $default_duration_ms,
     "main_js_bytes": $default_js_bytes

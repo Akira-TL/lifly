@@ -15,7 +15,7 @@ class AppConfig {
 
   static const String appVersion = String.fromEnvironment(
     'LIFLY_APP_VERSION',
-    defaultValue: '0.8.0',
+    defaultValue: '0.8.1',
   );
 
   static LiflyDataMode get dataMode => LiflyDataMode.fromName(dataModeName);

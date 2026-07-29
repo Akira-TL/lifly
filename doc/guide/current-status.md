@@ -176,7 +176,48 @@ scripts/check-web-theme-performance.sh 与 CI 固化启动契约、主题安全�
 主题功能在 Web、手机端和桌面端保持一致，平台只调整受控表现
 ```
 
-## M8：Desktop Local MCP & Production Hardening
+## M8：Web Minimal Shell & Global Navigation
+
+状态：已完成。
+
+目标：把跨端主题和布局地基落成可承载后续 Web 页面改造的稳定产品外壳，同时保持手机端五入口和桌面 compact 行为。
+
+范围：
+
+```text
+Web dashboard 248px 可折叠侧栏
+首页 / 备忘 / AI / 记账 / 任务五核心入口
+全局搜索与 AI 快速记录
+账单导入 / 导入批次 / 数据导出 / 附件 / 设置诊断管理中心
+侧栏折叠与当前核心入口设备本地持久化
+Ctrl+K / Ctrl+N 全局快捷键与输入焦点保护
+Loading / Empty / Error / Offline 共享页面状态
+默认 Web / Wasm Release 构建和 Shell 发布门禁
+```
+
+当前进展：
+
+```text
+Web dashboard 侧栏展示 Lifly 品牌、生活数据中心说明、高频动作和五个核心入口；桌面 compact 保持紧凑侧栏，手机端继续使用五入口底栏和 48px 触控边界
+附件、账单导入、导入批次、数据导出、设置与诊断收敛到单一管理中心；管理中心只组织路由，不复制 Repository、API、Local Core 或 PowerSync 状态
+侧栏折叠和当前核心入口通过 ShellPreferenceStore 保存；AppShell 重建后恢复，非法索引被忽略
+管理中心返回和 Web 主题切换保持当前核心页面与 API 服务实例
+Ctrl+K 打开搜索、Ctrl+N 进入 AI 快速记录；EditableText 聚焦时全局 Action 自动禁用
+AsyncContentScaffold 已统一 Loading、Empty、Error、Offline 状态；附件库完成首批真实消费，备忘、记账和任务保持兼容
+Flutter analyze 与 143 项客户端测试通过，v0.8.1 发布门禁同时覆盖默认 Web 和 Wasm 构建
+```
+
+验收：
+
+```text
+全局导航和业务内容边界清楚
+低频管理能力可达但不挤占五核心入口
+浏览器刷新、管理页返回和主题切换保持 Shell 状态
+文本编辑不被全局快捷键打断
+Web、桌面 compact 和手机端无导航回归
+```
+
+## M9：Desktop Local MCP & Production Hardening
 
 状态：后续。
 

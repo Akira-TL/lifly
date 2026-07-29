@@ -1,15 +1,23 @@
+import 'dart:async';
+
 import 'package:client_flutter/app/shell/shell_layout_policy.dart';
+import 'package:client_flutter/app/shell/shell_preferences.dart';
+import 'package:client_flutter/app/shell/wide_shell.dart';
 import 'package:client_flutter/app/theme/theme_package.dart';
 import 'package:client_flutter/app/theme/theme_platform_profile.dart';
-import 'package:flutter/material.dart';
 import 'package:client_flutter/features/ai_capture/pages/ai_capture_page.dart';
 import 'package:client_flutter/features/home/pages/home_page.dart';
 import 'package:client_flutter/features/ledger/pages/ledger_list_page.dart';
+import 'package:client_flutter/features/management/pages/management_hub_page.dart';
 import 'package:client_flutter/features/memo/pages/memo_list_page.dart';
+import 'package:client_flutter/features/search/pages/search_page.dart';
 import 'package:client_flutter/features/task/pages/task_list_page.dart';
+import 'package:flutter/material.dart';
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  final ShellPreferenceStore? preferenceStore;
+
+  const AppShell({super.key, this.preferenceStore});
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -17,32 +25,32 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   static const _primaryDestinationIndex = 2;
-  static const _destinations = <_ShellDestination>[
-    _ShellDestination(
+  static const _destinations = <ShellDestination>[
+    ShellDestination(
       label: '首页',
       icon: Icons.home_outlined,
       selectedIcon: Icons.home,
       page: HomePage(),
     ),
-    _ShellDestination(
+    ShellDestination(
       label: '备忘',
       icon: Icons.note_outlined,
       selectedIcon: Icons.note,
       page: MemoListPage(),
     ),
-    _ShellDestination(
+    ShellDestination(
       label: 'AI',
       icon: Icons.auto_awesome_outlined,
       selectedIcon: Icons.auto_awesome,
       page: AiCapturePage(),
     ),
-    _ShellDestination(
+    ShellDestination(
       label: '记账',
       icon: Icons.account_balance_wallet_outlined,
       selectedIcon: Icons.account_balance_wallet,
       page: LedgerListPage(),
     ),
-    _ShellDestination(
+    ShellDestination(
       label: '任务',
       icon: Icons.check_circle_outline,
       selectedIcon: Icons.check_circle,
@@ -50,11 +58,69 @@ class _AppShellState extends State<AppShell> {
     ),
   ];
 
+  late final ShellPreferenceStore _preferenceStore;
   int _currentIndex = 0;
+  bool _sidebarCollapsed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final providedStore = widget.preferenceStore;
+    if (providedStore != null) {
+      _preferenceStore = providedStore;
+    } else {
+      try {
+        _preferenceStore = SharedPreferencesShellPreferenceStore();
+      } catch (_) {
+        _preferenceStore = const NoopShellPreferenceStore();
+      }
+    }
+    unawaited(_restoreShellPreferences());
+  }
+
+  Future<void> _restoreShellPreferences() async {
+    bool? collapsed;
+    int? destinationIndex;
+    try {
+      collapsed = await _preferenceStore.loadSidebarCollapsed();
+    } catch (_) {
+      // A preference failure must not block the product shell.
+    }
+    try {
+      destinationIndex = await _preferenceStore.loadDestinationIndex();
+    } catch (_) {
+      // A preference failure must not block the product shell.
+    }
+    if (!mounted) return;
+    final validDestination =
+        destinationIndex != null &&
+        destinationIndex >= 0 &&
+        destinationIndex < _destinations.length;
+    if (collapsed == null && !validDestination) return;
+    setState(() {
+      if (collapsed != null) _sidebarCollapsed = collapsed;
+      if (validDestination) _currentIndex = destinationIndex!;
+    });
+  }
 
   void _selectDestination(int index) {
-    if (_currentIndex == index) return;
+    if (index < 0 || index >= _destinations.length || _currentIndex == index) {
+      return;
+    }
     setState(() => _currentIndex = index);
+    unawaited(_preferenceStore.saveDestinationIndex(index).catchError((_) {}));
+  }
+
+  void _toggleSidebar() {
+    final collapsed = !_sidebarCollapsed;
+    setState(() => _sidebarCollapsed = collapsed);
+    unawaited(
+      _preferenceStore.saveSidebarCollapsed(collapsed).catchError((_) {}),
+    );
+  }
+
+  void _openPage(BuildContext context, Widget page) {
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
   }
 
   @override
@@ -69,12 +135,18 @@ class _AppShellState extends State<AppShell> {
           profile: profile,
         );
         if (layout.useNavigationRail) {
-          return _WideShell(
+          return WideShell(
             currentIndex: _currentIndex,
             destinations: _destinations,
             layout: layout,
             keyboardNavigation: profile.keyboardNavigation,
+            sidebarCollapsed: _sidebarCollapsed,
             onDestinationSelected: _selectDestination,
+            onQuickCapture: () => _selectDestination(_primaryDestinationIndex),
+            onOpenSearch: () => _openPage(context, const SearchPage()),
+            onOpenManagement: () =>
+                _openPage(context, const ManagementHubPage()),
+            onToggleSidebar: _toggleSidebar,
           );
         }
 
@@ -96,81 +168,11 @@ class _AppShellState extends State<AppShell> {
   }
 }
 
-class _ShellDestination {
-  final String label;
-  final IconData icon;
-  final IconData selectedIcon;
-  final Widget page;
-
-  const _ShellDestination({
-    required this.label,
-    required this.icon,
-    required this.selectedIcon,
-    required this.page,
-  });
-}
-
-class _WideShell extends StatelessWidget {
-  final int currentIndex;
-  final List<_ShellDestination> destinations;
-  final ShellLayoutPolicy layout;
-  final bool keyboardNavigation;
-  final ValueChanged<int> onDestinationSelected;
-
-  const _WideShell({
-    required this.currentIndex,
-    required this.destinations,
-    required this.layout,
-    required this.keyboardNavigation,
-    required this.onDestinationSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final content = Row(
-      children: [
-        NavigationRail(
-          selectedIndex: currentIndex,
-          onDestinationSelected: onDestinationSelected,
-          extended: layout.railExtended,
-          labelType: layout.railLabelType,
-          minWidth: layout.railMinimumWidth,
-          minExtendedWidth: layout.railMinimumExtendedWidth,
-          destinations: destinations
-              .map(
-                (item) => NavigationRailDestination(
-                  icon: Icon(item.icon),
-                  selectedIcon: Icon(item.selectedIcon),
-                  label: Text(item.label),
-                ),
-              )
-              .toList(growable: false),
-        ),
-        const VerticalDivider(width: 1),
-        Expanded(
-          child: IndexedStack(
-            index: currentIndex,
-            children: destinations.map((item) => item.page).toList(),
-          ),
-        ),
-      ],
-    );
-    return Scaffold(
-      body: keyboardNavigation
-          ? FocusTraversalGroup(
-              policy: OrderedTraversalPolicy(),
-              child: content,
-            )
-          : content,
-    );
-  }
-}
-
 class _MobileShellNavigationBar extends StatelessWidget {
   final int currentIndex;
   final double height;
   final int primaryDestinationIndex;
-  final List<_ShellDestination> destinations;
+  final List<ShellDestination> destinations;
   final ValueChanged<int> onDestinationSelected;
 
   const _MobileShellNavigationBar({
@@ -221,7 +223,7 @@ class _MobileShellNavigationBar extends StatelessWidget {
 
 class _ShellDestinationButton extends StatelessWidget {
   final bool selected;
-  final _ShellDestination destination;
+  final ShellDestination destination;
   final VoidCallback onTap;
 
   const _ShellDestinationButton({
@@ -272,7 +274,7 @@ class _ShellDestinationButton extends StatelessWidget {
 
 class _PrimaryDestinationButton extends StatelessWidget {
   final bool selected;
-  final _ShellDestination destination;
+  final ShellDestination destination;
   final VoidCallback onTap;
 
   const _PrimaryDestinationButton({

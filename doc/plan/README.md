@@ -45,3 +45,5 @@ API 契约 -> doc/api/
 `mobile-product-foundation.md` 对应的 v0.7.0 产品地基计划已经完成并回写到 API、架构、客户端、测试和当前状态文档，发布门禁由 `scripts/check-v0.7-release-gate.sh` 长期维护，因此计划文件已删除。
 
 `theme-application-framework.md` 对应的 v0.8.0 跨端主题应用框架已经完成并回写到主题架构、Flutter 客户端、UI 信息架构、测试、路线图和当前状态文档，发布门禁由 `scripts/check-v0.8-release-gate.sh` 长期维护，因此计划文件已删除。
+
+`web-shell-navigation.md` 对应的 v0.8.1 Web 极简 Shell 与全局导航已经完成并回写到 Flutter 客户端、UI 信息架构、测试、路线图、任务池和当前状态文档，发布门禁由 `scripts/check-v0.8.1-release-gate.sh` 长期维护，因此计划文件已删除。

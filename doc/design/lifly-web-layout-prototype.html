@@ -1,0 +1,1483 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Lifly Web 产品布局方向</title>
+  <style>
+    :root {
+      --review-bg: #e9eae6;
+      --review-surface: #f7f7f4;
+      --review-text: #222522;
+      --review-muted: #737973;
+      --review-line: #d7dad4;
+      --review-accent: #245b45;
+      --frame-width: min(1440px, calc(100vw - 40px));
+      --frame-height: min(900px, calc(100vh - 138px));
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body { min-width: 320px; min-height: 100%; }
+
+    body {
+      margin: 0;
+      color: var(--review-text);
+      background: var(--review-bg);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    button,
+    input { font: inherit; }
+
+    button { color: inherit; }
+
+    svg { display: block; }
+
+    .review-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr) auto auto;
+      align-items: center;
+      gap: 18px;
+      min-height: 92px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--review-line);
+      background: rgba(247, 247, 244, .96);
+      backdrop-filter: blur(18px);
+    }
+
+    .review-title { min-width: 0; }
+
+    .review-title strong,
+    .review-title span { display: block; }
+
+    .review-title strong {
+      font-size: 16px;
+      letter-spacing: -.02em;
+    }
+
+    .review-title span {
+      margin-top: 5px;
+      overflow: hidden;
+      color: var(--review-muted);
+      font-size: 12px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .concept-switch,
+    .viewport-switch {
+      display: flex;
+      align-items: stretch;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid var(--review-line);
+      border-radius: 10px;
+      background: #fff;
+    }
+
+    .concept-switch button,
+    .viewport-switch button {
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .concept-switch button {
+      min-width: 142px;
+      padding: 9px 12px;
+      text-align: left;
+    }
+
+    .concept-switch strong,
+    .concept-switch span { display: block; }
+
+    .concept-switch strong { font-size: 12px; }
+
+    .concept-switch span {
+      margin-top: 3px;
+      color: var(--review-muted);
+      font-size: 10px;
+    }
+
+    .concept-switch button.active {
+      color: #f6fbf7;
+      background: #25352d;
+    }
+
+    .concept-switch button.active span { color: #c8d4cc; }
+
+    .viewport-switch button {
+      min-width: 50px;
+      padding: 10px;
+      color: var(--review-muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .viewport-switch button.active {
+      color: var(--review-text);
+      background: #eceee9;
+    }
+
+    .review-stage {
+      display: grid;
+      place-items: start center;
+      min-height: calc(100vh - 92px);
+      padding: 20px;
+      overflow: auto;
+    }
+
+    .prototype-frame {
+      width: var(--frame-width);
+      height: var(--frame-height);
+      min-height: 640px;
+      overflow: hidden;
+      border: 1px solid #cfd3cc;
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 24px 70px rgba(31, 36, 32, .16);
+      transition: width 180ms ease;
+    }
+
+    body[data-viewport="wide"] { --frame-width: min(1440px, calc(100vw - 40px)); }
+    body[data-viewport="medium"] { --frame-width: min(1180px, calc(100vw - 40px)); }
+    body[data-viewport="compact"] { --frame-width: min(960px, calc(100vw - 40px)); }
+
+    .concept {
+      display: none;
+      width: 100%;
+      height: 100%;
+    }
+
+    .concept.active { display: block; }
+
+    .icon {
+      width: 18px;
+      height: 18px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* ================================================================
+       A. FOCUS QUEUE — attention-first product model
+       ================================================================ */
+
+    .focus-app {
+      --f-bg: #f2f2ee;
+      --f-surface: #fbfbf8;
+      --f-text: #20241f;
+      --f-muted: #6f766e;
+      --f-line: #d9ddd6;
+      --f-accent: #225d45;
+      --f-accent-soft: #e2ece5;
+      --f-critical: #a83d35;
+      --f-warning: #9a6717;
+      display: grid;
+      grid-template-columns: 218px minmax(0, 1fr);
+      width: 100%;
+      height: 100%;
+      color: var(--f-text);
+      background: var(--f-bg);
+    }
+
+    .focus-sidebar {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      padding: 22px 15px 16px;
+      border-right: 1px solid var(--f-line);
+      background: var(--f-surface);
+    }
+
+    .focus-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 40px;
+      padding: 0 9px 20px;
+    }
+
+    .focus-brand-mark {
+      position: relative;
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      background: var(--f-accent);
+    }
+
+    .focus-brand-mark::before,
+    .focus-brand-mark::after {
+      content: "";
+      position: absolute;
+      border-radius: 99px;
+      background: #f5fff8;
+    }
+
+    .focus-brand-mark::before { width: 6px; height: 19px; left: 10px; top: 5px; transform: rotate(-18deg); }
+    .focus-brand-mark::after { width: 10px; height: 6px; left: 14px; top: 17px; transform: rotate(-18deg); }
+
+    .focus-brand strong { font-size: 15px; letter-spacing: -.02em; }
+
+    .focus-capture {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 40px;
+      margin-bottom: 18px;
+      padding: 0 11px;
+      border: 0;
+      border-radius: 7px;
+      color: #f8fffa;
+      background: var(--f-accent);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .focus-capture kbd {
+      color: #cde1d4;
+      font: 10px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+
+    .focus-nav-label {
+      margin: 5px 10px 7px;
+      color: #959b94;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: .12em;
+    }
+
+    .focus-nav { display: grid; gap: 2px; }
+
+    .focus-nav button {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      width: 100%;
+      min-height: 39px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 6px;
+      color: var(--f-muted);
+      background: transparent;
+      cursor: pointer;
+      text-align: left;
+      font-size: 12px;
+    }
+
+    .focus-nav button.active {
+      color: var(--f-text);
+      background: #eceee9;
+      font-weight: 700;
+    }
+
+    .focus-nav button.active::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      width: 2px;
+      height: 18px;
+      background: var(--f-accent);
+    }
+
+    .focus-nav .count {
+      margin-left: auto;
+      color: #899087;
+      font-size: 10px;
+    }
+
+    .focus-sidebar-foot {
+      margin-top: auto;
+      padding-top: 12px;
+      border-top: 1px solid var(--f-line);
+    }
+
+    .focus-account {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 8px 9px;
+    }
+
+    .focus-avatar {
+      display: grid;
+      place-items: center;
+      width: 29px;
+      height: 29px;
+      border-radius: 50%;
+      color: #fff;
+      background: #404840;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .focus-account-copy strong,
+    .focus-account-copy span { display: block; }
+    .focus-account-copy strong { font-size: 11px; }
+    .focus-account-copy span { margin-top: 2px; color: var(--f-muted); font-size: 9px; }
+
+    .focus-workspace {
+      display: grid;
+      grid-template-rows: 68px minmax(0, 1fr);
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .focus-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 0 28px;
+      border-bottom: 1px solid var(--f-line);
+      background: rgba(242, 242, 238, .92);
+    }
+
+    .focus-heading strong,
+    .focus-heading span { display: block; }
+    .focus-heading strong { font-size: 19px; letter-spacing: -.03em; }
+    .focus-heading span { margin-top: 4px; color: var(--f-muted); font-size: 10px; }
+
+    .focus-top-actions { display: flex; align-items: center; gap: 8px; }
+
+    .focus-icon-button,
+    .focus-text-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 34px;
+      border: 1px solid var(--f-line);
+      border-radius: 6px;
+      background: var(--f-surface);
+      cursor: pointer;
+    }
+
+    .focus-icon-button { width: 34px; }
+    .focus-text-button { gap: 7px; padding: 0 12px; font-size: 11px; font-weight: 700; }
+
+    .focus-main {
+      display: grid;
+      grid-template-columns: minmax(500px, 1.45fr) minmax(280px, .72fr);
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .focus-primary {
+      min-width: 0;
+      overflow-y: auto;
+      padding: 27px 30px 38px;
+    }
+
+    .focus-section + .focus-section { margin-top: 32px; }
+
+    .focus-section-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 11px;
+    }
+
+    .focus-section-head h2,
+    .focus-section-head p { margin: 0; }
+    .focus-section-head h2 { font-size: 15px; letter-spacing: -.02em; }
+    .focus-section-head p { margin-top: 4px; color: var(--f-muted); font-size: 10px; }
+    .focus-section-head button { border: 0; color: var(--f-accent); background: transparent; cursor: pointer; font-size: 10px; font-weight: 700; }
+
+    .focus-queue {
+      border-top: 1px solid #bfc5bd;
+      border-bottom: 1px solid #bfc5bd;
+      background: var(--f-surface);
+    }
+
+    .focus-queue-row {
+      position: relative;
+      display: grid;
+      grid-template-columns: 20px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      min-height: 63px;
+      padding: 10px 13px 10px 16px;
+    }
+
+    .focus-queue-row + .focus-queue-row { border-top: 1px solid var(--f-line); }
+
+    .focus-queue-row::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 13px;
+      bottom: 13px;
+      width: 3px;
+      background: var(--row-tone, var(--f-accent));
+    }
+
+    .focus-check {
+      width: 17px;
+      height: 17px;
+      border: 1px solid #aab1a8;
+      border-radius: 50%;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .focus-row-copy { min-width: 0; }
+    .focus-row-copy strong,
+    .focus-row-copy span { display: block; }
+    .focus-row-copy strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+    .focus-row-copy span { margin-top: 5px; color: var(--f-muted); font-size: 9px; }
+
+    .focus-row-side { text-align: right; }
+    .focus-row-side strong,
+    .focus-row-side span { display: block; }
+    .focus-row-side strong { font-size: 10px; }
+    .focus-row-side span { margin-top: 4px; color: var(--f-muted); font-size: 9px; }
+
+    .focus-two-column {
+      display: grid;
+      grid-template-columns: 1.05fr .95fr;
+      gap: 28px;
+    }
+
+    .focus-ledger-summary,
+    .focus-memo-list {
+      border-top: 1px solid #bfc5bd;
+      border-bottom: 1px solid #bfc5bd;
+    }
+
+    .focus-money-line {
+      display: grid;
+      grid-template-columns: 74px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      min-height: 45px;
+      padding: 7px 0;
+    }
+
+    .focus-money-line + .focus-money-line { border-top: 1px solid var(--f-line); }
+    .focus-money-line > span { color: var(--f-muted); font-size: 9px; }
+    .focus-money-line strong { font-size: 11px; }
+
+    .focus-bar { height: 5px; background: #dfe3dd; }
+    .focus-bar i { display: block; width: var(--bar); height: 100%; background: var(--bar-color, var(--f-accent)); }
+
+    .focus-memo-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      min-height: 45px;
+      padding: 8px 0;
+    }
+    .focus-memo-row + .focus-memo-row { border-top: 1px solid var(--f-line); }
+    .focus-memo-row strong,
+    .focus-memo-row span { display: block; }
+    .focus-memo-row strong { font-size: 10px; }
+    .focus-memo-row span { margin-top: 4px; color: var(--f-muted); font-size: 9px; }
+    .focus-memo-row time { color: var(--f-muted); font-size: 9px; }
+
+    .focus-agenda {
+      min-width: 0;
+      overflow-y: auto;
+      padding: 28px 24px 36px;
+      border-left: 1px solid var(--f-line);
+      background: var(--f-surface);
+    }
+
+    .focus-date {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      gap: 11px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--f-line);
+    }
+
+    .focus-date strong { font-size: 34px; font-weight: 600; letter-spacing: -.05em; }
+    .focus-date div strong,
+    .focus-date div span { display: block; }
+    .focus-date div strong { font-size: 11px; letter-spacing: 0; }
+    .focus-date div span { margin-top: 3px; color: var(--f-muted); font-size: 9px; }
+
+    .focus-timeline { position: relative; padding-top: 20px; }
+    .focus-timeline::before { content: ""; position: absolute; left: 42px; top: 20px; bottom: 12px; width: 1px; background: var(--f-line); }
+
+    .focus-time-row {
+      position: relative;
+      display: grid;
+      grid-template-columns: 31px 10px minmax(0, 1fr);
+      gap: 8px;
+      min-height: 72px;
+    }
+
+    .focus-time-row time { padding-top: 1px; color: var(--f-muted); font-size: 9px; text-align: right; }
+    .focus-time-dot { position: relative; z-index: 1; width: 7px; height: 7px; margin-top: 2px; border: 2px solid var(--f-surface); border-radius: 50%; background: var(--time-tone, var(--f-accent)); box-shadow: 0 0 0 1px var(--time-tone, var(--f-accent)); }
+    .focus-time-copy { min-width: 0; padding: 0 0 13px 3px; }
+    .focus-time-copy strong,
+    .focus-time-copy span { display: block; }
+    .focus-time-copy strong { font-size: 10px; }
+    .focus-time-copy span { margin-top: 4px; color: var(--f-muted); font-size: 9px; line-height: 1.5; }
+
+    .focus-agenda-foot {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--f-line);
+    }
+
+    .focus-agenda-foot strong,
+    .focus-agenda-foot span { display: block; }
+    .focus-agenda-foot strong { font-size: 10px; }
+    .focus-agenda-foot span { margin-top: 6px; color: var(--f-muted); font-size: 9px; line-height: 1.5; }
+
+    /* ================================================================
+       B. DAILY CANVAS — chronological life stream
+       ================================================================ */
+
+    .canvas-app {
+      --c-bg: #f6f2e9;
+      --c-paper: #fffdf8;
+      --c-text: #292821;
+      --c-muted: #7f7a6d;
+      --c-line: #ddd7ca;
+      --c-accent: #506f5e;
+      --c-coral: #b8644f;
+      display: grid;
+      grid-template-columns: 68px minmax(0, 1fr);
+      width: 100%;
+      height: 100%;
+      color: var(--c-text);
+      background: var(--c-bg);
+    }
+
+    .canvas-rail {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 18px 0 14px;
+      border-right: 1px solid var(--c-line);
+      background: #ede8dd;
+    }
+
+    .canvas-logo {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      margin-bottom: 25px;
+      border-radius: 50%;
+      color: #fff;
+      background: var(--c-accent);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .canvas-rail-nav { display: grid; gap: 8px; }
+
+    .canvas-rail button {
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      border: 0;
+      border-radius: 50%;
+      color: #756f62;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .canvas-rail button.active { color: #fff; background: #4e6759; }
+    .canvas-rail .rail-bottom { margin-top: auto; }
+
+    .canvas-shell {
+      display: grid;
+      grid-template-rows: 66px minmax(0, 1fr) 70px;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .canvas-top {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 20px;
+      padding: 0 28px;
+      border-bottom: 1px solid var(--c-line);
+      background: rgba(246, 242, 233, .9);
+    }
+
+    .canvas-title strong,
+    .canvas-title span { display: block; }
+    .canvas-title strong { font-family: Georgia, "Songti SC", serif; font-size: 20px; font-weight: 500; letter-spacing: -.02em; }
+    .canvas-title span { margin-top: 3px; color: var(--c-muted); font-size: 10px; }
+
+    .canvas-week { display: flex; gap: 4px; }
+    .canvas-week button {
+      width: 42px;
+      min-height: 42px;
+      border: 0;
+      border-radius: 21px;
+      color: var(--c-muted);
+      background: transparent;
+      cursor: pointer;
+    }
+    .canvas-week button strong,
+    .canvas-week button span { display: block; }
+    .canvas-week button strong { font-size: 9px; }
+    .canvas-week button span { margin-top: 3px; font-size: 11px; }
+    .canvas-week button.active { color: #fff; background: var(--c-accent); }
+
+    .canvas-main {
+      display: grid;
+      grid-template-columns: minmax(500px, 1fr) 300px;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .canvas-day {
+      position: relative;
+      min-width: 0;
+      overflow-y: auto;
+      padding: 30px 46px 44px;
+      background: var(--c-paper);
+    }
+
+    .canvas-day-heading {
+      display: grid;
+      grid-template-columns: 104px minmax(0, 1fr);
+      gap: 28px;
+      margin-bottom: 16px;
+    }
+
+    .canvas-day-heading time {
+      font-family: Georgia, "Songti SC", serif;
+      font-size: 48px;
+      line-height: .95;
+      letter-spacing: -.06em;
+    }
+
+    .canvas-day-heading div { align-self: end; padding-bottom: 4px; }
+    .canvas-day-heading strong,
+    .canvas-day-heading span { display: block; }
+    .canvas-day-heading strong { font-size: 12px; }
+    .canvas-day-heading span { margin-top: 4px; color: var(--c-muted); font-size: 10px; }
+
+    .canvas-stream { position: relative; }
+    .canvas-stream::before { content: ""; position: absolute; left: 103px; top: 0; bottom: 0; width: 1px; background: var(--c-line); }
+
+    .canvas-entry {
+      position: relative;
+      display: grid;
+      grid-template-columns: 76px 20px minmax(0, 1fr) auto;
+      gap: 12px;
+      min-height: 84px;
+      padding: 13px 0 16px;
+    }
+
+    .canvas-entry + .canvas-entry { border-top: 1px solid rgba(221, 215, 202, .72); }
+    .canvas-entry > time { padding-top: 2px; color: var(--c-muted); font: 10px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; text-align: right; }
+
+    .canvas-entry-marker {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      place-items: center;
+      width: 19px;
+      height: 19px;
+      border: 5px solid var(--c-paper);
+      border-radius: 50%;
+      background: var(--entry-tone, var(--c-accent));
+      box-shadow: 0 0 0 1px var(--entry-tone, var(--c-accent));
+    }
+
+    .canvas-entry-copy { min-width: 0; }
+    .canvas-entry-copy strong,
+    .canvas-entry-copy p,
+    .canvas-entry-copy span { display: block; margin: 0; }
+    .canvas-entry-copy strong { font-family: Georgia, "Songti SC", serif; font-size: 14px; font-weight: 600; }
+    .canvas-entry-copy p { max-width: 620px; margin-top: 7px; color: #59574f; font-size: 10px; line-height: 1.65; }
+    .canvas-entry-copy span { margin-top: 7px; color: var(--c-muted); font-size: 9px; }
+
+    .canvas-entry-value {
+      min-width: 66px;
+      padding-top: 1px;
+      color: #3d4f45;
+      font-size: 10px;
+      font-weight: 700;
+      text-align: right;
+    }
+
+    .canvas-entry-action {
+      margin-top: 9px;
+      border: 0;
+      border-bottom: 1px solid currentColor;
+      color: var(--c-accent);
+      background: transparent;
+      cursor: pointer;
+      font-size: 9px;
+    }
+
+    .canvas-aside {
+      min-width: 0;
+      overflow-y: auto;
+      padding: 28px 24px;
+      border-left: 1px solid var(--c-line);
+      background: #f1ece1;
+    }
+
+    .canvas-aside h2,
+    .canvas-aside p { margin: 0; }
+    .canvas-aside h2 { font-family: Georgia, "Songti SC", serif; font-size: 17px; font-weight: 500; }
+    .canvas-aside > p { margin-top: 6px; color: var(--c-muted); font-size: 9px; line-height: 1.6; }
+
+    .canvas-aside-section {
+      margin-top: 24px;
+      padding-top: 17px;
+      border-top: 1px solid var(--c-line);
+    }
+
+    .canvas-aside-section > strong {
+      display: block;
+      margin-bottom: 10px;
+      color: #5d5a51;
+      font-size: 9px;
+      letter-spacing: .08em;
+    }
+
+    .canvas-small-row {
+      display: grid;
+      grid-template-columns: 11px minmax(0, 1fr);
+      gap: 9px;
+      padding: 7px 0;
+    }
+    .canvas-small-row i { width: 7px; height: 7px; margin-top: 3px; border-radius: 50%; background: var(--small-tone, var(--c-accent)); }
+    .canvas-small-row strong,
+    .canvas-small-row span { display: block; }
+    .canvas-small-row strong { font-size: 10px; }
+    .canvas-small-row span { margin-top: 4px; color: var(--c-muted); font-size: 9px; line-height: 1.45; }
+
+    .canvas-budget {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: end;
+    }
+    .canvas-budget strong { font-family: Georgia, "Songti SC", serif; font-size: 27px; font-weight: 500; }
+    .canvas-budget span { padding-bottom: 4px; color: var(--c-muted); font-size: 9px; }
+    .canvas-budget-bar { grid-column: 1 / -1; height: 3px; background: #d8d1c4; }
+    .canvas-budget-bar i { display: block; width: 62%; height: 100%; background: var(--c-coral); }
+
+    .canvas-composer {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 24px;
+      border-top: 1px solid var(--c-line);
+      background: #ece6da;
+    }
+
+    .canvas-compose-mark {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      color: #fff;
+      background: var(--c-accent);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .canvas-composer input {
+      width: 100%;
+      height: 38px;
+      padding: 0 4px;
+      border: 0;
+      border-bottom: 1px solid #bdb6a8;
+      outline: 0;
+      color: var(--c-text);
+      background: transparent;
+      font-size: 11px;
+    }
+
+    .canvas-composer button {
+      min-height: 34px;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 18px;
+      color: #fff;
+      background: var(--c-accent);
+      cursor: pointer;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    /* ================================================================
+       C. OPERATIONS CONSOLE — keyboard-first three-pane workspace
+       ================================================================ */
+
+    .console-app {
+      --o-bg: #f4f6f5;
+      --o-panel: #ffffff;
+      --o-text: #1b2328;
+      --o-muted: #647079;
+      --o-line: #d8dee1;
+      --o-dark: #1c252b;
+      --o-dark-2: #273239;
+      --o-accent: #2d6f54;
+      --o-blue: #336f91;
+      display: grid;
+      grid-template-columns: 54px minmax(0, 1fr);
+      width: 100%;
+      height: 100%;
+      color: var(--o-text);
+      background: var(--o-bg);
+    }
+
+    .console-rail {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      padding: 12px 0;
+      color: #aeb8bd;
+      background: var(--o-dark);
+    }
+
+    .console-rail-logo {
+      display: grid;
+      place-items: center;
+      width: 31px;
+      height: 31px;
+      margin-bottom: 13px;
+      border: 1px solid #536169;
+      border-radius: 5px;
+      color: #dce8e1;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .console-rail button {
+      display: grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      border: 0;
+      border-radius: 4px;
+      color: inherit;
+      background: transparent;
+      cursor: pointer;
+    }
+    .console-rail button.active { color: #fff; background: var(--o-dark-2); }
+    .console-rail .console-rail-bottom { margin-top: auto; }
+
+    .console-shell {
+      display: grid;
+      grid-template-rows: 48px 38px minmax(0, 1fr) 28px;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .console-command {
+      display: grid;
+      grid-template-columns: 220px minmax(260px, 600px) minmax(180px, 1fr);
+      align-items: center;
+      gap: 18px;
+      padding: 0 14px;
+      color: #dce4e7;
+      background: var(--o-dark);
+    }
+
+    .console-brand strong { font-size: 11px; letter-spacing: .02em; }
+
+    .console-search {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 29px;
+      padding: 0 9px;
+      border: 1px solid #46545c;
+      border-radius: 4px;
+      background: #222d33;
+    }
+    .console-search input { width: 100%; border: 0; outline: 0; color: #e7edef; background: transparent; font-size: 10px; }
+    .console-search kbd { color: #8f9da4; font: 9px/1 ui-monospace, SFMono-Regular, Consolas, monospace; }
+
+    .console-actions { display: flex; justify-content: flex-end; gap: 6px; }
+    .console-actions button {
+      min-height: 28px;
+      padding: 0 10px;
+      border: 1px solid #48575f;
+      border-radius: 4px;
+      color: #d8e2e6;
+      background: transparent;
+      cursor: pointer;
+      font-size: 9px;
+    }
+    .console-actions button.primary { border-color: #42785f; background: #315e49; }
+
+    .console-statusbar {
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr) auto;
+      align-items: center;
+      border-bottom: 1px solid var(--o-line);
+      background: #e8ecea;
+      font-size: 9px;
+    }
+    .console-statusbar > div { height: 100%; padding: 0 12px; display: flex; align-items: center; gap: 12px; }
+    .console-statusbar > div + div { border-left: 1px solid #d1d8d4; }
+    .console-statusbar strong { font-size: 10px; }
+    .console-statusbar span { color: var(--o-muted); }
+    .console-statusbar .status-right { justify-content: flex-end; }
+
+    .console-workspace {
+      display: grid;
+      grid-template-columns: 220px minmax(480px, 1fr) 310px;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .console-filters,
+    .console-inspector {
+      min-width: 0;
+      overflow-y: auto;
+      background: #f8faf9;
+    }
+
+    .console-filters { border-right: 1px solid var(--o-line); }
+    .console-inspector { border-left: 1px solid var(--o-line); }
+
+    .console-pane-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 39px;
+      padding: 0 11px;
+      border-bottom: 1px solid var(--o-line);
+      background: #eef2f0;
+    }
+    .console-pane-head strong { font-size: 10px; }
+    .console-pane-head button { border: 0; color: var(--o-muted); background: transparent; cursor: pointer; font-size: 9px; }
+
+    .console-filter-group { padding: 11px; border-bottom: 1px solid var(--o-line); }
+    .console-filter-group > strong { display: block; margin-bottom: 6px; color: #566169; font-size: 8px; letter-spacing: .09em; }
+    .console-filter-group button {
+      display: grid;
+      grid-template-columns: 12px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 7px;
+      width: 100%;
+      min-height: 29px;
+      padding: 0 7px;
+      border: 0;
+      border-radius: 3px;
+      color: #48545c;
+      background: transparent;
+      cursor: pointer;
+      text-align: left;
+      font-size: 9px;
+    }
+    .console-filter-group button.active { color: #153d2c; background: #dfeae4; font-weight: 700; }
+    .console-filter-group button i { width: 6px; height: 6px; border-radius: 50%; background: var(--filter-tone, #87949a); }
+    .console-filter-group button em { color: #7d888e; font-style: normal; font-size: 8px; }
+
+    .console-table-wrap { min-width: 0; overflow: auto; background: var(--o-panel); }
+
+    .console-table-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-width: 760px;
+      min-height: 39px;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--o-line);
+    }
+    .console-table-toolbar strong { font-size: 10px; }
+    .console-table-toolbar span { margin-left: 7px; color: var(--o-muted); font-size: 8px; }
+    .console-table-toolbar div:last-child { display: flex; gap: 5px; }
+    .console-table-toolbar button { min-height: 25px; padding: 0 8px; border: 1px solid var(--o-line); border-radius: 3px; background: #fff; cursor: pointer; font-size: 8px; }
+
+    .console-table {
+      width: 100%;
+      min-width: 760px;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 9px;
+    }
+    .console-table th {
+      height: 31px;
+      padding: 0 8px;
+      border-bottom: 1px solid #cfd6d9;
+      color: #68747b;
+      background: #f3f6f5;
+      font-size: 8px;
+      font-weight: 700;
+      text-align: left;
+    }
+    .console-table td { height: 38px; padding: 0 8px; border-bottom: 1px solid #e2e6e7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .console-table tr.selected td { background: #edf5f1; }
+    .console-table .col-check { width: 30px; }
+    .console-table .col-type { width: 74px; }
+    .console-table .col-status { width: 90px; }
+    .console-table .col-date { width: 98px; }
+    .console-table .col-source { width: 90px; }
+
+    .console-check { width: 13px; height: 13px; border: 1px solid #9ca7ac; border-radius: 2px; background: #fff; }
+    .console-type { display: inline-flex; align-items: center; gap: 5px; color: #516068; }
+    .console-type i { width: 6px; height: 6px; border-radius: 50%; background: var(--type-tone, #607d8b); }
+    .console-status { display: inline-flex; align-items: center; gap: 5px; }
+    .console-status::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--status-tone, #708087); }
+    .console-table .money { font-variant-numeric: tabular-nums; text-align: right; }
+
+    .console-inspector-body { padding: 13px; }
+    .console-inspector-kicker { color: var(--o-muted); font-size: 8px; letter-spacing: .08em; }
+    .console-inspector-body h2 { margin: 8px 0 5px; font-size: 15px; line-height: 1.25; letter-spacing: -.02em; }
+    .console-inspector-meta { color: var(--o-muted); font-size: 8px; }
+
+    .console-inspector-section { margin-top: 17px; padding-top: 13px; border-top: 1px solid var(--o-line); }
+    .console-inspector-section > strong { display: block; margin-bottom: 8px; color: #536069; font-size: 8px; letter-spacing: .08em; }
+    .console-field { display: grid; grid-template-columns: 82px minmax(0, 1fr); gap: 8px; min-height: 27px; padding: 6px 0; border-bottom: 1px solid #e5e8e9; }
+    .console-field span { color: var(--o-muted); font-size: 8px; }
+    .console-field strong { font-size: 9px; font-weight: 600; }
+
+    .console-inspector-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 14px; }
+    .console-inspector-actions button { min-height: 29px; border: 1px solid var(--o-line); border-radius: 3px; background: #fff; cursor: pointer; font-size: 8px; }
+    .console-inspector-actions button.primary { color: #fff; border-color: var(--o-accent); background: var(--o-accent); }
+
+    .console-log {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+      padding: 0 10px;
+      color: #aeb9be;
+      background: #222c32;
+      font: 8px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+    .console-log strong { color: #d8e1e5; }
+    .console-log span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .console-log .log-right { margin-left: auto; flex: 0 0 auto; color: #88b99f; }
+
+    /* review notes */
+
+    .concept-note {
+      position: fixed;
+      right: 22px;
+      bottom: 18px;
+      z-index: 110;
+      width: min(310px, calc(100vw - 44px));
+      padding: 12px 14px;
+      border: 1px solid #cfd4cd;
+      border-radius: 8px;
+      background: rgba(255, 255, 252, .96);
+      box-shadow: 0 14px 34px rgba(37, 43, 38, .15);
+      backdrop-filter: blur(16px);
+    }
+
+    .concept-note strong,
+    .concept-note span { display: block; }
+    .concept-note strong { font-size: 11px; }
+    .concept-note span { margin-top: 5px; color: var(--review-muted); font-size: 9px; line-height: 1.55; }
+
+    @media (max-width: 1180px) {
+      .review-bar { grid-template-columns: 1fr auto; }
+      .viewport-switch { display: none; }
+      .concept-switch button { min-width: 116px; }
+      .focus-main { grid-template-columns: minmax(470px, 1fr) 260px; }
+      .focus-two-column { grid-template-columns: 1fr; }
+      .canvas-main { grid-template-columns: minmax(480px, 1fr) 260px; }
+      .console-workspace { grid-template-columns: 190px minmax(440px, 1fr) 270px; }
+      .console-command { grid-template-columns: 190px minmax(220px, 520px) 1fr; }
+      .console-statusbar { grid-template-columns: 190px 1fr auto; }
+    }
+
+    @media (max-width: 900px) {
+      .review-bar { position: static; display: block; padding: 12px; }
+      .review-title span { white-space: normal; }
+      .concept-switch { margin-top: 10px; overflow-x: auto; }
+      .concept-switch button { flex: 1 0 120px; }
+      .review-stage { padding: 12px; }
+      .prototype-frame { width: 100%; height: 720px; }
+      .focus-app { grid-template-columns: 64px minmax(0, 1fr); }
+      .focus-sidebar { padding-inline: 9px; }
+      .focus-brand strong,
+      .focus-capture span,
+      .focus-capture kbd,
+      .focus-nav-label,
+      .focus-nav button span,
+      .focus-nav .count,
+      .focus-account-copy { display: none; }
+      .focus-brand,
+      .focus-nav button { justify-content: center; }
+      .focus-capture { justify-content: center; padding: 0; }
+      .focus-main { grid-template-columns: 1fr; overflow-y: auto; }
+      .focus-primary { overflow: visible; }
+      .focus-agenda { border-top: 1px solid var(--f-line); border-left: 0; }
+      .canvas-main { grid-template-columns: 1fr; overflow-y: auto; }
+      .canvas-day { overflow: visible; }
+      .canvas-aside { border-top: 1px solid var(--c-line); border-left: 0; }
+      .canvas-week button:not(.active) { display: none; }
+      .console-workspace { grid-template-columns: 170px minmax(560px, 1fr); overflow: auto; }
+      .console-inspector { display: none; }
+      .console-command { grid-template-columns: 130px minmax(220px, 1fr) auto; }
+      .console-statusbar { grid-template-columns: 170px 1fr; }
+      .console-statusbar .status-right { display: none; }
+      .concept-note { display: none; }
+    }
+  </style>
+</head>
+<body data-concept="focus" data-viewport="wide">
+  <svg width="0" height="0" aria-hidden="true" focusable="false">
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19.5z"/><path d="M9 21v-7h6v7"/></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6z"/><path d="M14 3v4h4M9 11h6M9 15h6"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 1.2 4.2L17 9l-3.8 1.8L12 15l-1.2-4.2L7 9l3.8-1.8z"/><path d="m18.5 14 .7 2.3 2.3.7-2.3.7-.7 2.3-.7-2.3-2.3-.7 2.3-.7z"/></symbol>
+    <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M4 6.5h14a2 2 0 0 1 2 2v10H4a2 2 0 0 1-2-2v-12a2 2 0 0 1 2-2h12"/><path d="M15 11h5v4h-5a2 2 0 0 1 0-4z"/></symbol>
+    <symbol id="i-task" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16.5 8"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1z"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 5h16M7 12h10M10 19h4"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></symbol>
+  </svg>
+
+  <header class="review-bar">
+    <div class="review-title">
+      <strong>Lifly Web · 产品布局方向评审</strong>
+      <span>本轮比较信息架构与工作方式，不比较换肤。三套方案使用独立页面结构。</span>
+    </div>
+    <nav class="concept-switch" aria-label="设计方向">
+      <button class="active" type="button" data-concept-value="focus" aria-pressed="true">
+        <strong>A · 今日处理队列</strong>
+        <span>风险和行动优先</span>
+      </button>
+      <button type="button" data-concept-value="canvas" aria-pressed="false">
+        <strong>B · 生活时间流</strong>
+        <span>按一天的节奏组织</span>
+      </button>
+      <button type="button" data-concept-value="console" aria-pressed="false">
+        <strong>C · 专业工作区</strong>
+        <span>筛选、表格、检查器</span>
+      </button>
+    </nav>
+    <nav class="viewport-switch" aria-label="预览宽度">
+      <button class="active" type="button" data-viewport-value="wide">1440</button>
+      <button type="button" data-viewport-value="medium">1180</button>
+      <button type="button" data-viewport-value="compact">960</button>
+    </nav>
+  </header>
+
+  <main class="review-stage">
+    <div class="prototype-frame">
+      <section class="concept active" id="concept-focus" aria-label="今日处理队列方向">
+        <div class="focus-app">
+          <aside class="focus-sidebar">
+            <div class="focus-brand"><span class="focus-brand-mark"></span><strong>Lifly</strong></div>
+            <button class="focus-capture" type="button"><span>快速记录</span><kbd>⌘ K</kbd></button>
+            <div class="focus-nav-label">核心</div>
+            <nav class="focus-nav">
+              <button class="active" type="button"><svg class="icon"><use href="#i-home"></use></svg><span>今天</span><em class="count">4</em></button>
+              <button type="button"><svg class="icon"><use href="#i-note"></use></svg><span>备忘</span><em class="count">18</em></button>
+              <button type="button"><svg class="icon"><use href="#i-spark"></use></svg><span>AI 会话</span><em class="count">2</em></button>
+              <button type="button"><svg class="icon"><use href="#i-wallet"></use></svg><span>记账</span></button>
+              <button type="button"><svg class="icon"><use href="#i-task"></use></svg><span>任务</span><em class="count">7</em></button>
+            </nav>
+            <div class="focus-nav-label" style="margin-top:18px">管理</div>
+            <nav class="focus-nav">
+              <button type="button"><svg class="icon"><use href="#i-grid"></use></svg><span>全部内容</span></button>
+              <button type="button"><svg class="icon"><use href="#i-settings"></use></svg><span>设置</span></button>
+            </nav>
+            <div class="focus-sidebar-foot">
+              <div class="focus-account"><span class="focus-avatar">A</span><div class="focus-account-copy"><strong>Akira</strong><span>本地已同步</span></div></div>
+            </div>
+          </aside>
+
+          <div class="focus-workspace">
+            <header class="focus-topbar">
+              <div class="focus-heading"><strong>今天</strong><span>2026 年 7 月 30 日 · 星期四</span></div>
+              <div class="focus-top-actions">
+                <button class="focus-icon-button" type="button" aria-label="搜索"><svg class="icon"><use href="#i-search"></use></svg></button>
+                <button class="focus-text-button" type="button"><svg class="icon"><use href="#i-calendar"></use></svg>日程</button>
+              </div>
+            </header>
+
+            <div class="focus-main">
+              <main class="focus-primary">
+                <section class="focus-section">
+                  <header class="focus-section-head"><div><h2>先处理这 4 件事</h2><p>首页只放今天需要判断或执行的内容</p></div><button type="button">查看全部任务</button></header>
+                  <div class="focus-queue">
+                    <article class="focus-queue-row" style="--row-tone:var(--f-critical)"><button class="focus-check" type="button" aria-label="完成任务"></button><div class="focus-row-copy"><strong>确认 Web 首页布局方向</strong><span>产品设计 · 需要你做出选择</span></div><div class="focus-row-side"><strong>逾期 18 小时</strong><span>重要且紧急</span></div></article>
+                    <article class="focus-queue-row" style="--row-tone:var(--f-warning)"><button class="focus-check" type="button" aria-label="确认动作"></button><div class="focus-row-copy"><strong>确认 AI 识别的餐饮支出 ¥18.00</strong><span>食堂 · 微信支付 · 尚未写入账本</span></div><div class="focus-row-side"><strong>待确认</strong><span>AI Capture</span></div></article>
+                    <article class="focus-queue-row" style="--row-tone:#397296"><button class="focus-check" type="button" aria-label="完成任务"></button><div class="focus-row-copy"><strong>核对 5 条导入异常流水</strong><span>微信账单导入 · 金额字段存在歧义</span></div><div class="focus-row-side"><strong>今天 16:00</strong><span>数据维护</span></div></article>
+                    <article class="focus-queue-row" style="--row-tone:var(--f-accent)"><button class="focus-check" type="button" aria-label="完成任务"></button><div class="focus-row-copy"><strong>晚间复盘</strong><span>整理今天完成、推迟与新增事项</span></div><div class="focus-row-side"><strong>22:30</strong><span>固定习惯</span></div></article>
+                  </div>
+                </section>
+
+                <section class="focus-section focus-two-column">
+                  <div>
+                    <header class="focus-section-head"><div><h2>本月收支</h2><p>用占比判断，不展示装饰性图表</p></div><button type="button">进入账本</button></header>
+                    <div class="focus-ledger-summary">
+                      <div class="focus-money-line"><span>支出</span><div class="focus-bar"><i style="--bar:62%;--bar-color:#9f5c4d"></i></div><strong>¥3,420</strong></div>
+                      <div class="focus-money-line"><span>预算余量</span><div class="focus-bar"><i style="--bar:38%;--bar-color:#4e765f"></i></div><strong>¥2,080</strong></div>
+                      <div class="focus-money-line"><span>餐饮占比</span><div class="focus-bar"><i style="--bar:47%;--bar-color:#9a7a42"></i></div><strong>47%</strong></div>
+                    </div>
+                  </div>
+                  <div>
+                    <header class="focus-section-head"><div><h2>最近备忘</h2><p>继续上次未完成的思路</p></div><button type="button">全部备忘</button></header>
+                    <div class="focus-memo-list">
+                      <article class="focus-memo-row"><div><strong>首页注意力分发原则</strong><span>产品设计 · AI 已分类</span></div><time>14:42</time></article>
+                      <article class="focus-memo-row"><div><strong>主题应用框架边界</strong><span>开发 · 主题</span></div><time>昨天</time></article>
+                      <article class="focus-memo-row"><div><strong>七月读书清单</strong><span>清单 · 生活</span></div><time>周一</time></article>
+                    </div>
+                  </div>
+                </section>
+              </main>
+
+              <aside class="focus-agenda">
+                <div class="focus-date"><strong>30</strong><div><strong>星期四</strong><span>7 月 · 今天</span></div></div>
+                <div class="focus-timeline">
+                  <article class="focus-time-row"><time>10:30</time><span class="focus-time-dot" style="--time-tone:#2f7052"></span><div class="focus-time-copy"><strong>确认 Web 首页布局</strong><span>正在进行 · 产品设计</span></div></article>
+                  <article class="focus-time-row"><time>14:00</time><span class="focus-time-dot" style="--time-tone:#9b6717"></span><div class="focus-time-copy"><strong>接口方案评审</strong><span>研发会议 · 预计 45 分钟</span></div></article>
+                  <article class="focus-time-row"><time>16:00</time><span class="focus-time-dot" style="--time-tone:#a83d35"></span><div class="focus-time-copy"><strong>导入异常核对截止</strong><span>还剩 5 条未处理</span></div></article>
+                  <article class="focus-time-row"><time>20:00</time><span class="focus-time-dot" style="--time-tone:#397296"></span><div class="focus-time-copy"><strong>修改页面</strong><span>来自 AI Capture 的提醒</span></div></article>
+                  <article class="focus-time-row"><time>22:30</time><span class="focus-time-dot" style="--time-tone:#788078"></span><div class="focus-time-copy"><strong>晚间复盘</strong><span>固定习惯</span></div></article>
+                </div>
+                <div class="focus-agenda-foot"><strong>空闲窗口</strong><span>17:00—19:30 没有安排，适合处理需要持续注意力的工作。</span></div>
+              </aside>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="concept" id="concept-canvas" aria-label="生活时间流方向">
+        <div class="canvas-app">
+          <aside class="canvas-rail">
+            <div class="canvas-logo">L</div>
+            <nav class="canvas-rail-nav">
+              <button class="active" type="button" aria-label="今天"><svg class="icon"><use href="#i-calendar"></use></svg></button>
+              <button type="button" aria-label="备忘"><svg class="icon"><use href="#i-note"></use></svg></button>
+              <button type="button" aria-label="记账"><svg class="icon"><use href="#i-wallet"></use></svg></button>
+              <button type="button" aria-label="任务"><svg class="icon"><use href="#i-task"></use></svg></button>
+            </nav>
+            <button class="rail-bottom" type="button" aria-label="设置"><svg class="icon"><use href="#i-settings"></use></svg></button>
+          </aside>
+
+          <div class="canvas-shell">
+            <header class="canvas-top">
+              <div class="canvas-title"><strong>我的一天</strong><span>事情、消费和想法按发生顺序自然沉淀</span></div>
+              <nav class="canvas-week" aria-label="本周日期">
+                <button type="button"><strong>一</strong><span>27</span></button>
+                <button type="button"><strong>二</strong><span>28</span></button>
+                <button type="button"><strong>三</strong><span>29</span></button>
+                <button class="active" type="button"><strong>四</strong><span>30</span></button>
+                <button type="button"><strong>五</strong><span>31</span></button>
+                <button type="button"><strong>六</strong><span>1</span></button>
+                <button type="button"><strong>日</strong><span>2</span></button>
+              </nav>
+            </header>
+
+            <div class="canvas-main">
+              <main class="canvas-day">
+                <header class="canvas-day-heading"><time>30</time><div><strong>七月，星期四</strong><span>今天有 3 个安排，2 件事需要确认</span></div></header>
+                <div class="canvas-stream">
+                  <article class="canvas-entry" style="--entry-tone:#557662"><time>08:20</time><span class="canvas-entry-marker"></span><div class="canvas-entry-copy"><strong>写下今天最重要的一件事</strong><p>完成 Web 首页布局选择。只做结构判断，不再陷入配色和装饰细节。</p><span>晨间备忘 · 产品设计</span></div><div class="canvas-entry-value">置顶</div></article>
+                  <article class="canvas-entry" style="--entry-tone:#b8644f"><time>12:20</time><span class="canvas-entry-marker"></span><div class="canvas-entry-copy"><strong>食堂午饭</strong><p>AI 从一句话里识别出餐饮支出，金额和支付方式等待确认。</p><span>餐饮 · 微信支付</span><button class="canvas-entry-action" type="button">确认写入</button></div><div class="canvas-entry-value">− ¥18.00</div></article>
+                  <article class="canvas-entry" style="--entry-tone:#8f6f35"><time>14:00</time><span class="canvas-entry-marker"></span><div class="canvas-entry-copy"><strong>接口方案评审</strong><p>讨论本地优先与云端同步失败时的边界，预计 45 分钟。</p><span>工作日程 · 研发</span></div><div class="canvas-entry-value">45 分钟</div></article>
+                  <article class="canvas-entry" style="--entry-tone:#496f8b"><time>16:00</time><span class="canvas-entry-marker"></span><div class="canvas-entry-copy"><strong>核对导入异常流水</strong><p>微信账单有 5 条数据无法自动判断分类，完成后再提交导入。</p><span>任务 · 数据维护</span></div><div class="canvas-entry-value">5 条</div></article>
+                  <article class="canvas-entry" style="--entry-tone:#557662"><time>20:00</time><span class="canvas-entry-marker"></span><div class="canvas-entry-copy"><strong>修改页面</strong><p>提醒来自上午的 AI 会话。打开时自动带回相关备忘和设计选择。</p><span>任务 · AI 创建</span></div><div class="canvas-entry-value">待开始</div></article>
+                  <article class="canvas-entry" style="--entry-tone:#88847a"><time>22:30</time><span class="canvas-entry-marker"></span><div class="canvas-entry-copy"><strong>晚间复盘</strong><p>把完成、推迟和临时新增的事情收口，明天不再重新整理。</p><span>固定习惯</span></div><div class="canvas-entry-value">10 分钟</div></article>
+                </div>
+              </main>
+
+              <aside class="canvas-aside">
+                <h2>今天的收口</h2>
+                <p>这里不是统计仪表盘，只提示一天结束前仍需处理的内容。</p>
+                <section class="canvas-aside-section">
+                  <strong>还没完成</strong>
+                  <div class="canvas-small-row" style="--small-tone:#b8644f"><i></i><div><strong>确认 Web 布局方向</strong><span>已经逾期，需要先于其他工作处理</span></div></div>
+                  <div class="canvas-small-row" style="--small-tone:#8f6f35"><i></i><div><strong>确认午饭支出</strong><span>AI 识别结果尚未写入账本</span></div></div>
+                  <div class="canvas-small-row" style="--small-tone:#496f8b"><i></i><div><strong>核对 5 条异常流水</strong><span>今天 16:00 前完成</span></div></div>
+                </section>
+                <section class="canvas-aside-section">
+                  <strong>本月可用预算</strong>
+                  <div class="canvas-budget"><strong>¥2,080</strong><span>剩余 38%</span><div class="canvas-budget-bar"><i></i></div></div>
+                </section>
+                <section class="canvas-aside-section">
+                  <strong>最近留下的想法</strong>
+                  <div class="canvas-small-row"><i></i><div><strong>首页注意力分发原则</strong><span>今天 14:42 · 产品设计</span></div></div>
+                  <div class="canvas-small-row"><i></i><div><strong>主题应用框架边界</strong><span>昨天 · 开发</span></div></div>
+                </section>
+              </aside>
+            </div>
+
+            <footer class="canvas-composer"><span class="canvas-compose-mark">+</span><input type="text" placeholder="记下一句话，例如：晚上八点提醒我改页面，午饭 18 元"><button type="button">记录</button></footer>
+          </div>
+        </div>
+      </section>
+
+      <section class="concept" id="concept-console" aria-label="专业工作区方向">
+        <div class="console-app">
+          <aside class="console-rail">
+            <div class="console-rail-logo">LF</div>
+            <button class="active" type="button" aria-label="工作区"><svg class="icon"><use href="#i-grid"></use></svg></button>
+            <button type="button" aria-label="备忘"><svg class="icon"><use href="#i-note"></use></svg></button>
+            <button type="button" aria-label="记账"><svg class="icon"><use href="#i-wallet"></use></svg></button>
+            <button type="button" aria-label="任务"><svg class="icon"><use href="#i-task"></use></svg></button>
+            <button type="button" aria-label="AI"><svg class="icon"><use href="#i-spark"></use></svg></button>
+            <button class="console-rail-bottom" type="button" aria-label="设置"><svg class="icon"><use href="#i-settings"></use></svg></button>
+          </aside>
+
+          <div class="console-shell">
+            <header class="console-command">
+              <div class="console-brand"><strong>LIFLY / TODAY</strong></div>
+              <label class="console-search"><svg class="icon"><use href="#i-search"></use></svg><input type="search" placeholder="搜索全部内容或输入命令"><kbd>⌘ K</kbd></label>
+              <div class="console-actions"><button type="button">导入</button><button class="primary" type="button">+ 快速记录</button></div>
+            </header>
+
+            <div class="console-statusbar">
+              <div><strong>今天</strong><span>7 月 30 日 周四</span></div>
+              <div><span>待处理 7</span><span>逾期 1</span><span>待确认 2</span><span>本月支出 ¥3,420</span></div>
+              <div class="status-right"><span>本地已同步 · 14:46</span></div>
+            </div>
+
+            <div class="console-workspace">
+              <aside class="console-filters">
+                <header class="console-pane-head"><strong>视图与筛选</strong><button type="button">重置</button></header>
+                <section class="console-filter-group">
+                  <strong>保存的视图</strong>
+                  <button class="active" type="button"><i style="--filter-tone:#47735c"></i><span>今天需要处理</span><em>7</em></button>
+                  <button type="button"><i style="--filter-tone:#a94b43"></i><span>逾期与高风险</span><em>1</em></button>
+                  <button type="button"><i style="--filter-tone:#9a701f"></i><span>AI 待确认</span><em>2</em></button>
+                  <button type="button"><i style="--filter-tone:#3f718f"></i><span>导入异常</span><em>5</em></button>
+                </section>
+                <section class="console-filter-group">
+                  <strong>内容类型</strong>
+                  <button type="button"><i style="--filter-tone:#6e5f91"></i><span>备忘</span><em>18</em></button>
+                  <button type="button"><i style="--filter-tone:#47735c"></i><span>任务</span><em>7</em></button>
+                  <button type="button"><i style="--filter-tone:#a46b3d"></i><span>账单</span><em>24</em></button>
+                  <button type="button"><i style="--filter-tone:#68767d"></i><span>日程</span><em>3</em></button>
+                </section>
+                <section class="console-filter-group">
+                  <strong>标签</strong>
+                  <button type="button"><i style="--filter-tone:#47735c"></i><span>工作</span><em>9</em></button>
+                  <button type="button"><i style="--filter-tone:#7e6793"></i><span>产品设计</span><em>4</em></button>
+                  <button type="button"><i style="--filter-tone:#3f718f"></i><span>数据维护</span><em>5</em></button>
+                </section>
+              </aside>
+
+              <main class="console-table-wrap">
+                <header class="console-table-toolbar"><div><strong>今天需要处理</strong><span>7 条结果 · 按风险排序</span></div><div><button type="button">分组</button><button type="button">字段</button><button type="button">筛选</button></div></header>
+                <table class="console-table">
+                  <thead><tr><th class="col-check"></th><th class="col-type">类型</th><th>标题 / 内容</th><th class="col-status">状态</th><th class="col-date">时间</th><th class="col-source">来源</th></tr></thead>
+                  <tbody>
+                    <tr class="selected"><td><button class="console-check" type="button" aria-label="选择"></button></td><td><span class="console-type"><i style="--type-tone:#47735c"></i>任务</span></td><td>确认 Web 首页布局方向</td><td><span class="console-status" style="--status-tone:#a94b43">已逾期</span></td><td>昨天 16:00</td><td>手动</td></tr>
+                    <tr><td><button class="console-check" type="button" aria-label="选择"></button></td><td><span class="console-type"><i style="--type-tone:#a46b3d"></i>账单</span></td><td>食堂午饭</td><td><span class="console-status" style="--status-tone:#9a701f">待确认</span></td><td>今天 12:20</td><td>AI</td></tr>
+                    <tr><td><button class="console-check" type="button" aria-label="选择"></button></td><td><span class="console-type"><i style="--type-tone:#47735c"></i>任务</span></td><td>核对 5 条导入异常流水</td><td><span class="console-status" style="--status-tone:#3f718f">处理中</span></td><td>今天 16:00</td><td>导入</td></tr>
+                    <tr><td><button class="console-check" type="button" aria-label="选择"></button></td><td><span class="console-type"><i style="--type-tone:#68767d"></i>日程</span></td><td>接口方案评审</td><td><span class="console-status" style="--status-tone:#47735c">已安排</span></td><td>今天 14:00</td><td>日历</td></tr>
+                    <tr><td><button class="console-check" type="button" aria-label="选择"></button></td><td><span class="console-type"><i style="--type-tone:#6e5f91"></i>备忘</span></td><td>首页注意力分发原则</td><td><span class="console-status" style="--status-tone:#68767d">已分类</span></td><td>今天 14:42</td><td>AI</td></tr>
+                    <tr><td><button class="console-check" type="button" aria-label="选择"></button></td><td><span class="console-type"><i style="--type-tone:#47735c"></i>任务</span></td><td>修改页面</td><td><span class="console-status" style="--status-tone:#68767d">待开始</span></td><td>今天 20:00</td><td>AI</td></tr>
+                    <tr><td><button class="console-check" type="button" aria-label="选择"></button></td><td><span class="console-type"><i style="--type-tone:#47735c"></i>任务</span></td><td>晚间复盘</td><td><span class="console-status" style="--status-tone:#68767d">待开始</span></td><td>今天 22:30</td><td>重复</td></tr>
+                  </tbody>
+                </table>
+              </main>
+
+              <aside class="console-inspector">
+                <header class="console-pane-head"><strong>检查器</strong><button type="button">···</button></header>
+                <div class="console-inspector-body">
+                  <span class="console-inspector-kicker">任务 / 重要且紧急</span>
+                  <h2>确认 Web 首页布局方向</h2>
+                  <span class="console-inspector-meta">创建于 7 月 29 日 14:12 · 已逾期 18 小时</span>
+                  <section class="console-inspector-section">
+                    <strong>字段</strong>
+                    <div class="console-field"><span>状态</span><strong>进行中</strong></div>
+                    <div class="console-field"><span>截止时间</span><strong>7 月 29 日 16:00</strong></div>
+                    <div class="console-field"><span>优先级</span><strong>重要且紧急</strong></div>
+                    <div class="console-field"><span>标签</span><strong>产品设计、Web</strong></div>
+                    <div class="console-field"><span>来源</span><strong>手动创建</strong></div>
+                  </section>
+                  <section class="console-inspector-section">
+                    <strong>说明</strong>
+                    <div style="font-size:9px;line-height:1.65;color:#4e5960">比较三种真正不同的信息架构，确认默认 Core 方向后再进入 Flutter 正式页面实现。</div>
+                  </section>
+                  <section class="console-inspector-section">
+                    <strong>关联内容</strong>
+                    <div class="console-field"><span>备忘</span><strong>首页注意力分发原则</strong></div>
+                    <div class="console-field"><span>会话</span><strong>今天的快速记录</strong></div>
+                  </section>
+                  <div class="console-inspector-actions"><button class="primary" type="button">标记完成</button><button type="button">编辑字段</button></div>
+                </div>
+              </aside>
+            </div>
+
+            <footer class="console-log"><strong>SYNC</strong><span>PowerSync connected · 0 pending uploads · last pull 14:46:08</span><span class="log-right">LOCAL CORE READY</span></footer>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <aside class="concept-note" aria-live="polite">
+    <strong id="conceptNoteTitle">A · 今日处理队列</strong>
+    <span id="conceptNoteBody">首页是一张按风险排序的处理清单，日程只作为右侧时间约束。适合作为默认 Core。</span>
+  </aside>
+
+  <script>
+    const conceptButtons = [...document.querySelectorAll('[data-concept-value]')];
+    const viewportButtons = [...document.querySelectorAll('[data-viewport-value]')];
+    const concepts = [...document.querySelectorAll('.concept')];
+    const noteTitle = document.getElementById('conceptNoteTitle');
+    const noteBody = document.getElementById('conceptNoteBody');
+
+    const conceptNotes = {
+      focus: ['A · 今日处理队列', '首页是一张按风险排序的处理清单，日程只作为右侧时间约束。适合作为默认 Core。'],
+      canvas: ['B · 生活时间流', '备忘、任务、账单和日程都落入同一条时间流，强调生活连续性，而不是后台管理。'],
+      console: ['C · 专业工作区', '通过保存视图、密集表格和右侧检查器批量管理内容，适合键鼠重度用户与专业主题。']
+    };
+
+    function setConcept(value) {
+      document.body.dataset.concept = value;
+      conceptButtons.forEach((button) => {
+        const active = button.dataset.conceptValue === value;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', String(active));
+      });
+      concepts.forEach((concept) => concept.classList.toggle('active', concept.id === `concept-${value}`));
+      const note = conceptNotes[value];
+      noteTitle.textContent = note[0];
+      noteBody.textContent = note[1];
+      localStorage.setItem('lifly.design.concept', value);
+    }
+
+    function setViewport(value) {
+      document.body.dataset.viewport = value;
+      viewportButtons.forEach((button) => button.classList.toggle('active', button.dataset.viewportValue === value));
+      localStorage.setItem('lifly.design.viewport', value);
+    }
+
+    conceptButtons.forEach((button) => button.addEventListener('click', () => setConcept(button.dataset.conceptValue)));
+    viewportButtons.forEach((button) => button.addEventListener('click', () => setViewport(button.dataset.viewportValue)));
+
+    const storedConcept = localStorage.getItem('lifly.design.concept');
+    const storedViewport = localStorage.getItem('lifly.design.viewport');
+    if (conceptNotes[storedConcept]) setConcept(storedConcept);
+    if (['wide', 'medium', 'compact'].includes(storedViewport)) setViewport(storedViewport);
+  </script>
+</body>
+</html>
