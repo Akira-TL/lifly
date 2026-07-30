@@ -41,14 +41,17 @@ void main() {
     await tester.pumpWidget(_testApp(_overview()));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('home_layout_wide')), findsOneWidget);
-    expect(find.byKey(const Key('home_layout_compact')), findsNothing);
-    expect(find.byKey(const Key('home_attention_panel')), findsOneWidget);
-    expect(find.byKey(const Key('home_finance_panel')), findsOneWidget);
-    expect(find.byKey(const Key('home_recent_activity_panel')), findsOneWidget);
-    expect(find.text('确认 Web 首页布局'), findsOneWidget);
-    expect(find.text('餐饮'), findsWidgets);
-    expect(find.text('支出接近预算上限'), findsOneWidget);
+    expect(find.byKey(const Key('home_focus_layout_wide')), findsOneWidget);
+    expect(find.byKey(const Key('home_focus_layout_compact')), findsNothing);
+    expect(find.byKey(const Key('home_focus_queue')), findsOneWidget);
+    expect(find.byKey(const Key('home_focus_finance')), findsOneWidget);
+    expect(find.byKey(const Key('home_focus_recent_memos')), findsOneWidget);
+    expect(find.byKey(const Key('home_focus_agenda')), findsOneWidget);
+    expect(find.byKey(const Key('home_focus_topbar')), findsOneWidget);
+    expect(find.text('先处理这 2 件事'), findsOneWidget);
+    expect(find.text('确认 Web 首页布局'), findsWidgets);
+    expect(find.text('餐饮'), findsOneWidget);
+    expect(find.textContaining('支出接近预算上限'), findsOneWidget);
     expect(find.text('更新 Web 信息架构'), findsOneWidget);
     expect(find.byType(Card), findsNothing);
   });
@@ -60,10 +63,11 @@ void main() {
     await tester.pumpWidget(_testApp(_overview()));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('home_layout_compact')), findsOneWidget);
-    expect(find.byKey(const Key('home_layout_wide')), findsNothing);
-    expect(find.text('今天需要你关注的内容'), findsOneWidget);
-    expect(find.text('近七日支出'), findsOneWidget);
+    expect(find.byKey(const Key('home_focus_layout_compact')), findsOneWidget);
+    expect(find.byKey(const Key('home_focus_layout_wide')), findsNothing);
+    expect(find.text('先处理这 2 件事'), findsOneWidget);
+    expect(find.text('本月收支'), findsOneWidget);
+    expect(find.byKey(const Key('home_focus_agenda')), findsOneWidget);
   });
 }
 
