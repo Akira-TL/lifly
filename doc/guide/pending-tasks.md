@@ -66,7 +66,7 @@ Web HTML 启动壳和 Flutter Core 首帧不等待主题缓存
 验收：
 
 ```text
-Web dashboard 使用 248px 可折叠侧栏，桌面 compact 和手机五入口保持独立布局
+Web dashboard 使用 218px 自定义侧栏并支持 64px 折叠，桌面 compact 和手机五入口保持独立布局
 首页、备忘、AI、记账、任务五个核心入口不被低频管理能力挤占
 搜索、快速记录和管理中心可达
 管理中心组织账单导入、导入批次、数据导出、附件库、设置与诊断
@@ -81,7 +81,7 @@ Loading / Empty / Error / Offline 使用共享页面状态
 
 ```text
 Web 极简 Shell 与全局导航（v0.8.1 已完成）
-Web 首页清晰工作台与真实 Home Overview 消费（v0.8.2 已完成代码与自动检查）
+Web 首页 A 方向今日处理队列与真实 Home Overview 消费（v0.8.2 已按原型重构并通过自动检查）
 Web 备忘 AI 分类和标签消费（下一阶段）
 Web 记账预算、分类占比和洞察消费
 Web 任务预警策略和提醒状态消费
@@ -93,7 +93,7 @@ Web AI、附件、导入导出、搜索、设置和诊断
 
 ### LC-0701 Local Home Overview read model
 
-状态：云端 `/api/v1/home/overview` 与本地 fallback 基础链路已完成；v0.8.2 Web 首页已消费 attention、今日指标、预算进度、分类占比、财务洞察、七日趋势、最近混合活动和真实状态摘要。未来仍需补充更细的任务预警排序与待确认动作聚合。
+状态：云端 `/api/v1/home/overview` 与本地 fallback 基础链路已完成；v0.8.2 Web 首页按 A 方向消费 attention 处理队列、预算进度、主要分类、财务洞察、最近备忘、带时间事项和同步摘要。七日趋势与混合活动仍由手机端既有首页消费，Web 不为展示更多字段偏离原型。未来仍需补充更细的任务预警排序与待确认动作聚合。
 
 目标：新增云端同步优先、本地失败兜底的产品化首页 read model，支撑今日关注、紧急事项、混合最近内容流和数据状态摘要。
 
@@ -190,7 +190,7 @@ AppShell 手机端底部入口已固定为：首页 / 备忘 / AI / 记账 / 任
 AI 已作为居中主按钮入口
 搜索和设置已退出手机端底部一级入口
 首页顶部已提供全局搜索和设置入口
-宽屏 Flutter 已使用 NavigationRail 作为非手机布局基础
+Web dashboard 已使用自定义展开侧栏，桌面 compact 继续使用 NavigationRail
 widget test 已覆盖核心入口切换和底部入口收敛
 ```
 

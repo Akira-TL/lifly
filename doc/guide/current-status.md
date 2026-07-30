@@ -185,7 +185,7 @@ scripts/check-web-theme-performance.sh 与 CI 固化启动契约、主题安全�
 范围：
 
 ```text
-Web dashboard 248px 可折叠侧栏
+Web dashboard 218px 自定义侧栏，折叠后 64px
 首页 / 备忘 / AI / 记账 / 任务五核心入口
 全局搜索与 AI 快速记录
 账单导入 / 导入批次 / 数据导出 / 附件 / 设置诊断管理中心
@@ -219,38 +219,41 @@ Web、桌面 compact 和手机端无导航回归
 
 ## M9：Web Home Attention Workbench
 
-状态：已完成代码与自动检查，待浏览器视觉验收。
+状态：已按原型重构并通过自动检查，待浏览器视觉验收。
 
-目标：把已确认的 A 方向“清晰工作台”落到真实 Web 首页，建立后续核心页面复用的视觉与语义基础。
+目标：把已确认的 A 方向“今日处理队列”按结构而不是仅按信息层级落到真实 Web 首页。
 
 范围：
 
 ```text
-ThemeData 公开 critical / warning / success / info / neutral 语义色
-WorkspacePanel 连续分组面板
-Web 首页 1080px 主次两栏与窄屏单列
-真实 HomeOverview attention / finance / trend / activity / status 消费
-首页无逐条 Card、无硬编码状态色、无装饰性渐变
+Lifly Core 使用原型的绿色与中性灰语义色
+Web 默认 dashboard 使用 218px 自定义侧栏，折叠后 64px
+首页使用 68px 左对齐“今天”顶栏
+主工作区展示处理队列、本月收支和最近备忘
+右侧日程栏展示日期、真实时间事项和同步状态
+手机端保留既有 HomeDashboardView
 ```
 
 当前进展：
 
 ```text
-首页顶部集中展示数据来源、PowerSync 状态、最近导入和运行环境摘要
-逾期、今天截止、待处理、任务总数和备忘使用连续统计条
-今日关注按 critical / warning 等语义排序展示；收支区消费预算、分类占比和财务洞察；最近活动混合展示备忘、任务和流水
-主题包语义色通过 LiflySemanticColors 注入 ThemeData，业务页面不解析主题包，也不写死红、橙、绿
-首页源码按主布局、财务区、活动趋势区拆分，最大文件 594 行
-Flutter analyze 与 146 项测试通过；默认 Web main.dart.js 为 3,585,209 bytes，应用 main.dart.wasm 为 3,244,052 bytes，均通过既有预算
+Web 不再使用 Material NavigationRail 作为展开侧栏；桌面 compact 仍保留紧凑 NavigationRail
+首页移除了上一版额外增加的来源状态面板、五项指标条、七日柱状图和混合活动面板
+attention_items 最多四条进入处理队列；finance_overview 生成支出、预算余量和主要分类比例行；recent_activity 只提取最近备忘
+带 occurred_at 的 attention_items 进入右侧时间线，sync_summary 在底部显示真实数据状态
+主题包语义色继续通过 LiflySemanticColors 注入 ThemeData，业务页面不解析主题包或写死状态色
+最大源码文件为 wide_shell.dart 674 行，首页主视图为 533 行，符合 800 行门禁
+Flutter analyze 与 146 项测试通过；默认 Web main.dart.js 为 3,609,549 bytes，应用 main.dart.wasm 为 3,271,607 bytes，均通过既有预算
 ```
 
 验收：
 
 ```text
-宽屏和窄屏布局回归测试通过
+1440px Web 展示 218px 侧栏、主工作区和独立日程右栏
+较窄 Web 将日程移动到主内容下方，不把手机布局直接放大
 首页真实字段可见且云端失败后仍由既有 Local Core fallback 提供
-业务页面不创建 Material Card 堆叠，不硬编码状态色或渐变
-后续备忘、记账、任务和 AI 页面可复用语义色与 WorkspacePanel
+Web 首页不创建 Material Card 堆叠，不显示装饰性渐变或额外 Dashboard 模块
+桌面 compact 与手机端导航无回归
 ```
 
 ## M10：Desktop Local MCP & Production Hardening
