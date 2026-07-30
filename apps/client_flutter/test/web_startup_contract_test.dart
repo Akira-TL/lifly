@@ -14,6 +14,20 @@ void main() {
     expect(index, isNot(contains('<img')));
   });
 
+  test('PowerSync web runtime assets are bundled locally', () {
+    final wasm = File('web/sqlite3.wasm');
+    final databaseWorker = File('web/powersync_db.worker.js');
+    final syncWorker = File('web/powersync_sync.worker.js');
+
+    expect(wasm.existsSync(), isTrue);
+    expect(databaseWorker.existsSync(), isTrue);
+    expect(syncWorker.existsSync(), isTrue);
+    expect(wasm.lengthSync(), greaterThan(1000000));
+    expect(databaseWorker.lengthSync(), greaterThan(250000));
+    expect(syncWorker.lengthSync(), greaterThan(300000));
+    expect(wasm.readAsBytesSync().take(4), orderedEquals([0, 97, 115, 109]));
+  });
+
   test('custom bootstrap records each Flutter initialization stage', () {
     final bootstrap = File('web/flutter_bootstrap.js').readAsStringSync();
 

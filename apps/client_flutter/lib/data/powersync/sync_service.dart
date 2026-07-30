@@ -20,8 +20,8 @@ class SyncService {
     ApiClient? api,
     SyncPushService? pushService,
     PowerSyncCrudMapper? crudMapper,
-  })  : pushService = pushService ?? SyncPushService(api ?? ApiClient()),
-        crudMapper = crudMapper ?? const PowerSyncCrudMapper();
+  }) : pushService = pushService ?? SyncPushService(api ?? ApiClient()),
+       crudMapper = crudMapper ?? const PowerSyncCrudMapper();
 
   PowerSyncDatabase get db {
     final currentDb = _db;
@@ -46,7 +46,18 @@ class SyncService {
       path: resolvedPath,
     );
 
-    await nextDb.initialize();
+    try {
+      await nextDb.initialize();
+    } catch (error) {
+      if (kIsWeb) {
+        throw StateError(
+          'Web 本地数据库初始化失败。请确认 sqlite3.wasm、'
+          'powersync_db.worker.js 和 powersync_sync.worker.js 已由站点根路径提供。'
+          '原始错误：$error',
+        );
+      }
+      rethrow;
+    }
     _db = nextDb;
     _dbPath = resolvedPath;
   }
@@ -123,7 +134,8 @@ class _LiflyConnector extends PowerSyncBackendConnector {
   final DateTime? expiresAt;
   final SyncPushService pushService;
   final PowerSyncCrudMapper crudMapper;
-  final void Function(SyncPushUploadDiagnostics diagnostics) onUploadDiagnostics;
+  final void Function(SyncPushUploadDiagnostics diagnostics)
+  onUploadDiagnostics;
 
   _LiflyConnector({
     required this.endpoint,
