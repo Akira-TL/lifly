@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 typedef AsyncRefreshCallback = Future<void> Function();
 
@@ -177,10 +178,30 @@ class ErrorState extends StatelessWidget {
           iconColor: theme.colorScheme.error,
           title: title,
           message: message,
-          action: FilledButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh),
-            label: const Text('重试'),
+          selectableMessage: true,
+          action: Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              FilledButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh),
+                label: const Text('重试'),
+              ),
+              OutlinedButton.icon(
+                key: const Key('copy_error_diagnostics'),
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: message));
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('诊断信息已复制')));
+                },
+                icon: const Icon(Icons.copy_outlined),
+                label: const Text('复制诊断'),
+              ),
+            ],
           ),
         ),
       ),
@@ -265,6 +286,7 @@ class _PageStateContent extends StatelessWidget {
   final String title;
   final String message;
   final Widget? action;
+  final bool selectableMessage;
 
   const _PageStateContent({
     required this.icon,
@@ -272,6 +294,7 @@ class _PageStateContent extends StatelessWidget {
     required this.title,
     required this.message,
     required this.action,
+    this.selectableMessage = false,
   });
 
   @override
@@ -290,13 +313,23 @@ class _PageStateContent extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Text(
-          message,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+        if (selectableMessage)
+          SelectableText(
+            message,
+            textAlign: TextAlign.left,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontFamily: 'monospace',
+            ),
+          )
+        else
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
-        ),
         if (action != null) ...[const SizedBox(height: 20), action!],
       ],
     );

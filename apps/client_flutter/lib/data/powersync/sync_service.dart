@@ -1,6 +1,7 @@
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/powersync/powersync_credentials_service.dart';
 import 'package:client_flutter/data/powersync/powersync_crud_mapper.dart';
+import 'package:client_flutter/data/powersync/powersync_initialization_diagnostics.dart';
 import 'package:client_flutter/data/powersync/powersync_schema.dart';
 import 'package:client_flutter/data/powersync/sync_push_service.dart';
 import 'package:flutter/foundation.dart';
@@ -11,8 +12,11 @@ import 'package:powersync/powersync.dart';
 class SyncService {
   final SyncPushService pushService;
   final PowerSyncCrudMapper crudMapper;
+  final InitializationSingleFlight _initializationFlight =
+      InitializationSingleFlight();
   PowerSyncDatabase? _db;
   String? _dbPath;
+  PowerSyncInitializationFailure? _lastInitializationFailure;
   SyncPushUploadDiagnostics _uploadDiagnostics =
       const SyncPushUploadDiagnostics.idle();
 
@@ -37,29 +41,102 @@ class SyncService {
 
   SyncPushUploadDiagnostics get uploadDiagnostics => _uploadDiagnostics;
 
-  Future<void> initialize({String? dbPath}) async {
-    if (isInitialized) return;
+  PowerSyncInitializationFailure? get lastInitializationFailure =>
+      _lastInitializationFailure;
 
-    final resolvedPath = dbPath ?? await defaultDatabasePath();
-    final nextDb = PowerSyncDatabase(
-      schema: liflyPowerSyncSchema,
-      path: resolvedPath,
+  Future<void> initialize({String? dbPath}) {
+    if (isInitialized) return Future<void>.value();
+
+    return _initializationFlight.run(
+      () => _initializeOnce(dbPath: dbPath),
+      onJoin: () => _logInitializationEvent(
+        'join_pending_initialization',
+        detail: 'A second caller is awaiting the active database open.',
+      ),
     );
+  }
+
+  Future<void> _initializeOnce({String? dbPath}) async {
+    final occurredAt = DateTime.now().toUtc();
+    final diagnosticId =
+        'PS-${occurredAt.microsecondsSinceEpoch.toRadixString(36).toUpperCase()}';
+    final events = <String>[];
+    var stage = 'start';
+    var resolvedPath = dbPath ?? '<unresolved>';
+
+    void mark(String nextStage, {Object? detail}) {
+      stage = nextStage;
+      final timestamp = DateTime.now().toUtc().toIso8601String();
+      final message = detail == null
+          ? '$timestamp $nextStage'
+          : '$timestamp $nextStage | $detail';
+      events.add(message);
+      _logInitializationEvent(
+        nextStage,
+        diagnosticId: diagnosticId,
+        detail: detail,
+      );
+    }
 
     try {
+      mark('schema_validate_start');
+      liflyPowerSyncSchema.validate();
+      mark(
+        'schema_validate_ok',
+        detail: '${liflyPowerSyncSchema.tables.length} tables',
+      );
+
+      mark('database_path_resolve_start');
+      resolvedPath = dbPath ?? await defaultDatabasePath();
+      mark('database_path_resolve_ok', detail: resolvedPath);
+
+      mark('database_construct_start');
+      final nextDb = PowerSyncDatabase(
+        schema: liflyPowerSyncSchema,
+        path: resolvedPath,
+        logger: kIsWeb && kDebugMode ? debugLogger : null,
+      );
+      mark('database_construct_ok');
+
+      mark('database_initialize_start');
       await nextDb.initialize();
-    } catch (error) {
-      if (kIsWeb) {
-        throw StateError(
-          'Web 本地数据库初始化失败。请确认 sqlite3.wasm、'
-          'powersync_db.worker.js 和 powersync_sync.worker.js 已由站点根路径提供。'
-          '原始错误：$error',
-        );
+      mark('database_initialize_ok');
+
+      _db = nextDb;
+      _dbPath = resolvedPath;
+      _lastInitializationFailure = null;
+      mark('ready');
+    } catch (error, stackTrace) {
+      if (!kIsWeb) {
+        Error.throwWithStackTrace(error, stackTrace);
       }
-      rethrow;
+
+      final failure = PowerSyncInitializationFailure(
+        diagnosticId: diagnosticId,
+        occurredAt: occurredAt,
+        stage: stage,
+        databasePath: resolvedPath,
+        pageUri: Uri.base,
+        schemaTableCount: liflyPowerSyncSchema.tables.length,
+        cause: error,
+        causeStackTrace: stackTrace,
+        events: List<String>.unmodifiable(events),
+      );
+      _lastInitializationFailure = failure;
+      debugPrint(failure.report);
+      Error.throwWithStackTrace(failure, stackTrace);
     }
-    _db = nextDb;
-    _dbPath = resolvedPath;
+  }
+
+  void _logInitializationEvent(
+    String stage, {
+    String? diagnosticId,
+    Object? detail,
+  }) {
+    if (!kDebugMode) return;
+    final id = diagnosticId ?? 'shared';
+    final suffix = detail == null ? '' : ' | $detail';
+    debugPrint('[LIFLY_POWERSYNC][$id][$stage]$suffix');
   }
 
   Future<void> ensureInitialized() => initialize();

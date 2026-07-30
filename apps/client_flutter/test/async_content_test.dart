@@ -52,6 +52,12 @@ void main() {
 
     expect(find.text('加载失败'), findsOneWidget);
     expect(find.text('无法加载数据'), findsOneWidget);
+    expect(find.byType(SelectableText), findsOneWidget);
+    expect(find.byKey(const Key('copy_error_diagnostics')), findsOneWidget);
+
+    await tester.tap(find.text('复制诊断'));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('重试'));
     await tester.pump();
     expect(retries, 1);
