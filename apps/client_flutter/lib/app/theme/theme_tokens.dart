@@ -32,21 +32,48 @@ class ThemeTokenSet {
     final minimumSize = Size.square(
       platformProfile.minimumInteractiveDimension,
     );
+    final generatedScheme = ColorScheme.fromSeed(
+      seedColor: tokens.colors.primary,
+      brightness: brightness,
+    );
+    final workspaceBackground = Color.alphaBlend(
+      tokens.colors.neutral.withValues(
+        alpha: brightness == Brightness.light ? 0.08 : 0.12,
+      ),
+      tokens.colors.surface,
+    );
+    final workspaceLine = Color.alphaBlend(
+      tokens.colors.neutral.withValues(
+        alpha: brightness == Brightness.light ? 0.24 : 0.32,
+      ),
+      tokens.colors.surface,
+    );
+    final colorScheme = generatedScheme.copyWith(
+      primary: tokens.colors.primary,
+      onPrimary: tokens.colors.onPrimary,
+      secondary: tokens.colors.secondary,
+      surface: tokens.colors.surface,
+      onSurface: tokens.colors.onSurface,
+      onSurfaceVariant: tokens.colors.neutral,
+      outline: tokens.colors.neutral,
+      outlineVariant: workspaceLine,
+      surfaceContainerLowest: workspaceBackground,
+      surfaceContainerLow: tokens.colors.surface,
+      surfaceContainer: Color.alphaBlend(
+        tokens.colors.neutral.withValues(alpha: 0.04),
+        tokens.colors.surface,
+      ),
+      surfaceContainerHigh: Color.alphaBlend(
+        tokens.colors.neutral.withValues(alpha: 0.09),
+        tokens.colors.surface,
+      ),
+      error: tokens.colors.critical,
+    );
     final base = ThemeData(
       useMaterial3: true,
       brightness: brightness,
-      colorScheme:
-          ColorScheme.fromSeed(
-            seedColor: tokens.colors.primary,
-            brightness: brightness,
-          ).copyWith(
-            primary: tokens.colors.primary,
-            onPrimary: tokens.colors.onPrimary,
-            secondary: tokens.colors.secondary,
-            surface: tokens.colors.surface,
-            onSurface: tokens.colors.onSurface,
-            error: tokens.colors.critical,
-          ),
+      colorScheme: colorScheme,
+      scaffoldBackgroundColor: workspaceBackground,
       visualDensity: VisualDensity(horizontal: density, vertical: density),
       materialTapTargetSize:
           platformProfile.platform == ThemeTargetPlatform.phone
@@ -77,7 +104,14 @@ class ThemeTokenSet {
           borderRadius: BorderRadius.circular(tokens.radius.control),
         ),
       ),
-      appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
+      dividerTheme: DividerThemeData(color: workspaceLine, thickness: 1),
+      appBarTheme: AppBarTheme(
+        centerTitle: platformProfile.platform == ThemeTargetPlatform.phone,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        backgroundColor: workspaceBackground,
+        surfaceTintColor: Colors.transparent,
+      ),
     );
 
     return base.copyWith(

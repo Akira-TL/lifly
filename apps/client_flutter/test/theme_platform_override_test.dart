@@ -103,7 +103,7 @@ void main() {
     expect(compact.railLabelType, NavigationRailLabelType.none);
     expect(balanced.railLabelType, NavigationRailLabelType.all);
     expect(dashboard.railExtended, isTrue);
-    expect(dashboard.railMinimumExtendedWidth, 220);
+    expect(dashboard.railMinimumExtendedWidth, 218);
   });
 
   test('reduced motion overrides a theme that enables transitions', () async {

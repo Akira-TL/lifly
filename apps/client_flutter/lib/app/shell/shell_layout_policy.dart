@@ -38,7 +38,7 @@ class ShellLayoutPolicy {
           : NavigationRailLabelType.all,
       railMinimumWidth: variant == ThemeLayoutVariant.compact ? 64 : 80,
       railMinimumExtendedWidth: variant == ThemeLayoutVariant.dashboard
-          ? 220
+          ? 218
           : 200,
       mobileNavigationHeight: profile.minimumInteractiveDimension + 36,
     );

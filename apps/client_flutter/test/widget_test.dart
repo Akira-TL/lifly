@@ -270,8 +270,8 @@ void main() {
     expect(find.text('任务'), findsWidgets);
     expect(find.text('搜索'), findsNothing);
     expect(find.text('设置'), findsNothing);
-    expect(find.byTooltip('全局搜索'), findsOneWidget);
-    expect(find.byTooltip('设置'), findsOneWidget);
+    expect(find.byTooltip('搜索'), findsOneWidget);
+    expect(find.text('日程'), findsOneWidget);
     expect(find.text('测试备忘'), findsNothing);
 
     await tester.tap(find.text('备忘').last);
@@ -414,12 +414,13 @@ void main() {
     await runtime.restore();
     await tester.pumpAndSettle();
 
-    final rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
-    expect(rail.extended, isTrue);
-    expect(rail.destinations, hasLength(5));
-    expect(find.text('首页'), findsWidgets);
+    expect(find.byType(NavigationRail), findsNothing);
+    final sidebar = find.byKey(const Key('web_primary_navigation'));
+    expect(sidebar, findsOneWidget);
+    expect(tester.getSize(sidebar).width, 218);
+    expect(find.text('今天'), findsWidgets);
     expect(find.text('备忘'), findsWidgets);
-    expect(find.text('AI'), findsOneWidget);
+    expect(find.text('AI 会话'), findsOneWidget);
     expect(find.text('记账'), findsWidgets);
     expect(find.text('任务'), findsWidgets);
   });
@@ -457,23 +458,23 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      var rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
-      expect(rail.extended, isTrue);
+      var sidebar = find.byKey(const Key('web_primary_navigation'));
+      expect(sidebar, findsOneWidget);
+      expect(tester.getSize(sidebar).width, 218);
+      expect(find.byType(NavigationRail), findsNothing);
       expect(find.text('Lifly'), findsOneWidget);
-      expect(find.text('生活数据中心'), findsOneWidget);
-      expect(find.text('搜索'), findsOneWidget);
       expect(find.text('快速记录'), findsOneWidget);
-      expect(find.text('管理'), findsOneWidget);
+      expect(find.text('全部内容'), findsOneWidget);
+      expect(find.text('设置'), findsOneWidget);
       expect(find.text('附件'), findsNothing);
-      expect(find.text('设置'), findsNothing);
 
-      await tester.tap(find.text('搜索'));
+      await tester.tap(find.byTooltip('搜索'));
       await tester.pumpAndSettle();
       expect(find.widgetWithText(AppBar, '搜索'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('管理'));
+      await tester.tap(find.text('全部内容'));
       await tester.pumpAndSettle();
       expect(find.widgetWithText(AppBar, '管理中心'), findsOneWidget);
       expect(find.text('数据流转'), findsOneWidget);
@@ -503,7 +504,7 @@ void main() {
       expect(preferences.destinationIndex, 4);
       final apiBefore = tester.element(find.byType(AppShell)).read<ApiClient>();
 
-      await tester.tap(find.text('管理'));
+      await tester.tap(find.text('全部内容'));
       await tester.pumpAndSettle();
       expect(find.widgetWithText(AppBar, '管理中心'), findsOneWidget);
       await tester.pageBack();
@@ -514,10 +515,10 @@ void main() {
         same(apiBefore),
       );
 
-      await tester.tap(find.text('收起侧栏'));
+      await tester.tap(find.byTooltip('收起侧栏'));
       await tester.pumpAndSettle();
-      rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
-      expect(rail.extended, isFalse);
+      sidebar = find.byKey(const Key('web_primary_navigation'));
+      expect(tester.getSize(sidebar).width, 64);
       expect(preferences.collapsed, isTrue);
       expect(find.byTooltip('展开侧栏'), findsOneWidget);
 
@@ -528,8 +529,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
-      expect(rail.extended, isFalse);
+      sidebar = find.byKey(const Key('web_primary_navigation'));
+      expect(tester.getSize(sidebar).width, 64);
       expect(find.text('测试任务'), findsOneWidget);
       expect(preferences.destinationIndex, 4);
       expect(
@@ -611,7 +612,8 @@ void main() {
     await runtime.selectColorMode(ThemePackageColorMode.dark);
     await tester.pumpAndSettle();
 
-    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byKey(const Key('web_primary_navigation')), findsOneWidget);
+    expect(find.byType(NavigationRail), findsNothing);
     expect(find.text('测试任务'), findsOneWidget);
     expect(
       tester.element(find.byType(LiflyApp)).read<ApiClient>(),
@@ -671,7 +673,7 @@ void main() {
     },
   );
 
-  testWidgets('Wide shell keeps NavigationRail while restoring a theme', (
+  testWidgets('Wide shell preserves navigation while restoring a theme', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(1200, 800);
@@ -684,8 +686,9 @@ void main() {
     await tester.pumpWidget(_buildTestApp(themeRuntime));
     await tester.pump();
 
-    expect(find.byType(NavigationRail), findsOneWidget);
-    expect(find.text('首页'), findsWidgets);
+    expect(find.byKey(const Key('web_primary_navigation')), findsOneWidget);
+    expect(find.byType(NavigationRail), findsNothing);
+    expect(find.text('今天'), findsWidgets);
 
     final switchedTheme = _switchedTheme();
     themeResolver.snapshot = switchedTheme;
@@ -694,7 +697,14 @@ void main() {
 
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(app.theme, same(switchedTheme.lightTheme));
-    expect(find.byType(NavigationRail), findsOneWidget);
-    expect(find.text('首页'), findsWidgets);
+    final navigationCount =
+        find.byType(NavigationRail).evaluate().length +
+        find.byKey(const Key('web_primary_navigation')).evaluate().length;
+    expect(navigationCount, 1);
+    expect(
+      find.text('首页').evaluate().isNotEmpty ||
+          find.text('今天').evaluate().isNotEmpty,
+      isTrue,
+    );
   });
 }

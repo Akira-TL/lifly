@@ -11,6 +11,7 @@ import 'package:client_flutter/features/ledger/pages/ledger_list_page.dart';
 import 'package:client_flutter/features/management/pages/management_hub_page.dart';
 import 'package:client_flutter/features/memo/pages/memo_list_page.dart';
 import 'package:client_flutter/features/search/pages/search_page.dart';
+import 'package:client_flutter/features/settings/settings_page.dart';
 import 'package:client_flutter/features/task/pages/task_list_page.dart';
 import 'package:flutter/material.dart';
 
@@ -28,6 +29,7 @@ class _AppShellState extends State<AppShell> {
   static const _destinations = <ShellDestination>[
     ShellDestination(
       label: '首页',
+      webLabel: '今天',
       icon: Icons.home_outlined,
       selectedIcon: Icons.home,
       page: HomePage(),
@@ -40,6 +42,7 @@ class _AppShellState extends State<AppShell> {
     ),
     ShellDestination(
       label: 'AI',
+      webLabel: 'AI 会话',
       icon: Icons.auto_awesome_outlined,
       selectedIcon: Icons.auto_awesome,
       page: AiCapturePage(),
@@ -146,6 +149,7 @@ class _AppShellState extends State<AppShell> {
             onOpenSearch: () => _openPage(context, const SearchPage()),
             onOpenManagement: () =>
                 _openPage(context, const ManagementHubPage()),
+            onOpenSettings: () => _openPage(context, const SettingsPage()),
             onToggleSidebar: _toggleSidebar,
           );
         }

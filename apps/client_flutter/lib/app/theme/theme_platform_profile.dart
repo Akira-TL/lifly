@@ -27,8 +27,8 @@ class ThemePlatformProfile extends ThemeExtension<ThemePlatformProfile> {
     return switch (platform) {
       ThemeTargetPlatform.web => const ThemePlatformProfile(
         platform: ThemeTargetPlatform.web,
-        layoutVariant: ThemeLayoutVariant.balanced,
-        visualDensityAdjustment: 0,
+        layoutVariant: ThemeLayoutVariant.dashboard,
+        visualDensityAdjustment: -0.5,
         minimumInteractiveDimension: 40,
         focusRingWidth: 2,
         hoverEnabled: true,
