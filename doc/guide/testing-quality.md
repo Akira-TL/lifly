@@ -13,7 +13,8 @@ Lifly 需要重点保证：
 - MCP 工具行为稳定；
 - 主题失败不阻塞 Core；
 - Web 默认与 Wasm 构建保持兼容；
-- 默认主题启动性能不会被复杂主题拖慢。
+- 默认主题启动性能不会被复杂主题拖慢；
+- PowerSync Web 的 SQLite Wasm 与 Worker 资源不会在发布时缺失。
 
 ## 2. 测试类型
 
@@ -221,6 +222,9 @@ Web / 桌面端支持 Hover、Focus 和键盘遍历
 系统减少动态效果覆盖主题动效
 HTML 启动壳不加载远程字体和图片
 默认 Web 与 Wasm Release 构建都通过
+web/sqlite3.wasm、web/powersync_db.worker.js、web/powersync_sync.worker.js 必须存在并通过校验和检查
+默认 Web 与 Wasm 构建产物必须完整复制上述 PowerSync 运行资源
+更新 powersync 依赖后必须重新执行 dart run powersync:setup_web 并更新 powersync-assets.sha256
 Core 主包和宿主文件通过 scripts/check-web-theme-performance.sh 的体积预算
 ```
 

@@ -244,6 +244,7 @@ attention_items 最多四条进入处理队列；finance_overview 生成支出�
 主题包语义色继续通过 LiflySemanticColors 注入 ThemeData，业务页面不解析主题包或写死状态色
 最大源码文件为 wide_shell.dart 674 行，首页主视图为 533 行，符合 800 行门禁
 Flutter analyze 与 146 项测试通过；默认 Web main.dart.js 为 3,609,549 bytes，应用 main.dart.wasm 为 3,271,607 bytes，均通过既有预算
+PowerSync 1.18.0 的 sqlite3.wasm、数据库 Worker 和同步 Worker 已纳入 web 根目录；启动契约、SHA-256 和默认/Wasm 构建产物门禁防止 MIME 回退与 Local Core 连锁加载失败
 ```
 
 验收：
