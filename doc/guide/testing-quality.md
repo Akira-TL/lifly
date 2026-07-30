@@ -183,6 +183,7 @@ PowerSync 必须能上传 ledger_budget，服务端拒绝陈旧 revision 与重�
 首页 import_summary 必须来自最新 import_batches，不得固定返回 idle
 首页 settings_summary 不得暴露数据库连接串、JWT、对象存储密钥等敏感配置
 PowerSync 部署配置必须通过 scripts/check-powersync-sync-scope.sh，至少覆盖 infra/powersync-required-tables.txt
+Flutter PowerSync schema 必须通过 schema.validate；同步表 id 由 PowerSync 自动提供，禁止在 Table columns 中重复声明 id
 PowerSync CRUD mapper 和服务端 sync push 必须覆盖 reminder revision 与派发状态字段
 repository 读取支持 cloudPreferred，云端失败或断网时才降级 Local Core
 开发期 Local Core 默认 user_id 必须与 PowerSync 凭据的 local-dev 对齐
