@@ -2,7 +2,6 @@ import 'package:powersync/powersync.dart';
 
 const liflyPowerSyncSchema = Schema([
   Table('memos', [
-    Column.text('id'),
     Column.text('user_id'),
     Column.text('type'),
     Column.text('title'),
@@ -18,7 +17,6 @@ const liflyPowerSyncSchema = Schema([
     Column.integer('revision'),
   ]),
   Table('tag_metadata', [
-    Column.text('id'),
     Column.text('user_id'),
     Column.text('name'),
     Column.text('kind'),
@@ -30,7 +28,6 @@ const liflyPowerSyncSchema = Schema([
     Column.text('updated_at'),
   ]),
   Table('memo_classifications', [
-    Column.text('id'),
     Column.text('user_id'),
     Column.text('memo_id'),
     Column.text('tag'),
@@ -43,7 +40,6 @@ const liflyPowerSyncSchema = Schema([
     Column.text('updated_at'),
   ]),
   Table('tasks', [
-    Column.text('id'),
     Column.text('user_id'),
     Column.text('title'),
     Column.text('description'),
@@ -61,7 +57,6 @@ const liflyPowerSyncSchema = Schema([
     Column.integer('revision'),
   ]),
   Table('task_reminder_strategies', [
-    Column.text('id'),
     Column.text('user_id'),
     Column.text('task_id'),
     Column.text('warning_level'),
@@ -76,7 +71,6 @@ const liflyPowerSyncSchema = Schema([
     Column.text('updated_at'),
   ]),
   Table('reminders', [
-    Column.text('id'),
     Column.text('user_id'),
     Column.text('target_type'),
     Column.text('target_id'),
@@ -99,7 +93,6 @@ const liflyPowerSyncSchema = Schema([
     Column.text('updated_at'),
   ]),
   Table('ledger_transactions', [
-    Column.text('id'),
     Column.text('user_id'),
     Column.text('account_id'),
     Column.text('category_id'),
@@ -120,7 +113,6 @@ const liflyPowerSyncSchema = Schema([
     Column.integer('revision'),
   ]),
   Table('assets', [
-    Column.text('id'),
     Column.text('user_id'),
     Column.text('kind'),
     Column.text('asset_type'),
@@ -139,7 +131,6 @@ const liflyPowerSyncSchema = Schema([
     Column.text('updated_at'),
   ]),
   Table('memo_asset_refs', [
-    Column.text('id'),
     Column.text('memo_id'),
     Column.text('asset_id'),
     Column.text('ref_type'),
@@ -147,7 +138,6 @@ const liflyPowerSyncSchema = Schema([
     Column.text('created_at'),
   ]),
   Table('audit_logs', [
-    Column.text('id'),
     Column.text('user_id'),
     Column.text('actor_type'),
     Column.text('actor_id'),
@@ -163,7 +153,6 @@ const liflyPowerSyncSchema = Schema([
     Column.text('created_at'),
   ]),
   Table('mcp_undo_actions', [
-    Column.text('id'),
     Column.text('user_id'),
     Column.text('undo_token'),
     Column.text('entity_type'),
@@ -175,7 +164,6 @@ const liflyPowerSyncSchema = Schema([
     Column.text('created_at'),
   ]),
   Table('mcp_capture_sessions', [
-    Column.text('id'),
     Column.text('capture_id'),
     Column.text('user_id'),
     Column.text('original_text'),
@@ -194,7 +182,6 @@ const liflyPowerSyncSchema = Schema([
     Column.integer('revision'),
   ]),
   Table('mcp_capture_turns', [
-    Column.text('id'),
     Column.text('user_id'),
     Column.text('capture_id'),
     Column.integer('turn_index'),
@@ -214,7 +201,6 @@ const liflyPowerSyncSchema = Schema([
     Column.integer('revision'),
   ]),
   Table('import_batches', [
-    Column.text('id'),
     Column.text('user_id'),
     Column.text('source_provider'),
     Column.text('filename'),
@@ -228,7 +214,6 @@ const liflyPowerSyncSchema = Schema([
     Column.text('rolled_back_at'),
   ]),
   Table('tombstones', [
-    Column.text('id'),
     Column.text('user_id'),
     Column.text('entity_type'),
     Column.text('entity_id'),
@@ -236,7 +221,6 @@ const liflyPowerSyncSchema = Schema([
     Column.integer('last_revision'),
   ]),
   Table('ledger_accounts', [
-    Column.text('id'),
     Column.text('user_id'),
     Column.text('name'),
     Column.text('type'),
@@ -247,7 +231,6 @@ const liflyPowerSyncSchema = Schema([
     Column.text('updated_at'),
   ]),
   Table('ledger_categories', [
-    Column.text('id'),
     Column.text('user_id'),
     Column.text('name'),
     Column.text('parent_id'),
@@ -260,7 +243,6 @@ const liflyPowerSyncSchema = Schema([
     Column.text('updated_at'),
   ]),
   Table('ledger_budgets', [
-    Column.text('id'),
     Column.text('user_id'),
     Column.text('period_type'),
     Column.text('period_key'),
