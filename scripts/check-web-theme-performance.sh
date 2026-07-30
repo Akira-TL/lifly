@@ -89,6 +89,7 @@ flutter analyze
 flutter test \
   test/web_startup_contract_test.dart \
   test/powersync_schema_test.dart \
+  test/powersync_initialization_diagnostics_test.dart \
   test/theme_cache_bootstrapper_test.dart \
   test/theme_manifest_test.dart \
   test/theme_package_store_test.dart

@@ -114,6 +114,7 @@ Local Chat-style AI Capture
 ```text
 Home Overview 基础链路已落地：服务端 /api/v1/home/overview、LocalCoreBridge.getHomeOverview、LocalHomeOverviewBuilder、HomeOverviewRepository 云端优先/失败 fallback、HomePage repository 消费、云端/本地混合最近活动流；finance_overview 已扩展预算金额、预算使用、预算进度、预算剩余、分类占比和财务洞察字段；sync_summary 已接入客户端 PowerSync currentStatus 与服务端附件同步统计，import_summary 已接入最新 import_batches，settings_summary 已接入本地数据库与服务端配置完整性
 Flutter PowerSync schema 已适配当前 SDK：18 张同步表统一使用 PowerSync 自动提供的文本 id 主键，不再重复声明自定义 id 列；Web 发布门禁会直接执行 schema.validate，阻止浏览器运行期才暴露 schema 断言
+Web Local Core 初始化已改为 single-flight：同一 SyncService 的首页、备忘、记账和任务并发读取只会创建一个 PowerSyncDatabase，其余调用共享同一个初始化 Future；失败诊断会记录阶段、路径、页面 URI、错误类型、事件序列和最多 40 行堆栈，并可在错误页面直接复制
 Ledger budgets 与分类聚合写入闭环已落地：服务端与 Local Core 支持总预算和支出分类预算的列表、创建、更新、软删除、恢复与审计；PowerSync ledger_budgets 已接入 revision、CRUD 上传和服务端陈旧版本判定；LedgerRepository 预算读取云端优先/失败后本地 fallback，离线写入走 Local Core；/ledger/overview、/ledger/categories/summary、/ledger/insights 与本地月份聚合继续保持同构
 Memo AI 分类与标签元数据基础链路已落地：MemoClassification、TagMetadata、PowerSync memo_classifications/tag_metadata schema、备忘分类生成/确认/拒绝接口、/tags/summary、/tags/metadata 管理接口、服务端与本地创建/更新自动生成分类建议、MemoRepository 分类生成/标签统计/标签元数据管理
 Task reminder strategies 与派发状态机已落地：TaskReminderStrategy、Reminder、PowerSync task_reminder_strategies/reminders schema、任务分组 group、策略生成/读取/确认/dismiss；Reminder 支持 pending/delivered/failed/cancelled、到期认领 lease、dispatch token、指数退避、手动 retry、取消与审计，TaskRepository 和 Local Core 提供同构状态操作；ReminderDispatcher 通过平台无关 ReminderNotificationAdapter 投递，reminder ID 作为稳定幂等键，尚未绑定具体 Android/桌面/Web 通知插件

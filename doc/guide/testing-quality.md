@@ -225,6 +225,8 @@ HTML 启动壳不加载远程字体和图片
 默认 Web 与 Wasm Release 构建都通过
 web/sqlite3.wasm、web/powersync_db.worker.js、web/powersync_sync.worker.js 必须存在并通过校验和检查
 默认 Web 与 Wasm 构建产物必须完整复制上述 PowerSync 运行资源
+同一路径的 PowerSync 初始化必须使用 single-flight，多个页面并发读取不得创建多个数据库实例
+初始化失败必须保留阶段、诊断编号、数据库路径、页面 URI、原始错误类型和堆栈，并允许用户从错误页复制
 更新 powersync 依赖后必须重新执行 dart run powersync:setup_web 并更新 powersync-assets.sha256
 Core 主包和宿主文件通过 scripts/check-web-theme-performance.sh 的体积预算
 ```
