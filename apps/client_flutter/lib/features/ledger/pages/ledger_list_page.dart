@@ -174,7 +174,7 @@ class _LedgerListPageState extends State<LedgerListPage> {
               onRefresh: _loadFirstPage,
               emptyIcon: Icons.account_balance_wallet_outlined,
               emptyTitle: '还没有账单',
-              emptySubtitle: '点击右下角记一笔，先打通真实 API 写入。',
+              emptySubtitle: '记录第一笔收支，之后可以在这里查看和整理账单。',
               child: ListView(
                 controller: _scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),

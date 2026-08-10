@@ -42,6 +42,7 @@ class _AiCapturePageState extends State<AiCapturePage> {
   @override
   Widget build(BuildContext context) {
     final service = context.watch<AiCaptureService>();
+    final compactHeader = MediaQuery.sizeOf(context).width < 700;
     return Scaffold(
       appBar: AppBar(
         title: const Text('AI 对话'),
@@ -62,15 +63,16 @@ class _AiCapturePageState extends State<AiCapturePage> {
               onPressed: _loading ? null : _dismissCurrentSession,
               icon: const Icon(Icons.close_outlined),
             ),
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: Center(
-              child: Text(
-                service.modeLabel,
-                style: Theme.of(context).textTheme.labelSmall,
+          if (!compactHeader)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Center(
+                child: Text(
+                  service.modeLabel,
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
               ),
             ),
-          ),
         ],
       ),
       body: LayoutBuilder(
@@ -262,7 +264,9 @@ class _AiCapturePageState extends State<AiCapturePage> {
 
   Future<void> _openSession(String captureId) async {
     await _run(() async {
-      final session = await context.read<AiCaptureService>().getSession(captureId);
+      final session = await context.read<AiCaptureService>().getSession(
+        captureId,
+      );
       if (!mounted) return;
       setState(() => _session = session);
       _scrollToBottom();
@@ -367,12 +371,18 @@ class _Composer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 600;
     return Material(
-      elevation: 6,
+      elevation: 3,
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+          padding: EdgeInsets.fromLTRB(
+            12,
+            compact ? 6 : 8,
+            12,
+            compact ? 8 : 10,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -395,35 +405,31 @@ class _Composer extends StatelessWidget {
                   ),
                 ),
               if (selectedAssets.isNotEmpty) const SizedBox(height: 8),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  IconButton(
+              TextField(
+                key: const Key('ai_capture_composer'),
+                controller: controller,
+                enabled: enabled,
+                minLines: 1,
+                maxLines: compact ? 4 : 5,
+                textInputAction: TextInputAction.newline,
+                decoration: InputDecoration(
+                  isDense: compact,
+                  hintText: '告诉 AI 要记录、修改或设置什么…',
+                  prefixIcon: IconButton(
                     tooltip: '添加附件',
                     onPressed: enabled ? onAttach : null,
-                    icon: const Icon(Icons.attach_file),
+                    icon: const Icon(Icons.attach_file, size: 20),
                   ),
-                  Expanded(
-                    child: TextField(
-                      key: const Key('ai_capture_composer'),
-                      controller: controller,
-                      enabled: enabled,
-                      minLines: 1,
-                      maxLines: 5,
-                      textInputAction: TextInputAction.newline,
-                      decoration: const InputDecoration(
-                        hintText: '告诉 AI 要记录、修改或设置什么…',
-                        border: OutlineInputBorder(),
-                      ),
+                  suffixIcon: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: IconButton.filled(
+                      tooltip: '发送',
+                      onPressed: enabled ? onSend : null,
+                      icon: const Icon(Icons.send_outlined, size: 18),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  IconButton.filled(
-                    tooltip: '发送',
-                    onPressed: enabled ? onSend : null,
-                    icon: const Icon(Icons.send_outlined),
-                  ),
-                ],
+                  border: const OutlineInputBorder(),
+                ),
               ),
             ],
           ),

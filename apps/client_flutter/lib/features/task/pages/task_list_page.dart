@@ -181,7 +181,7 @@ class _TaskListPageState extends State<TaskListPage> {
               onRefresh: _loadFirstPage,
               emptyIcon: Icons.check_circle_outline,
               emptyTitle: '还没有任务',
-              emptySubtitle: '点击右下角新建任务，先打通真实 API 写入。',
+              emptySubtitle: '新建一个任务，把接下来要处理的事情安排下来。',
               child: ListView.separated(
                 controller: _scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
