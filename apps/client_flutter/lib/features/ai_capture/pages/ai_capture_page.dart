@@ -497,23 +497,35 @@ class _ModeNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (MediaQuery.sizeOf(context).width >= 700) {
+      return const SizedBox.shrink();
+    }
+
+    final theme = Theme.of(context);
     final message = service.supportsCloudCapture
-        ? '联网时优先使用云端解析；聊天记录、设置结果和撤销凭据会持久化。'
-        : '当前使用 Local Core；会话、候选动作和撤销链路均可离线保存。';
+        ? 'Cloud · 在线解析'
+        : 'Local Core · 离线可用';
     return Material(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      color: theme.colorScheme.surfaceContainerHighest,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
         child: Row(
           children: [
             Icon(
               service.supportsCloudCapture
                   ? Icons.cloud_done_outlined
                   : Icons.offline_bolt_outlined,
-              size: 18,
+              size: 16,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
-            const SizedBox(width: 8),
-            Expanded(child: Text(message)),
+            const SizedBox(width: 7),
+            Text(
+              message,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ],
         ),
       ),
