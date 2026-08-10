@@ -321,7 +321,6 @@ class _MemoTile extends StatelessWidget {
       _memoTypeLabel(memo.type),
       if (tags.isNotEmpty) tags.first,
       if (tags.length > 1) '+${tags.length - 1}',
-      createdAt,
     ].join(' · ');
 
     return DenseListRow(
@@ -332,7 +331,15 @@ class _MemoTile extends StatelessWidget {
       subtitle: content.isNotEmpty && content != title
           ? Text(content, maxLines: 1, overflow: TextOverflow.ellipsis)
           : null,
-      metadata: Text(metadata, maxLines: 1, overflow: TextOverflow.ellipsis),
+      metadata: Row(
+        children: [
+          Expanded(
+            child: Text(metadata, maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+          const SizedBox(width: 10),
+          Text(createdAt, key: Key('memo_timestamp_${memo.id}')),
+        ],
+      ),
     );
   }
 }

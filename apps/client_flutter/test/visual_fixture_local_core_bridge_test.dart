@@ -112,6 +112,9 @@ void main() {
     expect(second, findsOneWidget);
     expect(find.byKey(const Key('memo_inline_search')), findsNothing);
     expect(find.byTooltip('搜索备忘'), findsOneWidget);
+    final timestamp = find.byKey(const Key('memo_timestamp_visual_memo_02'));
+    expect(timestamp, findsOneWidget);
+    expect(tester.getRect(timestamp).right, lessThanOrEqualTo(374));
     expect(tester.getTopLeft(second).dy - tester.getTopLeft(first).dy, lessThan(90));
 
     await tester.tap(find.byTooltip('搜索备忘'));
@@ -134,6 +137,9 @@ void main() {
     expect(tester.getTopLeft(second).dy - tester.getTopLeft(first).dy, lessThan(90));
     expect(find.textContaining('urgent'), findsNothing);
     expect(find.textContaining('紧急'), findsWidgets);
+    final dueTime = find.byKey(const Key('task_due_visual_task_02'));
+    expect(dueTime, findsOneWidget);
+    expect(tester.getRect(dueTime).right, lessThan(360));
   });
 
   testWidgets('visual fixture bridge renders compact ledger rows without source diagnostics', (
@@ -150,6 +156,9 @@ void main() {
     expect(second, findsOneWidget);
     expect(tester.getTopLeft(second).dy - tester.getTopLeft(first).dy, lessThan(74));
     expect(find.textContaining('local'), findsNothing);
+    final occurredAt = find.byKey(const Key('ledger_time_visual_tx_01'));
+    expect(occurredAt, findsOneWidget);
+    expect(tester.getRect(occurredAt).right, lessThan(360));
   });
 
   test('visual fixture bridge drives a populated home overview', () async {

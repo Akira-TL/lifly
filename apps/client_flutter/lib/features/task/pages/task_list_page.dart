@@ -291,7 +291,6 @@ class _TaskTile extends StatelessWidget {
     final metadata = [
       statusLabel,
       _taskPriorityLabel(task.priority),
-      ?dueLabel,
     ].join(' · ');
 
     return DenseListRow(
@@ -313,7 +312,17 @@ class _TaskTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             )
           : null,
-      metadata: Text(metadata, maxLines: 1, overflow: TextOverflow.ellipsis),
+      metadata: Row(
+        children: [
+          Expanded(
+            child: Text(metadata, maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+          if (dueLabel != null) ...[
+            const SizedBox(width: 10),
+            Text(dueLabel, key: Key('task_due_${task.id}')),
+          ],
+        ],
+      ),
       trailing: SizedBox(
         width: 48,
         height: 48,

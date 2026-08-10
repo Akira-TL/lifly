@@ -366,10 +366,17 @@ class _LedgerTile extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      subtitle: Text(
-        [if (note?.isNotEmpty == true) note!, dateLabel].join(' · '),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+      subtitle: Row(
+        children: [
+          if (note?.isNotEmpty == true)
+            Expanded(
+              child: Text(note!, maxLines: 1, overflow: TextOverflow.ellipsis),
+            )
+          else
+            const Spacer(),
+          if (note?.isNotEmpty == true) const SizedBox(width: 10),
+          Text(dateLabel, key: Key('ledger_time_${transaction.id}')),
+        ],
       ),
       trailing: Text(
         transaction.amountText,
