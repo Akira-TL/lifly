@@ -402,8 +402,8 @@ class _SidebarGroupLabel extends StatelessWidget {
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
           color: Theme.of(context).colorScheme.onSurfaceVariant,
           fontWeight: FontWeight.w800,
-          fontSize: 9,
-          letterSpacing: 1.2,
+          fontSize: 10,
+          letterSpacing: 1.1,
         ),
       ),
     );
@@ -504,7 +504,7 @@ class _SidebarItem extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: foreground,
-                            fontSize: 12,
+                            fontSize: 13,
                             fontWeight: selected
                                 ? FontWeight.w700
                                 : FontWeight.w500,
@@ -576,7 +576,7 @@ class _SidebarFooter extends StatelessWidget {
                 '本地优先',
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
-                  fontSize: 9,
+                  fontSize: 10,
                 ),
               ),
             ],

@@ -92,7 +92,7 @@ class _HomePageState extends State<HomePage> {
           Text(
             '今天',
             style: theme.textTheme.titleLarge?.copyWith(
-              fontSize: 19,
+              fontSize: 21,
               fontWeight: FontWeight.w800,
               letterSpacing: -0.55,
             ),
@@ -102,7 +102,7 @@ class _HomePageState extends State<HomePage> {
             _webDateLabel(DateTime.now()),
             style: theme.textTheme.labelSmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: FontWeight.w400,
             ),
           ),

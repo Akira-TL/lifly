@@ -138,19 +138,27 @@ class _AppShellState extends State<AppShell> {
           profile: profile,
         );
         if (layout.useNavigationRail) {
-          return WideShell(
-            currentIndex: _currentIndex,
-            destinations: _destinations,
-            layout: layout,
-            keyboardNavigation: profile.keyboardNavigation,
-            sidebarCollapsed: _sidebarCollapsed,
-            onDestinationSelected: _selectDestination,
-            onQuickCapture: () => _selectDestination(_primaryDestinationIndex),
-            onOpenSearch: () => _openPage(context, const SearchPage()),
-            onOpenManagement: () =>
-                _openPage(context, const ManagementHubPage()),
-            onOpenSettings: () => _openPage(context, const SettingsPage()),
-            onToggleSidebar: _toggleSidebar,
+          final theme = Theme.of(context);
+          final wideTheme = theme.copyWith(
+            textTheme: theme.textTheme.apply(fontSizeFactor: 1.06),
+          );
+          return Theme(
+            data: wideTheme,
+            child: WideShell(
+              currentIndex: _currentIndex,
+              destinations: _destinations,
+              layout: layout,
+              keyboardNavigation: profile.keyboardNavigation,
+              sidebarCollapsed: _sidebarCollapsed,
+              onDestinationSelected: _selectDestination,
+              onQuickCapture: () =>
+                  _selectDestination(_primaryDestinationIndex),
+              onOpenSearch: () => _openPage(context, const SearchPage()),
+              onOpenManagement: () =>
+                  _openPage(context, const ManagementHubPage()),
+              onOpenSettings: () => _openPage(context, const SettingsPage()),
+              onToggleSidebar: _toggleSidebar,
+            ),
           );
         }
 

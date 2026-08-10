@@ -23,24 +23,60 @@ class ListFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final wide = MediaQuery.sizeOf(context).width >= 720;
+
+    Widget buildOption(ListFilterOption option) {
+      final selected = selectedValue == option.value;
+      if (wide) {
+        return TextButton(
+          onPressed: () => onChanged(option.value),
+          style: TextButton.styleFrom(
+            minimumSize: const Size(0, 34),
+            padding: const EdgeInsets.symmetric(horizontal: 11),
+            foregroundColor: selected
+                ? theme.colorScheme.onSurface
+                : theme.colorScheme.onSurfaceVariant,
+            backgroundColor: selected
+                ? theme.colorScheme.surfaceContainerHigh
+                : Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(6),
+            ),
+          ),
+          child: Text(
+            option.label,
+            style: TextStyle(
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        );
+      }
+
+      return ChoiceChip(
+        label: Text(option.label),
+        selected: selected,
+        showCheckmark: false,
+        onSelected: (_) => onChanged(option.value),
+      );
+    }
+
     return Material(
-      color: Theme.of(context).colorScheme.surface,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: padding,
-        child: Row(
-          children: options
-              .map(
-                (option) => Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Text(option.label),
-                    selected: selectedValue == option.value,
-                    onSelected: (_) => onChanged(option.value),
-                  ),
+      color: theme.colorScheme.surface,
+      child: SizedBox(
+        width: double.infinity,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: padding,
+          child: Row(
+            children: [
+              for (final option in options)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: buildOption(option),
                 ),
-              )
-              .toList(),
+            ],
+          ),
         ),
       ),
     );
