@@ -18,9 +18,9 @@ class AiCaptureService {
 
   String get modeLabel {
     return switch (dataMode) {
-      LiflyDataMode.api => 'Cloud MCP',
+      LiflyDataMode.api => '云端处理',
       LiflyDataMode.local =>
-        localCore == null ? 'Local Core 未接入' : 'Local Core 本地捕获',
+        localCore == null ? '本地处理不可用' : '本地处理',
     };
   }
 
@@ -230,7 +230,7 @@ class AiCaptureService {
   LocalCoreBridge _requireLocalCore() {
     final bridge = localCore;
     if (bridge == null) {
-      throw StateError('Local Core 未接入，无法执行本地 Capture。');
+      throw StateError('本地处理不可用，请检查数据模式配置。');
     }
     return bridge;
   }

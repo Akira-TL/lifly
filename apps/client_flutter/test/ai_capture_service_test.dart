@@ -5,6 +5,26 @@ import 'package:client_flutter/features/ai_capture/data/ai_capture_service.dart'
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('AI capture exposes product-facing mode labels', () {
+    final api = ApiClient(baseUrl: 'http://localhost/api/v1');
+    expect(
+      AiCaptureService(
+        api: api,
+        dataMode: LiflyDataMode.local,
+        localCore: FakeLocalCoreBridge(),
+      ).modeLabel,
+      '本地处理',
+    );
+    expect(
+      AiCaptureService(api: api, dataMode: LiflyDataMode.local).modeLabel,
+      '本地处理不可用',
+    );
+    expect(
+      AiCaptureService(api: api, dataMode: LiflyDataMode.api).modeLabel,
+      '云端处理',
+    );
+  });
+
   test(
     'AI capture keeps continuous turns and supports undo then revise',
     () async {

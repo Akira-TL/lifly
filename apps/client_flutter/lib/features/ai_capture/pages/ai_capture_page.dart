@@ -452,9 +452,9 @@ class _ModeNotice extends StatelessWidget {
     }
 
     final theme = Theme.of(context);
-    final message = service.supportsCloudCapture
-        ? 'Cloud · 在线解析'
-        : 'Local Core · 离线可用';
+    final message = service.supportsCapture
+        ? '${service.modeLabel} · ${service.supportsCloudCapture ? '在线可用' : '离线可用'}'
+        : service.modeLabel;
     return Material(
       color: theme.colorScheme.surfaceContainerHighest,
       child: Padding(
