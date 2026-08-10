@@ -110,7 +110,13 @@ void main() {
     final second = find.text('Lifly 首页信息密度与跨端布局调整记录');
     expect(first, findsOneWidget);
     expect(second, findsOneWidget);
+    expect(find.byKey(const Key('memo_inline_search')), findsNothing);
+    expect(find.byTooltip('搜索备忘'), findsOneWidget);
     expect(tester.getTopLeft(second).dy - tester.getTopLeft(first).dy, lessThan(90));
+
+    await tester.tap(find.byTooltip('搜索备忘'));
+    await tester.pump();
+    expect(find.byKey(const Key('memo_inline_search')), findsOneWidget);
   });
 
   testWidgets('visual fixture bridge renders localized compact task states', (

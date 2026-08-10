@@ -31,6 +31,7 @@ class _MemoListPageState extends State<MemoListPage> {
   bool _isLoading = true;
   bool _isLoadingMore = false;
   bool _isCreating = false;
+  bool _isSearching = false;
   String? _error;
 
   bool get _hasMore => _items.length < _total;
@@ -156,18 +157,58 @@ class _MemoListPageState extends State<MemoListPage> {
     _loadFirstPage();
   }
 
+  void _openSearch() {
+    setState(() => _isSearching = true);
+  }
+
+  void _closeSearch() {
+    final hadQuery = _searchController.text.trim().isNotEmpty;
+    _searchController.clear();
+    setState(() => _isSearching = false);
+    if (hadQuery) _loadFirstPage();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('备忘录')),
+      appBar: AppBar(
+        title: _isSearching
+            ? TextField(
+                key: const Key('memo_inline_search'),
+                controller: _searchController,
+                autofocus: true,
+                textInputAction: TextInputAction.search,
+                decoration: const InputDecoration(
+                  hintText: '搜索备忘',
+                  border: InputBorder.none,
+                  isDense: true,
+                ),
+                onSubmitted: (_) => _loadFirstPage(),
+              )
+            : const Text('备忘录'),
+        actions: [
+          if (_isSearching) ...[
+            IconButton(
+              tooltip: '执行搜索',
+              onPressed: _loadFirstPage,
+              icon: const Icon(Icons.search),
+            ),
+            IconButton(
+              tooltip: '退出搜索',
+              onPressed: _closeSearch,
+              icon: const Icon(Icons.close),
+            ),
+          ] else
+            IconButton(
+              tooltip: '搜索备忘',
+              onPressed: _openSearch,
+              icon: const Icon(Icons.search),
+            ),
+        ],
+      ),
       body: Column(
         children: [
-          _MemoFilterBar(
-            selectedType: _selectedType,
-            searchController: _searchController,
-            onTypeChanged: _setType,
-            onSearch: _loadFirstPage,
-          ),
+          _MemoFilterBar(selectedType: _selectedType, onTypeChanged: _setType),
           Expanded(
             child: AsyncContentScaffold(
               isLoading: _isLoading,
@@ -235,56 +276,25 @@ class _MemoListPageState extends State<MemoListPage> {
 
 class _MemoFilterBar extends StatelessWidget {
   final String? selectedType;
-  final TextEditingController searchController;
   final ValueChanged<String?> onTypeChanged;
-  final VoidCallback onSearch;
 
   const _MemoFilterBar({
     required this.selectedType,
-    required this.searchController,
     required this.onTypeChanged,
-    required this.onSearch,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).colorScheme.surface,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-        child: Column(
-          children: [
-            ListFilterBar(
-              selectedValue: selectedType,
-              padding: EdgeInsets.zero,
-              onChanged: onTypeChanged,
-              options: const [
-                ListFilterOption(label: '全部', value: null),
-                ListFilterOption(label: '备忘', value: 'memo'),
-                ListFilterOption(label: '日记', value: 'journal'),
-                ListFilterOption(label: '剪藏', value: 'clip'),
-                ListFilterOption(label: '文档', value: 'doc'),
-              ],
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: searchController,
-              textInputAction: TextInputAction.search,
-              decoration: InputDecoration(
-                isDense: true,
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: IconButton(
-                  onPressed: onSearch,
-                  icon: const Icon(Icons.arrow_forward),
-                ),
-                labelText: '搜索备忘',
-                border: const OutlineInputBorder(),
-              ),
-              onSubmitted: (_) => onSearch(),
-            ),
-          ],
-        ),
-      ),
+    return ListFilterBar(
+      selectedValue: selectedType,
+      onChanged: onTypeChanged,
+      options: const [
+        ListFilterOption(label: '全部', value: null),
+        ListFilterOption(label: '备忘', value: 'memo'),
+        ListFilterOption(label: '日记', value: 'journal'),
+        ListFilterOption(label: '剪藏', value: 'clip'),
+        ListFilterOption(label: '文档', value: 'doc'),
+      ],
     );
   }
 }
