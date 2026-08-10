@@ -1,6 +1,7 @@
 import 'package:client_flutter/features/ai_capture/data/ai_capture_service.dart';
 import 'package:client_flutter/features/ai_capture/models/ai_capture_models.dart';
 import 'package:client_flutter/features/ai_capture/widgets/ai_capture_asset_picker.dart';
+import 'package:client_flutter/features/ai_capture/widgets/ai_capture_session_panel.dart';
 import 'package:client_flutter/features/ai_capture/widgets/ai_capture_turn_card.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -83,7 +84,7 @@ class _AiCapturePageState extends State<AiCapturePage> {
               if (showSessionPanel)
                 SizedBox(
                   width: 280,
-                  child: _SessionPanel(
+                  child: AiCaptureSessionPanel(
                     sessions: _sessions,
                     selectedCaptureId: _session?.captureId,
                     onSelected: _openSession,
@@ -307,7 +308,7 @@ class _AiCapturePageState extends State<AiCapturePage> {
     final selectedId = await showModalBottomSheet<String>(
       context: context,
       builder: (context) => SafeArea(
-        child: _SessionPanel(
+        child: AiCaptureSessionPanel(
           sessions: _sessions,
           selectedCaptureId: _session?.captureId,
           onSelected: (captureId) => Navigator.of(context).pop(captureId),
@@ -435,57 +436,6 @@ class _Composer extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _SessionPanel extends StatelessWidget {
-  const _SessionPanel({
-    required this.sessions,
-    required this.selectedCaptureId,
-    required this.onSelected,
-    required this.onNew,
-  });
-
-  final List<AiCaptureSession> sessions;
-  final String? selectedCaptureId;
-  final ValueChanged<String> onSelected;
-  final VoidCallback onNew;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        ListTile(
-          leading: const Icon(Icons.add_comment_outlined),
-          title: const Text('新会话'),
-          onTap: onNew,
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: sessions.isEmpty
-              ? const Center(child: Text('暂无历史会话'))
-              : ListView.builder(
-                  itemCount: sessions.length,
-                  itemBuilder: (context, index) {
-                    final session = sessions[index];
-                    return ListTile(
-                      selected: session.captureId == selectedCaptureId,
-                      leading: const Icon(Icons.chat_bubble_outline),
-                      title: Text(
-                        session.originalText.isEmpty
-                            ? '未命名会话'
-                            : session.originalText,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text('${session.turnCount} 条记录'),
-                      onTap: () => onSelected(session.captureId),
-                    );
-                  },
-                ),
-        ),
-      ],
     );
   }
 }
