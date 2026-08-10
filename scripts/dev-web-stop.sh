@@ -7,12 +7,29 @@ LOG_DIR="$PROJECT_ROOT/logs"
 PORT="${LIFLY_WEB_PORT:-4175}"
 PID_FILE="$LOG_DIR/flutter-web-$PORT.pid"
 
-if [[ ! -f "$PID_FILE" ]]; then
-  echo "没有记录 Flutter Web 调试实例: port=$PORT"
+PID=""
+if [[ -f "$PID_FILE" ]]; then
+  PID="$(cat "$PID_FILE")"
+else
+  PID="$(
+    (ss -ltnp 2>/dev/null | grep ":$PORT " |
+      sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | head -n 1) || true
+  )"
+fi
+
+if [[ -z "$PID" ]]; then
+  echo "没有运行中的 Flutter Web 调试实例: port=$PORT"
   exit 0
 fi
 
-PID="$(cat "$PID_FILE")"
+COMMAND="$(ps -p "$PID" -o args= 2>/dev/null || true)"
+if [[ "$COMMAND" != *"flutter_tools.snapshot run -d web-server"* ]] ||
+   [[ "$COMMAND" != *"--web-port $PORT"* ]]; then
+  echo "端口 $PORT 的进程不是受支持的 Flutter Web 调试实例，拒绝停止。" >&2
+  echo "pid=$PID command=$COMMAND" >&2
+  exit 1
+fi
+
 if kill -0 "$PID" 2>/dev/null; then
   echo "停止 Flutter Web: pid=$PID port=$PORT"
   kill "$PID"
