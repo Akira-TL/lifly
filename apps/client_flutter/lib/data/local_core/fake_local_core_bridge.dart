@@ -10,6 +10,7 @@ part 'fake/fake_capture_store.dart';
 part 'fake/fake_ledger_store.dart';
 part 'fake/fake_memo_store.dart';
 part 'fake/fake_task_store.dart';
+part 'fake/visual_fixture_local_core_bridge.dart';
 
 const Object _fakeReminderUnchanged = Object();
 const Object _fakeCaptureUnchanged = Object();

@@ -10,6 +10,7 @@ PORT="${LIFLY_WEB_PORT:-4175}"
 DATA_MODE="${LIFLY_DATA_MODE:-local}"
 API_BASE_URL="${LIFLY_API_BASE_URL:-http://127.0.0.1:8310/api/v1}"
 APP_VERSION="${LIFLY_APP_VERSION:-0.8.2}"
+VISUAL_FIXTURES="${LIFLY_VISUAL_FIXTURES:-false}"
 PID_FILE="$LOG_DIR/flutter-web-$PORT.pid"
 LOG_FILE="$LOG_DIR/flutter-web-$PORT.log"
 
@@ -34,6 +35,7 @@ echo "启动 Flutter Web 调试实例..."
 echo "  URL:      http://127.0.0.1:$PORT"
 echo "  DataMode: $DATA_MODE"
 echo "  API:      $API_BASE_URL"
+echo "  Fixtures: $VISUAL_FIXTURES"
 echo "  Log:      $LOG_FILE"
 
 cd "$CLIENT_DIR"
@@ -43,6 +45,7 @@ nohup flutter run -d web-server \
   --dart-define="LIFLY_DATA_MODE=$DATA_MODE" \
   --dart-define="LIFLY_API_BASE_URL=$API_BASE_URL" \
   --dart-define="LIFLY_APP_VERSION=$APP_VERSION" \
+  --dart-define="LIFLY_VISUAL_FIXTURES=$VISUAL_FIXTURES" \
   >"$LOG_FILE" 2>&1 < /dev/null &
 PID=$!
 printf '%s\n' "$PID" > "$PID_FILE"

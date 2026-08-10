@@ -18,5 +18,10 @@ class AppConfig {
     defaultValue: '0.8.1',
   );
 
+  static const bool visualFixtures = bool.fromEnvironment(
+    'LIFLY_VISUAL_FIXTURES',
+    defaultValue: false,
+  );
+
   static LiflyDataMode get dataMode => LiflyDataMode.fromName(dataModeName);
 }

@@ -19,6 +19,7 @@ import 'package:client_flutter/app/theme/theme_runtime.dart';
 import 'package:client_flutter/app/theme/theme_tokens.dart';
 import 'package:client_flutter/app/theme/themes/lifly_test_theme.dart';
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/local_core/fake_local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/powersync_local_core_bridge.dart';
 import 'package:client_flutter/data/powersync/powersync_connection_coordinator.dart';
@@ -29,6 +30,7 @@ import 'package:client_flutter/features/ai_capture/data/ai_capture_service.dart'
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   StartupMetrics.markDartEntrypoint();
+  final useVisualFixtures = kDebugMode && AppConfig.visualFixtures;
   runApp(
     MultiProvider(
       providers: [
@@ -59,7 +61,9 @@ void main() {
             return runtime;
           },
         ),
-        Provider<LiflyDataMode>.value(value: AppConfig.dataMode),
+        Provider<LiflyDataMode>.value(
+          value: useVisualFixtures ? LiflyDataMode.local : AppConfig.dataMode,
+        ),
         Provider<ApiClient>(
           create: (_) => ApiClient(baseUrl: AppConfig.apiBaseUrl),
         ),
@@ -76,8 +80,14 @@ void main() {
           ),
         ),
         ProxyProvider<SyncService, LocalCoreBridge>(
-          update: (_, syncService, _) =>
-              PowerSyncLocalCoreBridge(syncService: syncService),
+          update: (_, syncService, previous) {
+            if (useVisualFixtures) {
+              return previous is VisualFixtureLocalCoreBridge
+                  ? previous
+                  : VisualFixtureLocalCoreBridge();
+            }
+            return PowerSyncLocalCoreBridge(syncService: syncService);
+          },
         ),
         ProxyProvider3<
           ApiClient,
