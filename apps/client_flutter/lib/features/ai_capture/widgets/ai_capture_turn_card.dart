@@ -19,7 +19,8 @@ class AiCaptureTurnCard extends StatefulWidget {
     AiCaptureTurn turn,
     int actionIndex,
     Map<String, dynamic> payload,
-  ) onRevise;
+  )
+  onRevise;
   final Future<void> Function(AiCaptureTurn turn) onUndo;
 
   @override
@@ -78,14 +79,14 @@ class _AiCaptureTurnCardState extends State<AiCaptureTurnCard> {
         constraints: const BoxConstraints(maxWidth: 820),
         child: Card(
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.auto_awesome_outlined, size: 20),
-                    const SizedBox(width: 8),
+                    const Icon(Icons.auto_awesome_outlined, size: 18),
+                    const SizedBox(width: 7),
                     Expanded(
                       child: Text(
                         _statusTitle(widget.turn.turnStatus),
@@ -103,10 +104,12 @@ class _AiCaptureTurnCardState extends State<AiCaptureTurnCard> {
                   _AssetContextWrap(contexts: widget.turn.assetContext),
                 ],
                 if (widget.turn.actions.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  for (var index = 0;
-                      index < widget.turn.actions.length;
-                      index++)
+                  const SizedBox(height: 6),
+                  for (
+                    var index = 0;
+                    index < widget.turn.actions.length;
+                    index++
+                  )
                     _ActionTile(
                       action: widget.turn.actions[index],
                       index: index,
@@ -126,27 +129,34 @@ class _AiCaptureTurnCardState extends State<AiCaptureTurnCard> {
                     ),
                 ],
                 if (widget.turn.resultEntities.isNotEmpty) ...[
-                  const Divider(),
-                  Text(
-                    '已设置内容',
-                    style: Theme.of(context).textTheme.labelLarge,
-                  ),
                   const SizedBox(height: 6),
                   Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                    spacing: 12,
+                    runSpacing: 6,
                     children: widget.turn.resultEntities
                         .map(
-                          (entity) => Chip(
-                            avatar: Icon(_entityIcon(entity.type), size: 18),
-                            label: Text('${_entityLabel(entity.type)} · ${entity.id}'),
+                          (entity) => Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.check_circle_outline,
+                                size: 17,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                '已创建${_entityLabel(entity.type)}',
+                                style: Theme.of(context).textTheme.labelLarge
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                            ],
                           ),
                         )
                         .toList(growable: false),
                   ),
                 ],
                 if (widget.turn.canCommit || widget.turn.canUndo) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
                     children: [
@@ -213,13 +223,13 @@ class _AiCaptureTurnCardState extends State<AiCaptureTurnCard> {
 
   static String _statusTitle(String status) {
     return switch (status) {
-      'parsed' => 'AI 已整理候选内容',
-      'revised' => '已按修改生成新版本',
-      'superseded' => '旧版本（已被修改）',
-      'committed' => 'AI 已完成设置',
-      'partial' => '部分内容已设置',
+      'parsed' => '建议设置',
+      'revised' => '已更新建议',
+      'superseded' => '旧版本',
+      'committed' => '已完成',
+      'partial' => '部分已完成',
       'failed' => '设置失败，可修改后重试',
-      'undone' => '本轮设置已撤销',
+      'undone' => '已撤销',
       _ => status,
     };
   }
@@ -229,15 +239,6 @@ class _AiCaptureTurnCardState extends State<AiCaptureTurnCard> {
       'undone' => '已撤销本轮 AI 设置',
       'dismissed' => '会话已关闭',
       _ => turn.text ?? turn.turnStatus,
-    };
-  }
-
-  static IconData _entityIcon(String type) {
-    return switch (type) {
-      'memo' => Icons.note_outlined,
-      'task' => Icons.check_circle_outline,
-      'ledger_transaction' => Icons.account_balance_wallet_outlined,
-      _ => Icons.data_object_outlined,
     };
   }
 
@@ -272,23 +273,56 @@ class _ActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: selectable
-          ? Checkbox(
-              value: selected,
-              onChanged: (value) => onSelected(value ?? false),
-            )
-          : Icon(_icon(action.type)),
-      title: Text('${action.label} · ${action.summary}'),
-      subtitle: Text('置信度 ${action.confidence.toStringAsFixed(2)}'),
-      trailing: canRevise
-          ? IconButton(
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 48,
+            height: 48,
+            child: selectable
+                ? Checkbox(
+                    value: selected,
+                    visualDensity: VisualDensity.compact,
+                    onChanged: (value) => onSelected(value ?? false),
+                  )
+                : Icon(_icon(action.type), size: 19),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '建议${action.label}',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  action.summary,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (canRevise)
+            IconButton(
               tooltip: '修改',
+              visualDensity: VisualDensity.compact,
               onPressed: onRevise,
-              icon: const Icon(Icons.edit_outlined),
-            )
-          : null,
+              icon: const Icon(Icons.edit_outlined, size: 19),
+            ),
+        ],
+      ),
     );
   }
 

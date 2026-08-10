@@ -281,7 +281,8 @@ class _OverviewHeader extends StatelessWidget {
     HomeSettingsSummary settings,
     LiflySemanticColors semantic,
   ) {
-    final incomplete = settings.databaseConfigured == false ||
+    final incomplete =
+        settings.databaseConfigured == false ||
         settings.powerSyncConfigured == false ||
         settings.objectStorageConfigured == false;
     return _HeaderStatus(
@@ -489,13 +490,13 @@ class _AttentionRow extends StatelessWidget {
     final theme = Theme.of(context);
     final tone = _levelColor(item.level, theme.semanticColors);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 13, 14, 13),
+      padding: const EdgeInsets.fromLTRB(16, 10, 14, 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 3,
-            height: 42,
+            height: 38,
             margin: const EdgeInsets.only(top: 1),
             decoration: BoxDecoration(
               color: tone,
@@ -529,12 +530,10 @@ class _AttentionRow extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
-                  item.description?.trim().isNotEmpty == true
-                      ? item.description!.trim()
-                      : item.entityType,
-                  maxLines: 2,
+                  _attentionDetail(item),
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
@@ -543,15 +542,6 @@ class _AttentionRow extends StatelessWidget {
               ],
             ),
           ),
-          if (item.occurredAt != null) ...[
-            const SizedBox(width: 12),
-            Text(
-              DateFormat('MM/dd HH:mm').format(item.occurredAt!.toLocal()),
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -576,6 +566,26 @@ String _attentionTypeLabel(String type) {
     'sync_error' => '同步异常',
     _ => type.replaceAll('_', ' '),
   };
+}
+
+String _attentionDetail(HomeAttentionItem item) {
+  final description = item.description?.trim() ?? '';
+  final status = _attentionTypeLabel(item.type);
+  final generic =
+      description.isEmpty ||
+      description == '任务已逾期' ||
+      description == '今天截止' ||
+      description == status;
+  final base = generic
+      ? switch (item.entityType) {
+          'task' => '任务',
+          'memo' => '备忘',
+          'ledger_transaction' => '流水',
+          _ => '待处理内容',
+        }
+      : description;
+  if (item.occurredAt == null) return base;
+  return '$base · ${DateFormat('MM/dd HH:mm').format(item.occurredAt!.toLocal())}';
 }
 
 double _normalizedRatio(double raw) {

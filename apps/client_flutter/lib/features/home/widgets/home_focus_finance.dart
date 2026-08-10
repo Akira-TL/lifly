@@ -11,12 +11,12 @@ class HomeFocusFinanceSection extends StatelessWidget {
     final semantic = theme.semanticColors;
     final formatter = _focusCurrencyFormatter(finance.currency);
     final budgetAmount = finance.budgetAmount ?? 0;
-    final expenseRatio = budgetAmount > 0
+    final double? expenseRatio = budgetAmount > 0
         ? (finance.monthExpense / budgetAmount).clamp(0, 1).toDouble()
-        : _focusRatio(finance.budgetProgress);
-    final remainingRatio = budgetAmount > 0
+        : null;
+    final double? remainingRatio = budgetAmount > 0
         ? ((finance.budgetRemaining ?? 0) / budgetAmount).clamp(0, 1).toDouble()
-        : 0.0;
+        : null;
     final topCategory = finance.categoryBreakdown
         .where((item) => item.direction == 'expense')
         .firstOrNull;
@@ -52,7 +52,9 @@ class HomeFocusFinanceSection extends StatelessWidget {
               Divider(height: 1, color: theme.colorScheme.outlineVariant),
               _FocusMoneyLine(
                 label: topCategory?.categoryName ?? '主要分类',
-                ratio: _focusRatio(topCategory?.ratio),
+                ratio: topCategory == null
+                    ? null
+                    : _focusRatio(topCategory.ratio),
                 color: semantic.warning,
                 value: topCategory == null
                     ? '暂无'
@@ -72,7 +74,7 @@ class HomeFocusFinanceSection extends StatelessWidget {
 
 class _FocusMoneyLine extends StatelessWidget {
   final String label;
-  final double ratio;
+  final double? ratio;
   final Color color;
   final String value;
 
@@ -104,17 +106,20 @@ class _FocusMoneyLine extends StatelessWidget {
                 ),
               ),
             ),
-            Expanded(
-              child: Container(
-                height: 5,
-                color: theme.colorScheme.surfaceContainerHigh,
-                alignment: Alignment.centerLeft,
-                child: FractionallySizedBox(
-                  widthFactor: ratio.clamp(0, 1),
-                  child: ColoredBox(color: color),
+            if (ratio != null)
+              Expanded(
+                child: Container(
+                  height: 5,
+                  color: theme.colorScheme.surfaceContainerHigh,
+                  alignment: Alignment.centerLeft,
+                  child: FractionallySizedBox(
+                    widthFactor: ratio!.clamp(0, 1),
+                    child: ColoredBox(color: color),
+                  ),
                 ),
-              ),
-            ),
+              )
+            else
+              const Spacer(),
             const SizedBox(width: 10),
             ConstrainedBox(
               constraints: const BoxConstraints(minWidth: 56),

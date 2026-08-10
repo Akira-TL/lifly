@@ -142,28 +142,19 @@ class _FocusQueueRow extends StatelessWidget {
     final theme = Theme.of(context);
     final tone = _focusLevelColor(item.level, theme.semanticColors);
     return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 63),
+      constraints: const BoxConstraints(minHeight: 56),
       child: Stack(
         children: [
           Positioned(
             left: 0,
-            top: 13,
-            bottom: 13,
+            top: 10,
+            bottom: 10,
             child: Container(width: 3, color: tone),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 13, 10),
+            padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
             child: Row(
               children: [
-                Container(
-                  width: 17,
-                  height: 17,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: theme.colorScheme.outline),
-                  ),
-                ),
-                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -178,11 +169,9 @@ class _FocusQueueRow extends StatelessWidget {
                           fontSize: 12,
                         ),
                       ),
-                      const SizedBox(height: 5),
+                      const SizedBox(height: 4),
                       Text(
-                        item.description?.trim().isNotEmpty == true
-                            ? item.description!.trim()
-                            : _focusEntityLabel(item.entityType),
+                        _focusItemDetail(item, includeTime: true),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.labelSmall?.copyWith(
@@ -193,36 +182,16 @@ class _FocusQueueRow extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 16),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 110),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        _focusQueueSideTitle(item),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.right,
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: tone,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 10,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _focusTypeLabel(item.type),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.right,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontSize: 9,
-                        ),
-                      ),
-                    ],
+                const SizedBox(width: 12),
+                Text(
+                  _focusTypeLabel(item.type),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: tone,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 10,
                   ),
                 ),
               ],
@@ -469,14 +438,19 @@ Color _focusLevelColor(String level, LiflySemanticColors colors) {
   };
 }
 
-String _focusQueueSideTitle(HomeAttentionItem item) {
-  if (item.level.toLowerCase() == 'critical') return '需要优先处理';
-  final occurredAt = item.occurredAt;
-  if (occurredAt != null) {
-    final local = occurredAt.toLocal();
-    return DateFormat('MM/dd HH:mm').format(local);
-  }
-  return _focusTypeLabel(item.type);
+String _focusItemDetail(HomeAttentionItem item, {bool includeTime = false}) {
+  final rawDescription = item.description?.trim() ?? '';
+  final statusLabel = _focusTypeLabel(item.type);
+  final genericDescription =
+      rawDescription.isEmpty ||
+      rawDescription == '任务已逾期' ||
+      rawDescription == '今天截止' ||
+      rawDescription == statusLabel;
+  final base = genericDescription
+      ? _focusEntityLabel(item.entityType)
+      : rawDescription;
+  if (!includeTime || item.occurredAt == null) return base;
+  return '$base · ${DateFormat('MM/dd HH:mm').format(item.occurredAt!.toLocal())}';
 }
 
 String _focusTypeLabel(String type) {

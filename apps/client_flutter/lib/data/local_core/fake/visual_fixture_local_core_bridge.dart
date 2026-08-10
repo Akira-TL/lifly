@@ -23,6 +23,31 @@ class VisualFixtureLocalCoreBridge extends FakeLocalCoreBridge {
     );
   }
 
+  @override
+  Future<LocalHomeOverview> getHomeOverview(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final summary = await summarizeExpenses(input, context);
+    final ledgerOverview = await getLedgerOverview(input, context);
+    final categoryBreakdown = await getLedgerCategorySummary({
+      ...input,
+      'direction': 'expense',
+    }, context);
+    final financeInsights = await getLedgerInsights(input, context);
+    return const LocalHomeOverviewBuilder().build(
+      memos: _memos,
+      tasks: _tasks,
+      transactions: _expenses,
+      summary: summary,
+      ledgerOverview: ledgerOverview,
+      categoryBreakdown: categoryBreakdown,
+      financeInsights: financeInsights,
+      now: context.effectiveNow,
+      sourceMode: input['source_mode'] as String? ?? 'visual_fixture',
+    );
+  }
+
   void _seedVisualFixtures() {
     final day = DateTime.utc(
       fixtureNow.year,

@@ -56,8 +56,10 @@ void main() {
       ),
     );
 
-    expect(find.text('AI 已完成设置'), findsOneWidget);
-    expect(find.text('任务 · task-1'), findsOneWidget);
+    expect(find.text('已完成'), findsOneWidget);
+    expect(find.text('已创建任务'), findsOneWidget);
+    expect(find.textContaining('task-1'), findsNothing);
+    expect(find.textContaining('置信度'), findsNothing);
     expect(find.text('计划.pdf'), findsOneWidget);
     expect(find.text('撤销'), findsOneWidget);
 

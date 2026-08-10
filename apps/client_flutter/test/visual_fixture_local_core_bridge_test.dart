@@ -3,6 +3,7 @@ import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/local_core/fake_local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_context.dart';
+import 'package:client_flutter/features/ledger/pages/ledger_list_page.dart';
 import 'package:client_flutter/features/memo/pages/memo_list_page.dart';
 import 'package:client_flutter/features/task/pages/task_list_page.dart';
 import 'package:flutter/material.dart';
@@ -99,22 +100,50 @@ void main() {
     );
   });
 
-  testWidgets('visual fixture bridge renders dense memo list', (tester) async {
+  testWidgets('visual fixture bridge renders a compact memo list', (tester) async {
+    await _usePhoneViewport(tester);
     final bridge = VisualFixtureLocalCoreBridge(now: now);
     await tester.pumpWidget(_fixtureApp(bridge, const MemoListPage()));
     await tester.pumpAndSettle();
 
-    expect(find.text('本周需要处理的杂事'), findsOneWidget);
-    expect(find.text('Lifly 首页信息密度与跨端布局调整记录'), findsOneWidget);
+    final first = find.text('本周需要处理的杂事');
+    final second = find.text('Lifly 首页信息密度与跨端布局调整记录');
+    expect(first, findsOneWidget);
+    expect(second, findsOneWidget);
+    expect(tester.getTopLeft(second).dy - tester.getTopLeft(first).dy, lessThan(90));
   });
 
-  testWidgets('visual fixture bridge renders task states', (tester) async {
+  testWidgets('visual fixture bridge renders localized compact task states', (
+    tester,
+  ) async {
+    await _usePhoneViewport(tester);
     final bridge = VisualFixtureLocalCoreBridge(now: now);
     await tester.pumpWidget(_fixtureApp(bridge, const TaskListPage()));
     await tester.pumpAndSettle();
 
-    expect(find.text('提交本周项目进度总结'), findsOneWidget);
-    expect(find.text('回复积压的三封重要邮件'), findsOneWidget);
+    final first = find.text('提交本周项目进度总结');
+    final second = find.text('确认明天上午的体检预约和需要空腹的项目');
+    expect(first, findsOneWidget);
+    expect(second, findsOneWidget);
+    expect(tester.getTopLeft(second).dy - tester.getTopLeft(first).dy, lessThan(90));
+    expect(find.textContaining('urgent'), findsNothing);
+    expect(find.textContaining('紧急'), findsWidgets);
+  });
+
+  testWidgets('visual fixture bridge renders compact ledger rows without source diagnostics', (
+    tester,
+  ) async {
+    await _usePhoneViewport(tester);
+    final bridge = VisualFixtureLocalCoreBridge(now: now);
+    await tester.pumpWidget(_fixtureApp(bridge, const LedgerListPage()));
+    await tester.pumpAndSettle();
+
+    final first = find.text('社区咖啡店');
+    final second = find.text('地铁');
+    expect(first, findsOneWidget);
+    expect(second, findsOneWidget);
+    expect(tester.getTopLeft(second).dy - tester.getTopLeft(first).dy, lessThan(74));
+    expect(find.textContaining('local'), findsNothing);
   });
 
   test('visual fixture bridge drives a populated home overview', () async {
@@ -133,7 +162,18 @@ void main() {
     expect(overview.recentActivity, isNotEmpty);
     expect(overview.financeOverview.monthExpense, greaterThan(0));
     expect(overview.financeOverview.monthIncome, greaterThan(0));
+    expect(overview.financeOverview.categoryBreakdown, isNotEmpty);
+    expect(
+      overview.financeOverview.categoryBreakdown.first.categoryName,
+      isNot('未分类'),
+    );
   });
+}
+
+Future<void> _usePhoneViewport(WidgetTester tester) async {
+  tester.view.devicePixelRatio = 1;
+  tester.view.physicalSize = const Size(390, 844);
+  addTearDown(tester.view.reset);
 }
 
 Widget _fixtureApp(LocalCoreBridge bridge, Widget home) {

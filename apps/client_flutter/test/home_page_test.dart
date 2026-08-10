@@ -50,6 +50,8 @@ void main() {
     expect(find.byKey(const Key('home_focus_topbar')), findsOneWidget);
     expect(find.text('先处理这 2 件事'), findsOneWidget);
     expect(find.text('确认 Web 首页布局'), findsWidgets);
+    expect(find.text('任务已逾期'), findsNothing);
+    expect(find.text('需要优先处理'), findsNothing);
     expect(find.text('餐饮'), findsOneWidget);
     expect(find.textContaining('支出接近预算上限'), findsOneWidget);
     expect(find.text('更新 Web 信息架构'), findsOneWidget);
@@ -69,6 +71,29 @@ void main() {
     expect(find.text('本月收支'), findsOneWidget);
     expect(find.byKey(const Key('home_focus_agenda')), findsOneWidget);
   });
+
+  testWidgets('Phone home avoids repeating generic overdue diagnostics', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+
+    await tester.pumpWidget(_testPhoneApp(_overview()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('确认 Web 首页布局'), findsOneWidget);
+    expect(find.text('任务已逾期'), findsNothing);
+    expect(find.text('已逾期'), findsOneWidget);
+  });
+}
+
+Widget _testPhoneApp(HomeOverview overview) {
+  final theme = LiflyCoreTheme.tokens.buildTheme(
+    Brightness.light,
+    platformProfile: ThemePlatformProfile.defaults(ThemeTargetPlatform.phone),
+  );
+  return MaterialApp(
+    theme: theme,
+    home: HomePage(loadOverview: (_) async => overview),
+  );
 }
 
 Widget _testApp(HomeOverview overview) {
@@ -144,7 +169,7 @@ HomeOverview _overview() {
         type: 'task_overdue',
         level: 'critical',
         title: '确认 Web 首页布局',
-        description: '产品设计评审已经逾期。',
+        description: '任务已逾期',
         entityType: 'task',
         entityId: 'task-1',
         occurredAt: now.subtract(const Duration(hours: 2)),

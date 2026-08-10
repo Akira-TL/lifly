@@ -195,9 +195,7 @@ class _FocusTimelineRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    item.description?.trim().isNotEmpty == true
-                        ? item.description!.trim()
-                        : _focusTypeLabel(item.type),
+                    _focusItemDetail(item),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.labelSmall?.copyWith(

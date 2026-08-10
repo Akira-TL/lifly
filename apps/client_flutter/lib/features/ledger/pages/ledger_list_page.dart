@@ -5,6 +5,7 @@ import 'package:client_flutter/data/repositories/ledger_repository.dart';
 import 'package:client_flutter/domain/entities/ledger_transaction.dart';
 import 'package:client_flutter/features/ledger/pages/ledger_detail_page.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
+import 'package:client_flutter/shared/widgets/dense_list_row.dart';
 import 'package:client_flutter/shared/widgets/list_filter_bar.dart';
 import 'package:client_flutter/shared/widgets/pagination_footer.dart';
 import 'package:flutter/material.dart';
@@ -178,30 +179,33 @@ class _LedgerListPageState extends State<LedgerListPage> {
               child: ListView(
                 controller: _scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 96),
                 children: [
-                  _SummaryCard(summary: _summary),
-                  const SizedBox(height: 12),
-                  ..._items.map(
-                    (tx) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _LedgerTile(
-                        transaction: tx,
-                        onTap: () async {
-                          await Navigator.push<bool>(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => LedgerDetailPage(
-                                transactionId: tx.id,
-                                initialTransaction: tx,
-                              ),
+                  _LedgerSummaryStrip(summary: _summary),
+                  const SizedBox(height: 6),
+                  for (var index = 0; index < _items.length; index++) ...[
+                    _LedgerTile(
+                      transaction: _items[index],
+                      onTap: () async {
+                        final tx = _items[index];
+                        await Navigator.push<bool>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => LedgerDetailPage(
+                              transactionId: tx.id,
+                              initialTransaction: tx,
                             ),
-                          );
-                          if (context.mounted) await _loadFirstPage();
-                        },
-                      ),
+                          ),
+                        );
+                        if (context.mounted) await _loadFirstPage();
+                      },
                     ),
-                  ),
+                    if (index != _items.length - 1)
+                      Divider(
+                        height: 1,
+                        color: Theme.of(context).colorScheme.outlineVariant,
+                      ),
+                  ],
                   PaginationFooter(
                     total: _total,
                     current: _items.length,
@@ -254,10 +258,10 @@ class _LedgerFilterBar extends StatelessWidget {
   }
 }
 
-class _SummaryCard extends StatelessWidget {
+class _LedgerSummaryStrip extends StatelessWidget {
   final Map<String, dynamic> summary;
 
-  const _SummaryCard({required this.summary});
+  const _LedgerSummaryStrip({required this.summary});
 
   @override
   Widget build(BuildContext context) {
@@ -267,9 +271,15 @@ class _SummaryCard extends StatelessWidget {
         ? (summary['transaction_count'] as num).toInt()
         : 0;
 
-    return Card(
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.symmetric(
+          horizontal: BorderSide(color: theme.colorScheme.outlineVariant),
+        ),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
         child: Row(
           children: [
             Expanded(
@@ -290,7 +300,7 @@ class _SummaryCard extends StatelessWidget {
               child: _SummaryMetric(
                 label: '笔数',
                 value: count.toString(),
-                color: Theme.of(context).colorScheme.primary,
+                color: theme.colorScheme.primary,
               ),
             ),
           ],
@@ -346,33 +356,27 @@ class _LedgerTile extends StatelessWidget {
       'MM/dd HH:mm',
     ).format(transaction.occurredAt.toLocal());
 
-    return Card(
-      child: ListTile(
-        onTap: onTap,
-        leading: CircleAvatar(
-          backgroundColor: color.withAlpha(30),
-          child: Icon(
-            isExpense ? Icons.shopping_bag_outlined : Icons.attach_money,
-            color: color,
-          ),
-        ),
-        title: Text(
-          transaction.merchant ?? transaction.note ?? '未知交易',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Text(
-          [
-            if (transaction.note != null) transaction.note!,
-            dateLabel,
-            transaction.source,
-          ].join(' · '),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: Text(
-          transaction.amountText,
-          style: TextStyle(color: color, fontWeight: FontWeight.bold),
+    final note = transaction.note?.trim();
+    return DenseListRow(
+      onTap: onTap,
+      minHeight: 56,
+      accentColor: color,
+      title: Text(
+        transaction.merchant ?? note ?? '未知交易',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        [if (note?.isNotEmpty == true) note!, dateLabel].join(' · '),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: Text(
+        transaction.amountText,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w700,
+          fontFeatures: const [FontFeature.tabularFigures()],
         ),
       ),
     );

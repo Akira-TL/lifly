@@ -5,6 +5,7 @@ import 'package:client_flutter/data/repositories/task_repository.dart';
 import 'package:client_flutter/domain/entities/task.dart';
 import 'package:client_flutter/features/task/pages/task_detail_page.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
+import 'package:client_flutter/shared/widgets/dense_list_row.dart';
 import 'package:client_flutter/shared/widgets/list_filter_bar.dart';
 import 'package:client_flutter/shared/widgets/pagination_footer.dart';
 import 'package:flutter/material.dart';
@@ -185,9 +186,12 @@ class _TaskListPageState extends State<TaskListPage> {
               child: ListView.separated(
                 controller: _scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 96),
                 itemCount: _items.length + 1,
-                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                separatorBuilder: (context, index) => Divider(
+                  height: 1,
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
                 itemBuilder: (context, index) {
                   if (index == _items.length) {
                     return PaginationFooter(
@@ -277,58 +281,69 @@ class _TaskTile extends StatelessWidget {
     final dueLabel = task.dueAt == null
         ? null
         : DateFormat('MM/dd HH:mm').format(task.dueAt!.toLocal());
-    final statusLabel = task.isDone
-        ? '已完成'
-        : task.isOverdue
-        ? '已逾期'
-        : '进行中';
+    final statusLabel = _taskStatusLabel(task);
     final statusColor = task.isDone
         ? Colors.green
         : task.isOverdue
         ? theme.colorScheme.error
         : theme.colorScheme.primary;
 
-    return Card(
-      child: ListTile(
-        onTap: onTap,
-        leading: CircleAvatar(
-          backgroundColor: statusColor.withAlpha(24),
-          child: Icon(
-            task.isDone ? Icons.done : Icons.check_circle_outline,
-            color: statusColor,
-          ),
-        ),
-        title: Text(
-          task.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: task.isDone
-              ? const TextStyle(decoration: TextDecoration.lineThrough)
-              : null,
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (task.description != null && task.description!.isNotEmpty)
-              Text(
-                task.description!,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            const SizedBox(height: 4),
-            Text(
-              [statusLabel, task.priority, ?dueLabel].join(' · '),
-              style: theme.textTheme.bodySmall,
-            ),
-          ],
-        ),
-        trailing: Checkbox(
+    final metadata = [
+      statusLabel,
+      _taskPriorityLabel(task.priority),
+      ?dueLabel,
+    ].join(' · ');
+
+    return DenseListRow(
+      onTap: onTap,
+      minHeight: 70,
+      accentColor: statusColor,
+      title: Text(
+        task.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: task.isDone
+            ? const TextStyle(decoration: TextDecoration.lineThrough)
+            : null,
+      ),
+      subtitle: task.description?.trim().isNotEmpty == true
+          ? Text(
+              task.description!.trim(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            )
+          : null,
+      metadata: Text(metadata, maxLines: 1, overflow: TextOverflow.ellipsis),
+      trailing: SizedBox(
+        width: 48,
+        height: 48,
+        child: Checkbox(
           value: task.isDone,
+          visualDensity: VisualDensity.compact,
           onChanged: task.isDone ? null : (_) => onComplete(),
         ),
       ),
     );
   }
+}
+
+String _taskStatusLabel(Task task) {
+  if (task.isDone) return '已完成';
+  if (task.isOverdue) return '已逾期';
+  return switch (task.taskStatus) {
+    'doing' => '进行中',
+    'cancelled' => '已取消',
+    _ => '待办',
+  };
+}
+
+String _taskPriorityLabel(String priority) {
+  return switch (priority) {
+    'urgent' => '紧急',
+    'high' => '高优先级',
+    'low' => '低优先级',
+    _ => '普通',
+  };
 }
 
 class _TaskDraft {

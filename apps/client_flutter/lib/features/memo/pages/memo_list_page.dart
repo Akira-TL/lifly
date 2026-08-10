@@ -5,6 +5,7 @@ import 'package:client_flutter/data/repositories/memo_repository.dart';
 import 'package:client_flutter/domain/entities/memo.dart';
 import 'package:client_flutter/features/memo/pages/memo_detail_page.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
+import 'package:client_flutter/shared/widgets/dense_list_row.dart';
 import 'package:client_flutter/shared/widgets/list_filter_bar.dart';
 import 'package:client_flutter/shared/widgets/pagination_footer.dart';
 import 'package:flutter/material.dart';
@@ -179,9 +180,12 @@ class _MemoListPageState extends State<MemoListPage> {
               child: ListView.separated(
                 controller: _scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 96),
                 itemCount: _items.length + 1,
-                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                separatorBuilder: (context, index) => Divider(
+                  height: 1,
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
                 itemBuilder: (context, index) {
                   if (index == _items.length) {
                     return PaginationFooter(
@@ -302,42 +306,43 @@ class _MemoTile extends StatelessWidget {
         : memo.displayTitle.trim();
     final content = memo.contentMarkdown.trim();
 
-    return Card(
-      child: ListTile(
-        onTap: onTap,
-        leading: CircleAvatar(
-          backgroundColor: theme.colorScheme.primary.withAlpha(24),
-          child: Icon(Icons.note_outlined, color: theme.colorScheme.primary),
-        ),
-        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (content.isNotEmpty && content != title)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  content,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            const SizedBox(height: 4),
-            Text(createdAt, style: theme.textTheme.bodySmall),
-          ],
-        ),
-        trailing: memo.tags == null || memo.tags!.isEmpty
-            ? null
-            : Chip(
-                label: Text(
-                  memo.tags!.first,
-                  style: const TextStyle(fontSize: 12),
-                ),
-                visualDensity: VisualDensity.compact,
-              ),
-      ),
+    final tags = memo.tags ?? const <String>[];
+    final metadata = [
+      _memoTypeLabel(memo.type),
+      if (tags.isNotEmpty) tags.first,
+      if (tags.length > 1) '+${tags.length - 1}',
+      createdAt,
+    ].join(' · ');
+
+    return DenseListRow(
+      onTap: onTap,
+      minHeight: 68,
+      accentColor: _memoTypeColor(memo.type, theme.colorScheme),
+      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: content.isNotEmpty && content != title
+          ? Text(content, maxLines: 1, overflow: TextOverflow.ellipsis)
+          : null,
+      metadata: Text(metadata, maxLines: 1, overflow: TextOverflow.ellipsis),
     );
   }
+}
+
+String _memoTypeLabel(String type) {
+  return switch (type) {
+    'journal' => '日记',
+    'clip' => '剪藏',
+    'doc' => '文档',
+    _ => '备忘',
+  };
+}
+
+Color _memoTypeColor(String type, ColorScheme colorScheme) {
+  return switch (type) {
+    'journal' => colorScheme.tertiary,
+    'clip' => colorScheme.secondary,
+    'doc' => colorScheme.outline,
+    _ => colorScheme.primary,
+  };
 }
 
 class _MemoDraft {
