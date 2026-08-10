@@ -4,6 +4,7 @@ import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/repositories/memo_repository.dart';
 import 'package:client_flutter/domain/entities/memo.dart';
 import 'package:client_flutter/features/memo/pages/memo_detail_page.dart';
+import 'package:client_flutter/shared/widgets/adaptive_action_fab.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
 import 'package:client_flutter/shared/widgets/dense_list_row.dart';
 import 'package:client_flutter/shared/widgets/list_filter_bar.dart';
@@ -258,17 +259,13 @@ class _MemoListPageState extends State<MemoListPage> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: AdaptiveActionFab(
         heroTag: 'memo-create-fab',
+        tooltip: '新建备忘',
+        label: '新建',
+        icon: Icons.add,
+        isLoading: _isCreating,
         onPressed: _isCreating ? null : _createMemo,
-        icon: _isCreating
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.add),
-        label: const Text('新建'),
       ),
     );
   }

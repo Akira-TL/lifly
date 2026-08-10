@@ -4,6 +4,7 @@ import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/repositories/ledger_repository.dart';
 import 'package:client_flutter/domain/entities/ledger_transaction.dart';
 import 'package:client_flutter/features/ledger/pages/ledger_detail_page.dart';
+import 'package:client_flutter/shared/widgets/adaptive_action_fab.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
 import 'package:client_flutter/shared/widgets/dense_list_row.dart';
 import 'package:client_flutter/shared/widgets/list_filter_bar.dart';
@@ -219,17 +220,13 @@ class _LedgerListPageState extends State<LedgerListPage> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: AdaptiveActionFab(
         heroTag: 'ledger-create-fab',
+        tooltip: '记一笔',
+        label: '记一笔',
+        icon: Icons.add,
+        isLoading: _isCreating,
         onPressed: _isCreating ? null : _createTransaction,
-        icon: _isCreating
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.add),
-        label: const Text('记一笔'),
       ),
     );
   }

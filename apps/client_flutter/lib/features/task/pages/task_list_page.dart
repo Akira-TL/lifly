@@ -4,6 +4,7 @@ import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/repositories/task_repository.dart';
 import 'package:client_flutter/domain/entities/task.dart';
 import 'package:client_flutter/features/task/pages/task_detail_page.dart';
+import 'package:client_flutter/shared/widgets/adaptive_action_fab.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
 import 'package:client_flutter/shared/widgets/dense_list_row.dart';
 import 'package:client_flutter/shared/widgets/list_filter_bar.dart';
@@ -224,17 +225,13 @@ class _TaskListPageState extends State<TaskListPage> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: AdaptiveActionFab(
         heroTag: 'task-create-fab',
+        tooltip: '新建任务',
+        label: '新建',
+        icon: Icons.add,
+        isLoading: _isCreating,
         onPressed: _isCreating ? null : _createTask,
-        icon: _isCreating
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.add),
-        label: const Text('新建'),
       ),
     );
   }
