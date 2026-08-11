@@ -15,6 +15,16 @@ from app.modules.tasks.time_reasoning import (
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+    try:
+        return _execute(args)
+    except ValueError as exc:
+        _print_json({"valid": False, "errors": [str(exc)]})
+        return 0
+
+
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="lifly-task-time")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -23,7 +33,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     inspect_parser = subparsers.add_parser("inspect")
     _add_time_arguments(inspect_parser)
 
-    sum_parser = subparsers.add_parser("sum")
+    sum_parser = subparsers.add_parser("sum-durations")
     sum_parser.add_argument("--seconds", type=int, nargs="+", required=True)
 
     validate_parser = subparsers.add_parser("validate")
@@ -32,13 +42,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     validate_parser.add_argument("--urgent-lead-seconds", type=int)
     validate_parser.add_argument("--super-urgent-lead-seconds", type=int)
     validate_parser.add_argument("--minimum-urgent-lead-seconds", type=int)
+    return parser
 
-    args = parser.parse_args(argv)
 
+def _execute(args: argparse.Namespace) -> int:
     if args.command == "contract":
         _print_json(task_time_ai_contract())
         return 0
-    if args.command == "sum":
+    if args.command == "sum-durations":
         parts = list(args.seconds)
         _print_json(
             {

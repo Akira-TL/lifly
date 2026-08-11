@@ -174,7 +174,7 @@ class LocalTaskTimeReasoning {
         '精确时间计算必须使用 time_facts，不得由模型自行做日期或时区算术。',
         '模型只估计重要性以及两个提前量，提前量统一使用整数秒。',
         '任务文本包含明确时长时，必须先用 sum_durations 做精确加总，并把结果作为最小紧急提前量交给 validate。',
-        '模型输出后必须调用 timing_validation；校验失败时修正输出，禁止绕过校验。',
+        '模型输出后必须调用 validate；校验失败时修正输出，禁止绕过校验。',
         '无截止时间任务的两个提前量必须为 null。',
       ],
       'proposal_fields': const [

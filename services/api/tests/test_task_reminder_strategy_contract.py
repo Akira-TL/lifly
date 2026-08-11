@@ -320,11 +320,21 @@ def test_time_reasoning_cli_inspects_and_validates_without_model_math(
     assert inspected["is_overdue"] is False
 
     exit_code = time_reasoning_cli_main(
-        ["sum", "--seconds", "2400", "1200"]
+        ["sum-durations", "--seconds", "2400", "1200"]
     )
     summed = json.loads(capsys.readouterr().out)
     assert exit_code == 0
     assert summed["total_seconds"] == 3600
+
+    exit_code = time_reasoning_cli_main(
+        ["sum-durations", "--seconds", "-1"]
+    )
+    rejected_sum = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert rejected_sum == {
+        "valid": False,
+        "errors": ["精确时长必须是非负整数秒"],
+    }
 
     exit_code = time_reasoning_cli_main(
         [
