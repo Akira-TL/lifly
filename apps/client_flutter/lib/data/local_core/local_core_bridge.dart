@@ -61,6 +61,10 @@ abstract class LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   );
+  Future<LocalLedgerTransactionRecord> updateExpense(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
   Future<List<LocalLedgerTransactionRecord>> searchExpenses(
     Map<String, Object?> input,
     LocalCoreContext context,

@@ -50,6 +50,22 @@ void main() {
       expect(expense.revision, 1);
       expect(income.revision, 1);
 
+      final updatedExpense = await bridge.updateExpense({
+        'transaction_id': expense.id,
+        'direction': 'expense',
+        'amount': 18.75,
+        'currency': 'CNY',
+        'merchant': 'Updated Merchant',
+        'note': 'updated locally',
+        'occurred_at': '2026-07-01T08:30:00.000Z',
+      }, LocalCoreContext.flutterUser(now: DateTime.utc(2026, 7, 1, 11)));
+      expect(updatedExpense.id, expense.id);
+      expect(updatedExpense.amount, 18.75);
+      expect(updatedExpense.merchant, 'Updated Merchant');
+      expect(updatedExpense.note, 'updated locally');
+      expect(updatedExpense.occurredAt, DateTime.utc(2026, 7, 1, 8, 30));
+      expect(updatedExpense.revision, 2);
+
       final results = await bridge.searchExpenses({
         'q': 'merchant',
         'limit': 20,
@@ -59,7 +75,7 @@ void main() {
       final summary = await bridge.summarizeExpenses({
         'period': 'current_month',
       }, context);
-      expect(summary.totalExpense, 12.5);
+      expect(summary.totalExpense, 18.75);
       expect(summary.totalIncome, 30);
       expect(summary.count, 2);
 
@@ -67,7 +83,7 @@ void main() {
         'transaction_id': expense.id,
       }, context);
       expect(deleted.status, 'deleted');
-      expect(deleted.revision, 2);
+      expect(deleted.revision, 3);
 
       final afterDelete = await bridge.searchExpenses({
         'q': 'merchant',
@@ -85,7 +101,7 @@ void main() {
       final auditCount = await service.db.get(
         'SELECT count(*) AS count FROM audit_logs',
       );
-      expect(auditCount['count'], 3);
+      expect(auditCount['count'], 4);
     },
   );
 

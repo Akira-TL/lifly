@@ -111,9 +111,11 @@ class LedgerRepository {
 
   Future<LedgerTransaction> update(String id, Map<String, dynamic> data) async {
     if (_useLocalCore) {
-      throw UnsupportedError(
-        'Local Core expense update is not available in v0.2.6.',
-      );
+      final record = await localCore!.updateExpense({
+        ...data,
+        'transaction_id': id,
+      }, LocalCoreContext.flutterUser());
+      return _transactionFromLocal(record);
     }
 
     final res = await api.put('/ledger/transactions/$id', data: data);

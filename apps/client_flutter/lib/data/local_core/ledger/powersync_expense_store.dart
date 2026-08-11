@@ -74,6 +74,65 @@ class PowerSyncExpenseStore {
     return tx;
   }
 
+  Future<LocalLedgerTransactionRecord> updateExpense(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final updateInput = LocalExpenseUpdateInput.fromMap(input);
+    late final LocalLedgerTransactionRecord updatedTx;
+
+    await LocalCoreWriteExecutor(syncService: syncService).run((handle) async {
+      final oldTx = await _findActiveExpense(handle, updateInput.transactionId);
+      if (oldTx == null) {
+        throw StateError('Expense not found: ${updateInput.transactionId}');
+      }
+      if (updateInput.hasOccurredAt && updateInput.occurredAt == null) {
+        throw ArgumentError('occurred_at is required when provided');
+      }
+
+      final metadata = policy.metadataForUpdate(
+        context,
+        currentRevision: oldTx.revision,
+        createdAt: oldTx.createdAt,
+      );
+      updatedTx = LocalLedgerTransactionRecord(
+        id: oldTx.id,
+        direction: updateInput.direction ?? oldTx.direction,
+        amount: updateInput.amount ?? oldTx.amount,
+        currency: (updateInput.currency ?? oldTx.currency).toUpperCase(),
+        merchant: updateInput.hasMerchant
+            ? updateInput.merchant
+            : oldTx.merchant,
+        note: updateInput.hasNote ? updateInput.note : oldTx.note,
+        categoryId: updateInput.hasCategoryId
+            ? updateInput.categoryId
+            : oldTx.categoryId,
+        occurredAt: updateInput.hasOccurredAt
+            ? updateInput.occurredAt!
+            : oldTx.occurredAt,
+        status: oldTx.status,
+        revision: metadata.revision,
+        createdAt: oldTx.createdAt,
+        updatedAt: metadata.timestamps.updatedAt,
+      );
+
+      await _updateExpense(handle, updatedTx, metadata);
+      await auditLogWriter.write(
+        handle,
+        LocalCoreAuditLogInput(
+          context: context,
+          action: 'expense.update',
+          entityType: 'expense',
+          entityId: updatedTx.id,
+          beforeSnapshot: LocalExpenseMapper.snapshot(oldTx),
+          afterSnapshot: LocalExpenseMapper.snapshot(updatedTx),
+        ),
+      );
+    });
+
+    return updatedTx;
+  }
+
   Future<List<LocalLedgerTransactionRecord>> searchExpenses(
     Map<String, Object?> input,
     LocalCoreContext context,
@@ -243,10 +302,14 @@ class PowerSyncExpenseStore {
     if (periodType != 'month') {
       throw ArgumentError('period_type must be month');
     }
-    final periodKey = _budgetPeriodKey(input['period_key'], context.effectiveNow);
+    final periodKey = _budgetPeriodKey(
+      input['period_key'],
+      context.effectiveNow,
+    );
     final categoryId = _optionalString(input['category_id']);
     final amount = _positiveDouble(input['amount'], 'amount');
-    final currency = (_optionalString(input['currency']) ?? 'CNY').toUpperCase();
+    final currency = (_optionalString(input['currency']) ?? 'CNY')
+        .toUpperCase();
     final alertThreshold = _threshold(input['alert_threshold'], fallback: 0.8);
     final metadata = policy.metadataForCreate(context);
     final budget = LocalLedgerBudget(
@@ -584,6 +647,31 @@ class PowerSyncExpenseStore {
     );
   }
 
+  Future<void> _updateExpense(
+    LocalCoreWriteHandle handle,
+    LocalLedgerTransactionRecord tx,
+    LocalCoreWriteMetadata metadata,
+  ) async {
+    await handle.execute(
+      'UPDATE ledger_transactions SET direction = ?, amount = ?, currency = ?, '
+      'merchant = ?, note = ?, category_id = ?, occurred_at = ?, updated_at = ?, revision = ? '
+      'WHERE id = ? AND status = ?',
+      [
+        tx.direction,
+        tx.amount,
+        tx.currency,
+        tx.merchant,
+        tx.note,
+        tx.categoryId,
+        tx.occurredAt.toIso8601String(),
+        metadata.timestamps.updatedAtIso,
+        metadata.revision,
+        tx.id,
+        'active',
+      ],
+    );
+  }
+
   Future<void> _softDeleteExpense(
     LocalCoreWriteHandle handle,
     LocalLedgerTransactionRecord tx,
@@ -736,7 +824,9 @@ class PowerSyncExpenseStore {
   double? _threshold(Object? value, {double? fallback}) {
     if (value == null) return fallback;
     if (value is! num || value <= 0 || value > 1) {
-      throw ArgumentError('alert_threshold must be greater than zero and at most one');
+      throw ArgumentError(
+        'alert_threshold must be greater than zero and at most one',
+      );
     }
     return value.toDouble();
   }

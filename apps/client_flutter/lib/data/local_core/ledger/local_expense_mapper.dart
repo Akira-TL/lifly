@@ -36,6 +36,55 @@ class LocalExpenseCreateInput {
   }
 }
 
+class LocalExpenseUpdateInput {
+  final String transactionId;
+  final String? direction;
+  final double? amount;
+  final String? currency;
+  final String? merchant;
+  final String? note;
+  final String? categoryId;
+  final DateTime? occurredAt;
+  final bool hasMerchant;
+  final bool hasNote;
+  final bool hasCategoryId;
+  final bool hasOccurredAt;
+
+  const LocalExpenseUpdateInput({
+    required this.transactionId,
+    required this.direction,
+    required this.amount,
+    required this.currency,
+    required this.merchant,
+    required this.note,
+    required this.categoryId,
+    required this.occurredAt,
+    required this.hasMerchant,
+    required this.hasNote,
+    required this.hasCategoryId,
+    required this.hasOccurredAt,
+  });
+
+  factory LocalExpenseUpdateInput.fromMap(Map<String, Object?> input) {
+    return LocalExpenseUpdateInput(
+      transactionId: _readTransactionId(input),
+      direction: _readOptionalString(input, 'direction'),
+      amount: input.containsKey('amount')
+          ? _readPositiveAmount(input, 'amount')
+          : null,
+      currency: _readOptionalString(input, 'currency'),
+      merchant: _readOptionalString(input, 'merchant'),
+      note: _readOptionalString(input, 'note'),
+      categoryId: _readOptionalString(input, 'category_id'),
+      occurredAt: _readOptionalDateTime(input, 'occurred_at'),
+      hasMerchant: input.containsKey('merchant'),
+      hasNote: input.containsKey('note'),
+      hasCategoryId: input.containsKey('category_id'),
+      hasOccurredAt: input.containsKey('occurred_at'),
+    );
+  }
+}
+
 class LocalExpenseSearchInput {
   final String query;
   final int limit;

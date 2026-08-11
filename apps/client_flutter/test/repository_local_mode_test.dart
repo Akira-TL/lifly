@@ -184,10 +184,22 @@ void main() {
       'amount': 12.5,
       'merchant': 'Local Merchant',
     });
+    final updated = await repo.update(tx.id, {
+      'direction': 'expense',
+      'amount': 18.75,
+      'merchant': 'Updated Local Merchant',
+      'note': 'edited from detail page',
+      'occurred_at': tx.occurredAt.toUtc().toIso8601String(),
+    });
+    final reloaded = await repo.get(tx.id);
     final summary = await repo.summary();
 
     expect(tx.id, 'local_tx_0001');
-    expect(summary['expense_total'], 12.5);
+    expect(updated.amount, 18.75);
+    expect(updated.merchant, 'Updated Local Merchant');
+    expect(reloaded.amount, 18.75);
+    expect(reloaded.note, 'edited from detail page');
+    expect(summary['expense_total'], 18.75);
     expect(summary['transaction_count'], 1);
   });
 
@@ -619,7 +631,10 @@ void main() {
     expect(overview.financeOverview.monthExpense, 18.5);
     expect(overview.financeOverview.budgetAmount, 100);
     expect(overview.financeOverview.budgetProgress, 0.185);
-    expect(overview.financeOverview.categoryBreakdown.single.categoryName, '餐饮');
+    expect(
+      overview.financeOverview.categoryBreakdown.single.categoryName,
+      '餐饮',
+    );
     expect(overview.financeOverview.insights.single.id, 'budget_ok');
     expect(overview.dailyTrend.single.total, 18.5);
     expect(overview.recentActivity.single.entityType, 'ledger_transaction');

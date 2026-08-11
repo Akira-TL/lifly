@@ -218,6 +218,14 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
+  Future<LocalLedgerTransactionRecord> updateExpense(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _expenseStore.updateExpense(input, context);
+  }
+
+  @override
   Future<List<LocalLedgerTransactionRecord>> searchExpenses(
     Map<String, Object?> input,
     LocalCoreContext context,
@@ -507,7 +515,8 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
       "SUM(CASE WHEN sync_status = 'failed' AND status = 'active' THEN 1 ELSE 0 END) AS failed_count "
       'FROM assets',
     );
-    final error = status.downloadError?.toString() ??
+    final error =
+        status.downloadError?.toString() ??
         status.uploadError?.toString() ??
         uploadDiagnostics.lastError;
     final pendingAssetCount = _readInt(assetCounts['pending_count']);
@@ -526,8 +535,8 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
       status: failedAssetCount > 0
           ? 'error'
           : pendingAssetCount > 0 && syncStatus == 'synced'
-              ? 'pending'
-              : syncStatus,
+          ? 'pending'
+          : syncStatus,
       connected: status.connected,
       connecting: status.connecting,
       downloading: status.downloading,

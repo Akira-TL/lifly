@@ -27,6 +27,55 @@ mixin _FakeLedgerStore on _FakeLocalCoreState {
   }
 
   @override
+  Future<LocalLedgerTransactionRecord> updateExpense(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final transactionId =
+        input['transaction_id'] as String? ??
+        input['expense_id'] as String? ??
+        input['id'] as String?;
+    final index = _expenses.indexWhere(
+      (tx) => tx.id == transactionId && tx.status == 'active',
+    );
+    if (index < 0) throw StateError('Expense not found: $transactionId');
+
+    final old = _expenses[index];
+    final amount = input.containsKey('amount')
+        ? (input['amount'] as num?)?.toDouble()
+        : old.amount;
+    if (amount == null || amount <= 0) {
+      throw ArgumentError('amount must be greater than zero');
+    }
+    final occurredAt = input.containsKey('occurred_at')
+        ? DateTime.tryParse(input['occurred_at'] as String? ?? '')?.toUtc()
+        : old.occurredAt;
+    if (occurredAt == null) {
+      throw ArgumentError('occurred_at must be an ISO datetime');
+    }
+    final updated = LocalLedgerTransactionRecord(
+      id: old.id,
+      direction: input['direction'] as String? ?? old.direction,
+      amount: amount,
+      currency: (input['currency'] as String? ?? old.currency).toUpperCase(),
+      merchant: input.containsKey('merchant')
+          ? input['merchant'] as String?
+          : old.merchant,
+      note: input.containsKey('note') ? input['note'] as String? : old.note,
+      categoryId: input.containsKey('category_id')
+          ? input['category_id'] as String?
+          : old.categoryId,
+      occurredAt: occurredAt,
+      status: old.status,
+      revision: old.revision + 1,
+      createdAt: old.createdAt,
+      updatedAt: context.effectiveNow,
+    );
+    _expenses[index] = updated;
+    return updated;
+  }
+
+  @override
   Future<List<LocalLedgerTransactionRecord>> searchExpenses(
     Map<String, Object?> input,
     LocalCoreContext context,
@@ -38,7 +87,9 @@ mixin _FakeLedgerStore on _FakeLocalCoreState {
         .where(
           (tx) =>
               q.isEmpty ||
-              '${tx.merchant ?? ''}\n${tx.note ?? ''}'.toLowerCase().contains(q),
+              '${tx.merchant ?? ''}\n${tx.note ?? ''}'.toLowerCase().contains(
+                q,
+              ),
         )
         .take(limit)
         .toList();
@@ -92,8 +143,9 @@ mixin _FakeLedgerStore on _FakeLocalCoreState {
       budgetState: budget == null ? 'not_configured' : 'configured',
       budgetAmount: budget?.amount,
       budgetUsed: budget == null ? null : summary.totalExpense,
-      budgetProgress:
-          budget == null ? null : summary.totalExpense / budget.amount,
+      budgetProgress: budget == null
+          ? null
+          : summary.totalExpense / budget.amount,
       currency: budget?.currency ?? 'CNY',
     );
   }
@@ -240,7 +292,8 @@ mixin _FakeLedgerStore on _FakeLocalCoreState {
       );
     }
     final status = input['status'] as String? ?? old.status;
-    final duplicate = status == 'active' &&
+    final duplicate =
+        status == 'active' &&
         _ledgerBudgets.any(
           (item) =>
               item.id != old.id &&
