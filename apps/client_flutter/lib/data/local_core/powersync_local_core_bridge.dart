@@ -346,6 +346,14 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
+  Future<LocalTaskRecord> restoreTask(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _taskStore.restoreTask(input, context);
+  }
+
+  @override
   Future<LocalTaskReminderStrategy?> getTaskReminderStrategy(
     Map<String, Object?> input,
     LocalCoreContext context,

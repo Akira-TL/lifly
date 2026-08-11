@@ -379,6 +379,18 @@ class TaskRepository {
     await api.delete('/tasks/$id');
   }
 
+  Future<Task> restore(String id) async {
+    if (_useLocalCore) {
+      final record = await localCore!.restoreTask({
+        'task_id': id,
+      }, LocalCoreContext.flutterUser());
+      return _taskFromLocal(record);
+    }
+
+    await api.post('/trash/task/$id/restore', data: const {});
+    return get(id);
+  }
+
   Task _taskFromLocal(LocalTaskRecord record) {
     return Task(
       id: record.id,

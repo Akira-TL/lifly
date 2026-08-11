@@ -60,6 +60,81 @@ void main() {
 
     expect(completed.taskStatus, 'done');
     expect(page.items.map((item) => item.id), contains(task.id));
+
+    await repo.delete(task.id);
+    expect(
+      (await repo.listPage(taskStatus: 'done')).items.map((item) => item.id),
+      isNot(contains(task.id)),
+    );
+    final restored = await repo.restore(task.id);
+    expect(restored.taskStatus, 'done');
+    expect(
+      (await repo.listPage(taskStatus: 'done')).items.map((item) => item.id),
+      contains(task.id),
+    );
+  });
+
+  test('TaskRepository restores through the trash endpoint in api mode', () async {
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost/api/v1'));
+    final requests = <String>[];
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          requests.add('${options.method} ${options.path}');
+          if (options.method == 'POST') {
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                statusCode: 200,
+                data: {
+                  'success': true,
+                  'data': {
+                    'entity_type': 'task',
+                    'entity_id': 'cloud-task',
+                    'status': 'active',
+                    'revision': 3,
+                  },
+                },
+              ),
+            );
+            return;
+          }
+          handler.resolve(
+            Response(
+              requestOptions: options,
+              statusCode: 200,
+              data: {
+                'success': true,
+                'data': {
+                  'id': 'cloud-task',
+                  'title': '云端恢复任务',
+                  'description': null,
+                  'due_at': null,
+                  'remind_at': null,
+                  'priority': 'normal',
+                  'task_status': 'todo',
+                  'completed_at': null,
+                  'created_at': '2026-08-11T05:00:00Z',
+                },
+              },
+            ),
+          );
+        },
+      ),
+    );
+    final repo = TaskRepository(
+      ApiClient(baseUrl: 'http://localhost/api/v1', dio: dio),
+      localCore: localCore,
+      dataMode: LiflyDataMode.api,
+    );
+
+    final restored = await repo.restore('cloud-task');
+
+    expect(restored.title, '云端恢复任务');
+    expect(requests, [
+      'POST /trash/task/cloud-task/restore',
+      'GET /tasks/cloud-task',
+    ]);
   });
 
   test('TaskRepository handles reminder strategy boundaries locally', () async {

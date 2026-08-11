@@ -162,6 +162,36 @@ class _TaskListPageState extends State<TaskListPage> {
     }
   }
 
+  void _showDeleteUndo(String taskId) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: const Text('任务已删除'),
+        action: SnackBarAction(
+          label: '撤销',
+          onPressed: () => _restoreTask(taskId),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _restoreTask(String taskId) async {
+    try {
+      await _repo.restore(taskId);
+      await _loadFirstPage();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('任务已恢复')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('恢复任务失败：$error')));
+    }
+  }
+
   void _setTaskStatus(String? taskStatus) {
     if (_taskStatus == taskStatus) return;
     setState(() => _taskStatus = taskStatus);
@@ -210,16 +240,21 @@ class _TaskListPageState extends State<TaskListPage> {
                     task: _items[index],
                     onComplete: () => _completeTask(_items[index]),
                     onTap: () async {
-                      await Navigator.push<bool>(
+                      final task = _items[index];
+                      final deleted = await Navigator.push<bool>(
                         context,
                         MaterialPageRoute(
                           builder: (_) => TaskDetailPage(
-                            taskId: _items[index].id,
-                            initialTask: _items[index],
+                            taskId: task.id,
+                            initialTask: task,
                           ),
                         ),
                       );
-                      if (context.mounted) await _loadFirstPage();
+                      if (!context.mounted) return;
+                      await _loadFirstPage();
+                      if (deleted == true && context.mounted) {
+                        _showDeleteUndo(task.id);
+                      }
                     },
                   );
                 },

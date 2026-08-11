@@ -159,6 +159,57 @@ class PowerSyncTaskStore {
     return deletedTask;
   }
 
+  Future<LocalTaskRecord> restoreTask(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final taskId = input['task_id'] as String? ?? input['id'] as String?;
+    if (taskId == null || taskId.trim().isEmpty) {
+      throw ArgumentError('task_id is required');
+    }
+    late final LocalTaskRecord restoredTask;
+
+    await LocalCoreWriteExecutor(syncService: syncService).run((handle) async {
+      final oldTask = await _findTrashedTask(handle, taskId);
+      if (oldTask == null) {
+        throw StateError('Task not found in trash: $taskId');
+      }
+      final metadata = policy.metadataForUpdate(
+        context,
+        currentRevision: oldTask.revision,
+        createdAt: oldTask.createdAt,
+      );
+      restoredTask = LocalTaskRecord(
+        id: oldTask.id,
+        title: oldTask.title,
+        description: oldTask.description,
+        dueAt: oldTask.dueAt,
+        remindAt: oldTask.remindAt,
+        priority: oldTask.priority,
+        taskStatus: oldTask.taskStatus,
+        completedAt: oldTask.completedAt,
+        status: 'active',
+        revision: metadata.revision,
+        createdAt: oldTask.createdAt,
+        updatedAt: metadata.timestamps.updatedAt,
+      );
+      await _restoreTask(handle, restoredTask, metadata);
+      await auditLogWriter.write(
+        handle,
+        LocalCoreAuditLogInput(
+          context: context,
+          action: 'task.restore',
+          entityType: 'task',
+          entityId: restoredTask.id,
+          beforeSnapshot: LocalTaskMapper.snapshot(oldTask),
+          afterSnapshot: LocalTaskMapper.snapshot(restoredTask),
+        ),
+      );
+    });
+
+    return restoredTask;
+  }
+
   Future<LocalTaskRecord> completeTask(
     Map<String, Object?> input,
     LocalCoreContext context,

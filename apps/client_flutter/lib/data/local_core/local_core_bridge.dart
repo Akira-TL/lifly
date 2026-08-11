@@ -126,6 +126,10 @@ abstract class LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   );
+  Future<LocalTaskRecord> restoreTask(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
   Future<LocalTaskReminderStrategy?> getTaskReminderStrategy(
     Map<String, Object?> input,
     LocalCoreContext context,

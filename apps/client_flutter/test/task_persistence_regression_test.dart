@@ -104,12 +104,46 @@ void main() {
       expect(deletedRow['task_status'], 'done');
       expect(deletedRow['completed_at'], isNotNull);
 
-      final auditCount = await fourthService.db.get(
-        'SELECT count(*) AS count FROM audit_logs WHERE entity_type = ? AND entity_id = ?',
+      final restored = await fourthBridge.restoreTask({
+        'task_id': task.id,
+      }, context);
+      expect(restored.status, 'active');
+      expect(restored.revision, 5);
+
+      final visibleAfterRestore = await fourthBridge.listTasks({
+        'task_status': 'done',
+        'limit': 20,
+      }, context);
+      expect(visibleAfterRestore.map((item) => item.id), contains(task.id));
+
+      final restoredRow = await fourthService.db.get(
+        'SELECT status, revision, deleted_at FROM tasks WHERE id = ?',
+        [task.id],
+      );
+      expect(restoredRow['status'], 'active');
+      expect(restoredRow['revision'], 5);
+      expect(restoredRow['deleted_at'], isNull);
+
+      final auditRows = await fourthService.db.getAll(
+        'SELECT action FROM audit_logs WHERE entity_type = ? AND entity_id = ? ORDER BY created_at',
         ['task', task.id],
       );
-      expect(auditCount['count'], 4);
+      expect(auditRows, hasLength(5));
+      expect(auditRows.last['action'], 'task.restore');
       fourthService.dispose();
+
+      final fifthService = await harness.openService();
+      expect(fifthService, isNotNull);
+      final fifthBridge = PowerSyncLocalCoreBridge(syncService: fifthService!);
+      final visibleAfterRestoreRestart = await fifthBridge.listTasks({
+        'task_status': 'done',
+        'limit': 20,
+      }, context);
+      expect(
+        visibleAfterRestoreRestart.map((item) => item.id),
+        contains(task.id),
+      );
+      fifthService.dispose();
     },
   );
 }

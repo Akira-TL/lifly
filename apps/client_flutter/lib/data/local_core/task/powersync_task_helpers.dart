@@ -295,6 +295,19 @@ Future<LocalTaskRecord?> _findActiveTask(
   return row == null ? null : LocalTaskMapper.fromRow(row);
 }
 
+Future<LocalTaskRecord?> _findTrashedTask(
+  LocalCoreWriteHandle handle,
+  String taskId,
+) async {
+  final row = await handle.getOptional(
+    'SELECT id, title, description, due_at, remind_at, priority, task_status, '
+    'completed_at, status, revision, created_at, updated_at '
+    'FROM tasks WHERE id = ? AND status IN (?, ?)',
+    [taskId, 'user_trashed', 'ai_trashed'],
+  );
+  return row == null ? null : LocalTaskMapper.fromRow(row);
+}
+
 Future<void> _upsertTaskReminderRecord(
   SyncService syncService,
   LocalCoreWritePolicy policy,
@@ -393,6 +406,25 @@ Future<void> _softDeleteTask(
       metadata.revision,
       task.id,
       'active',
+    ],
+  );
+}
+
+Future<void> _restoreTask(
+  LocalCoreWriteHandle handle,
+  LocalTaskRecord task,
+  LocalCoreWriteMetadata metadata,
+) async {
+  await handle.execute(
+    'UPDATE tasks SET status = ?, deleted_at = NULL, updated_at = ?, revision = ? '
+    'WHERE id = ? AND status IN (?, ?)',
+    [
+      'active',
+      metadata.timestamps.updatedAtIso,
+      metadata.revision,
+      task.id,
+      'user_trashed',
+      'ai_trashed',
     ],
   );
 }

@@ -43,6 +43,38 @@ mixin _FakeTaskStore on _FakeLocalCoreState {
   }
 
   @override
+  Future<LocalTaskRecord> restoreTask(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final taskId = input['task_id'] as String? ?? input['id'] as String?;
+    final index = _tasks.indexWhere(
+      (task) =>
+          task.id == taskId &&
+          const {'user_trashed', 'ai_trashed'}.contains(task.status),
+    );
+    if (index < 0) throw StateError('Task not found in trash: $taskId');
+
+    final old = _tasks[index];
+    final restored = LocalTaskRecord(
+      id: old.id,
+      title: old.title,
+      description: old.description,
+      dueAt: old.dueAt,
+      remindAt: old.remindAt,
+      priority: old.priority,
+      taskStatus: old.taskStatus,
+      completedAt: old.completedAt,
+      status: 'active',
+      revision: old.revision + 1,
+      createdAt: old.createdAt,
+      updatedAt: context.effectiveNow,
+    );
+    _tasks[index] = restored;
+    return restored;
+  }
+
+  @override
   Future<LocalTaskRecord> completeTask(
     Map<String, Object?> input,
     LocalCoreContext context,
