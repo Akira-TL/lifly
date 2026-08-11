@@ -55,7 +55,7 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() => _health = health);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _diagnosticError = 'Health 检查失败：$error');
+      setState(() => _diagnosticError = '服务连接检查失败：$error');
     } finally {
       if (mounted) {
         setState(() => _checkingHealth = false);
@@ -76,7 +76,7 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() => _aiAuditSummary = summary);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _aiAuditError = 'AI audit check failed: $error');
+      setState(() => _aiAuditError = 'AI 操作记录检查失败：$error');
     } finally {
       if (mounted) {
         setState(() => _checkingAiAudit = false);
@@ -97,7 +97,7 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() => _smokeReport = report);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _diagnosticError = 'MCP smoke 检查失败：$error');
+      setState(() => _diagnosticError = '完整检查失败：$error');
     } finally {
       if (mounted) {
         setState(() => _runningSmoke = false);
@@ -121,7 +121,7 @@ class _SettingsPageState extends State<SettingsPage> {
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _localCoreError = 'Local Core 检查失败：$error');
+      setState(() => _localCoreError = '本地能力检查失败：$error');
     } finally {
       if (mounted) {
         setState(() => _checkingLocalCore = false);
@@ -174,7 +174,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _uploadDiagnostics = diagnostics.uploadDiagnostics;
         _powerSyncCredentialsError = diagnostics.error == null
             ? null
-            : 'PowerSync 连接失败：${diagnostics.error}';
+            : '数据同步连接失败：${diagnostics.error}';
       });
     } finally {
       if (mounted) {
@@ -198,7 +198,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _uploadDiagnostics = diagnostics.uploadDiagnostics;
         _powerSyncCredentialsError = diagnostics.error == null
             ? null
-            : 'PowerSync 断开失败：${diagnostics.error}';
+            : '数据同步断开失败：${diagnostics.error}';
       });
     } finally {
       if (mounted) {
@@ -298,7 +298,9 @@ class _ApiDiagnosticsCard extends StatelessWidget {
     final theme = Theme.of(context);
     final healthStatus = health == null
         ? '未检查'
-        : '${health!.status} / v${health!.version}${health!.port == null ? '' : ' / :${health!.port}'}';
+        : health!.status == 'ok'
+        ? '正常'
+        : health!.status;
     final smokeStatus = smokeReport == null
         ? '未运行'
         : '${smokeReport!.passedCount}/${smokeReport!.totalCount} ${smokeReport!.passed ? '通过' : '失败'}';
@@ -311,10 +313,10 @@ class _ApiDiagnosticsCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.api_outlined, color: theme.colorScheme.primary),
+                Icon(Icons.link_outlined, color: theme.colorScheme.primary),
                 const SizedBox(width: 8),
                 Text(
-                  '后端连接诊断',
+                  '服务连接',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -322,10 +324,10 @@ class _ApiDiagnosticsCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            SelectableText('API Base URL: $baseUrl'),
+            SelectableText('服务地址：$baseUrl'),
             const SizedBox(height: 8),
-            _StatusRow(label: 'Health', value: healthStatus),
-            _StatusRow(label: 'MCP Smoke', value: smokeStatus),
+            _StatusRow(label: '连接状态', value: healthStatus),
+            _StatusRow(label: '完整检查', value: smokeStatus),
             if (error != null) ...[
               const SizedBox(height: 8),
               Text(error!, style: TextStyle(color: theme.colorScheme.error)),
@@ -348,7 +350,7 @@ class _ApiDiagnosticsCard extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.monitor_heart_outlined),
-                  label: const Text('检查 Health'),
+                  label: const Text('检查连接'),
                 ),
                 OutlinedButton.icon(
                   onPressed: runningSmoke ? null : onRunMcpSmoke,
@@ -359,7 +361,7 @@ class _ApiDiagnosticsCard extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.play_circle_outline),
-                  label: const Text('运行 MCP Smoke'),
+                  label: const Text('运行完整检查'),
                 ),
               ],
             ),
@@ -398,8 +400,14 @@ class _DataModeCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _StatusRow(label: '当前模式', value: dataMode.label),
-            const _StatusRow(label: '切换方式', value: 'LIFLY_DATA_MODE=api|local'),
-            const _StatusRow(label: '本地范围', value: 'memo / task / expense'),
+            const _StatusRow(
+              label: '本地可用',
+              value: '备忘、任务、记账与 AI 对话',
+            ),
+            const _StatusRow(
+              label: '云端能力',
+              value: '跨端同步、导入与导出',
+            ),
           ],
         ),
       ),
@@ -437,7 +445,7 @@ class _AiAuditSummaryCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'AI 写入审计',
+                  'AI 操作记录',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -445,11 +453,11 @@ class _AiAuditSummaryCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            _StatusRow(label: 'AI 写入总数', value: '${summary?.total ?? 0}'),
+            _StatusRow(label: '操作总数', value: '${summary?.total ?? 0}'),
             if (summary != null && summary!.items.isNotEmpty)
               ...summary!.items.map(
                 (item) => _StatusRow(
-                  label: '${item.sourceChannel}/${item.toolName}',
+                  label: _aiAuditSourceLabel(item.sourceChannel),
                   value: '${item.count}',
                 ),
               ),
@@ -459,7 +467,7 @@ class _AiAuditSummaryCard extends StatelessWidget {
             ],
             const SizedBox(height: 8),
             Text(
-              '只展示聚合计数；具体 source_text 不在诊断页展示。',
+              '这里只展示聚合数量，不展示用户输入的原始内容。',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
@@ -472,13 +480,24 @@ class _AiAuditSummaryCard extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.refresh_outlined),
-              label: const Text('刷新 AI 审计'),
+              label: const Text('刷新记录'),
             ),
           ],
         ),
       ),
     );
   }
+}
+
+String _aiAuditSourceLabel(String sourceChannel) {
+  return switch (sourceChannel) {
+    'flutter' => '应用内',
+    'local_mcp' || 'localMcp' => '本地 AI',
+    'cloud_mcp' || 'cloudMcp' => '云端 AI',
+    'import' => '导入',
+    'system' => '系统',
+    _ => '其他',
+  };
 }
 
 class _PowerSyncCredentialsCard extends StatelessWidget {
@@ -531,7 +550,7 @@ class _PowerSyncCredentialsCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '同步凭据 / PowerSync',
+                  '数据同步',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -540,16 +559,16 @@ class _PowerSyncCredentialsCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _StatusRow(
-              label: 'Endpoint',
+              label: '服务地址',
               value: credentials?.endpoint ?? '未检查',
             ),
-            _StatusRow(label: 'User', value: credentials?.userId ?? '未检查'),
+            _StatusRow(label: '账户', value: credentials?.userId ?? '未检查'),
             _StatusRow(
-              label: 'Token',
+              label: '授权状态',
               value: credentials?.tokenStatus ?? '未获取',
             ),
-            _StatusRow(label: 'Mode', value: credentials?.mode ?? '未检查'),
-            if (expiresAt != null) _StatusRow(label: '过期时间', value: expiresAt),
+            if (expiresAt != null)
+              _StatusRow(label: '授权有效期', value: expiresAt),
             _StatusRow(label: '连接状态', value: connectionDiagnostics.statusLabel),
             if (connectedAt != null)
               _StatusRow(label: '连接时间', value: connectedAt),
@@ -562,19 +581,19 @@ class _PowerSyncCredentialsCard extends StatelessWidget {
                   '${uploadDiagnostics.uploadedChanges} 条业务 / ${uploadDiagnostics.ignoredChanges} 条忽略',
             ),
             _StatusRow(
-              label: '云端应用',
+              label: '云端处理',
               value:
-                  '${uploadDiagnostics.applied} applied / ${uploadDiagnostics.skipped} skipped',
+                  '已应用 ${uploadDiagnostics.applied} 条 / 已跳过 ${uploadDiagnostics.skipped} 条',
             ),
             if (uploadDiagnostics.lastError != null)
-              _StatusRow(label: '上传错误', value: uploadDiagnostics.lastError!),
+              _StatusRow(label: '同步错误', value: uploadDiagnostics.lastError!),
             if (error != null) ...[
               const SizedBox(height: 8),
               Text(error!, style: TextStyle(color: theme.colorScheme.error)),
             ],
             const SizedBox(height: 8),
             Text(
-              '0.3.4 已支持手动连接 PowerSync 并刷新 uploadData 诊断；token 明文不会在页面展示。',
+              '连接后会自动同步本地变更；授权信息只显示状态，不展示密钥内容。',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
@@ -591,7 +610,7 @@ class _PowerSyncCredentialsCard extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.cloud_sync_outlined),
-                  label: const Text('连接 PowerSync'),
+                  label: const Text('连接同步'),
                 ),
                 OutlinedButton.icon(
                   onPressed: checking ? null : onCheck,
@@ -602,7 +621,7 @@ class _PowerSyncCredentialsCard extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.refresh_outlined),
-                  label: const Text('刷新诊断'),
+                  label: const Text('刷新状态'),
                 ),
                 OutlinedButton.icon(
                   onPressed: disconnecting ? null : onDisconnect,
@@ -642,7 +661,9 @@ class _LocalMcpStatusCard extends StatelessWidget {
     final theme = Theme.of(context);
     final localCoreStatus = health == null
         ? '未检查'
-        : '${health!.status} / ${health!.mode} / v${health!.version}';
+        : health!.healthy
+        ? '正常'
+        : '异常';
     final checkedAt = health?.checkedAt?.toLocal().toIso8601String();
 
     return Card(
@@ -654,12 +675,12 @@ class _LocalMcpStatusCard extends StatelessWidget {
             Row(
               children: [
                 Icon(
-                  Icons.developer_board_outlined,
+                  Icons.offline_bolt_outlined,
                   color: theme.colorScheme.primary,
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '本地能力 / Local MCP',
+                  '本地能力',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -667,14 +688,15 @@ class _LocalMcpStatusCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            _StatusRow(label: '当前模式', value: health?.mode ?? '未检查'),
-            _StatusRow(label: 'Local Core', value: localCoreStatus),
+            _StatusRow(label: '运行状态', value: localCoreStatus),
             const _StatusRow(
-              label: 'Local MCP',
-              value: '桌面端 host 承载，手机/Web 不内置 Server',
+              label: '离线可用',
+              value: '备忘、任务、记账与 AI 对话',
             ),
-            _StatusRow(label: 'PowerSync', value: health?.detail ?? '未初始化'),
-            const _StatusRow(label: '离线写入', value: '0.2.2+ 启用'),
+            const _StatusRow(
+              label: '恢复联网',
+              value: '连接后继续同步本地变更',
+            ),
             if (checkedAt != null) _StatusRow(label: '检查时间', value: checkedAt),
             if (error != null) ...[
               const SizedBox(height: 8),
@@ -682,7 +704,7 @@ class _LocalMcpStatusCard extends StatelessWidget {
             ],
             const SizedBox(height: 8),
             Text(
-              '0.2.6 已支持 memo、task、expense 在本地模式下走 Local Core。',
+              '本地模式下可在断网时继续记录，恢复连接后再同步。',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
@@ -695,7 +717,7 @@ class _LocalMcpStatusCard extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.storage_outlined),
-              label: const Text('检查 Local Core'),
+              label: const Text('检查本地能力'),
             ),
           ],
         ),
