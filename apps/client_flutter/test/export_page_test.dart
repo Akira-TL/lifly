@@ -51,9 +51,15 @@ void main() {
     expect(find.text('导出预览'), findsOneWidget);
     expect(find.text('文件名：lifly-export-all.jsonl'), findsOneWidget);
     expect(find.text('大小：120 bytes'), findsOneWidget);
-    expect(find.text('Checksum：abc123'), findsOneWidget);
-    expect(find.text('memos：2'), findsOneWidget);
-    expect(find.text('tasks：1'), findsOneWidget);
+    expect(find.text('导出范围：全部数据'), findsOneWidget);
+    expect(find.text('文件类型：application/jsonl'), findsOneWidget);
+    expect(find.text('校验值：abc123'), findsOneWidget);
+    expect(find.text('格式版本：v0.6'), findsOneWidget);
+    expect(find.text('备忘：2'), findsOneWidget);
+    expect(find.text('任务：1'), findsOneWidget);
+    expect(find.textContaining('Checksum'), findsNothing);
+    expect(find.textContaining('Contract'), findsNothing);
+    expect(find.textContaining('memos：'), findsNothing);
     expect(find.textContaining('{"type":"memo"}'), findsOneWidget);
   });
 
@@ -84,10 +90,12 @@ void main() {
       expect(api.downloadCalls.single.path, '/export/stream');
       expect(api.downloadCalls.single.params, {'entity_type': 'all'});
       expect(find.text('下载完成'), findsOneWidget);
-      expect(find.text('下载字节数：4 bytes'), findsOneWidget);
+      expect(find.text('文件大小：4 bytes'), findsOneWidget);
       expect(find.text('文件名：lifly-export-all.jsonl'), findsOneWidget);
-      expect(find.text('Checksum：def456'), findsOneWidget);
-      expect(find.text('Contract：v0.6'), findsOneWidget);
+      expect(find.text('校验值：def456'), findsOneWidget);
+      expect(find.text('格式版本：v0.6'), findsOneWidget);
+      expect(find.textContaining('Checksum'), findsNothing);
+      expect(find.textContaining('Contract'), findsNothing);
     },
   );
 

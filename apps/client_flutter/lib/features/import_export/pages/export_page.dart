@@ -294,12 +294,15 @@ class _MetadataCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _DetailLine(label: '文件名', value: metadata.filename),
-            _DetailLine(label: '实体类型', value: metadata.entityType),
+            _DetailLine(
+              label: '导出范围',
+              value: _exportEntityLabel(metadata.entityType),
+            ),
             _DetailLine(label: '格式', value: metadata.format),
-            _DetailLine(label: 'Media Type', value: metadata.mediaType),
+            _DetailLine(label: '文件类型', value: metadata.mediaType),
             _DetailLine(label: '大小', value: '${metadata.sizeBytes} bytes'),
-            _DetailLine(label: 'Checksum', value: metadata.checksumSha256),
-            _DetailLine(label: 'Contract', value: metadata.contractVersion),
+            _DetailLine(label: '校验值', value: metadata.checksumSha256),
+            _DetailLine(label: '格式版本', value: metadata.contractVersion),
             if (metadata.counts.isNotEmpty) ...[
               const SizedBox(height: 12),
               Wrap(
@@ -307,7 +310,9 @@ class _MetadataCard extends StatelessWidget {
                 runSpacing: 8,
                 children: metadata.counts.entries
                     .map((entry) {
-                      return Chip(label: Text('${entry.key}：${entry.value}'));
+                      return Chip(
+                        label: Text('${_exportCountLabel(entry.key)}：${entry.value}'),
+                      );
                     })
                     .toList(growable: false),
               ),
@@ -361,20 +366,24 @@ class _DownloadResultCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            _DetailLine(label: '下载字节数', value: '${payload.bytes.length} bytes'),
+            _DetailLine(label: '文件大小', value: '${payload.bytes.length} bytes'),
             _DetailLine(label: '文件名', value: metadata.filename ?? '-'),
-            _DetailLine(label: '实体类型', value: metadata.entityType),
-            _DetailLine(label: 'Media Type', value: metadata.mediaType ?? '-'),
             _DetailLine(
-              label: 'Header Size',
-              value: metadata.sizeBytes?.toString() ?? '-',
+              label: '导出范围',
+              value: _exportEntityLabel(metadata.entityType),
             ),
+            _DetailLine(label: '文件类型', value: metadata.mediaType ?? '-'),
+            if (metadata.sizeBytes != null)
+              _DetailLine(
+                label: '标注大小',
+                value: '${metadata.sizeBytes} bytes',
+              ),
             _DetailLine(
-              label: 'Checksum',
+              label: '校验值',
               value: metadata.checksumSha256 ?? '-',
             ),
             _DetailLine(
-              label: 'Contract',
+              label: '格式版本',
               value: metadata.contractVersion ?? '-',
             ),
           ],
@@ -382,6 +391,28 @@ class _DownloadResultCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _exportEntityLabel(String? entityType) {
+  return switch (entityType) {
+    'all' => '全部数据',
+    'ledger_transactions' => '记账流水',
+    'memos' => '备忘',
+    'tasks' => '任务',
+    'assets' => '附件',
+    null || '' => '-',
+    _ => '其他数据',
+  };
+}
+
+String _exportCountLabel(String key) {
+  return switch (key) {
+    'ledger_transactions' => '记账流水',
+    'memos' => '备忘',
+    'tasks' => '任务',
+    'assets' => '附件',
+    _ => '其他',
+  };
 }
 
 class _DetailLine extends StatelessWidget {
