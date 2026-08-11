@@ -37,7 +37,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('导入预览'), findsOneWidget);
-      expect(find.text('Batch ID：batch-001'), findsOneWidget);
+      expect(find.text('导入编号：batch-001'), findsOneWidget);
+      expect(find.textContaining('Batch ID'), findsNothing);
       expect(find.text('待导入（1）'), findsOneWidget);
       expect(find.text('错误（1）'), findsOneWidget);
 

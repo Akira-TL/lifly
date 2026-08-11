@@ -255,7 +255,7 @@ class _BatchSummaryCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            SelectableText('Batch ID：$batchId'),
+            SelectableText('导入编号：$batchId'),
             if (currentBatch != null) ...[
               Text('文件：${currentBatch.filename ?? '-'}'),
               Text('状态：${currentBatch.status}'),
