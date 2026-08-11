@@ -65,54 +65,91 @@ def _build_attention_items(
     strategies: dict[str, TaskReminderStrategy],
     now: datetime,
 ) -> list[dict[str, object | None]]:
-    todo_tasks = [task for task in tasks if task.task_status == "todo"]
-    overdue_tasks = [
-        task for task in todo_tasks if _to_utc(task.due_at) is not None and _to_utc(task.due_at) < now
-    ]
-    today_tasks = [task for task in todo_tasks if _same_utc_day(task.due_at, now)]
+    active_tasks = [task for task in tasks if task.task_status in {"todo", "doing"}]
+    ranked: list[tuple[int, datetime, Task, TaskReminderStrategy | None, str]] = []
+    far_future = now + timedelta(days=36500)
+    for task in active_tasks:
+        strategy = strategies.get(task.id)
+        quadrant = _task_quadrant(task, strategy, now)
+        due_at = _to_utc(task.due_at) or _to_utc(
+            strategy.ai_suggested_remind_at if strategy else None
+        )
+        ranked.append(
+            (_quadrant_rank(quadrant), due_at or far_future, task, strategy, quadrant)
+        )
 
+    ranked.sort(key=lambda item: (item[0], item[1]))
     items: list[dict[str, object | None]] = []
-    for task in overdue_tasks[:3]:
-        strategy = strategies.get(task.id)
-        items.append({
-            "id": f"overdue_task_{task.id}",
-            "type": "task_overdue",
-            "level": "critical",
-            "title": task.title,
-            "description": strategy.warning_reason if strategy else "任务已逾期",
-            "entity_type": "task",
-            "entity_id": task.id,
-            "occurred_at": _iso(task.due_at),
-        })
-
-    overdue_ids = {task.id for task in overdue_tasks}
-    for task in today_tasks:
-        if len(items) >= 3:
-            break
-        if task.id in overdue_ids:
-            continue
-        strategy = strategies.get(task.id)
-        level = _task_attention_level(task, strategy)
-        items.append({
-            "id": f"today_task_{task.id}",
-            "type": "task_warning_strategy" if strategy else "task_due_today",
-            "level": level,
-            "title": task.title,
-            "description": strategy.warning_reason if strategy else "今天截止",
-            "entity_type": "task",
-            "entity_id": task.id,
-            "occurred_at": _iso(task.due_at or (strategy.ai_suggested_remind_at if strategy else None)),
-        })
+    for _, due_at, task, strategy, quadrant in ranked[:8]:
+        actual_due_at = _to_utc(task.due_at) or _to_utc(
+            strategy.ai_suggested_remind_at if strategy else None
+        )
+        is_overdue = actual_due_at is not None and actual_due_at < now
+        is_due_today = _same_utc_day(actual_due_at, now)
+        if is_overdue:
+            item_type = "task_overdue"
+        elif strategy is not None:
+            item_type = "task_warning_strategy"
+        elif is_due_today:
+            item_type = "task_due_today"
+        else:
+            item_type = "task_focus"
+        items.append(
+            {
+                "id": f"focus_task_{task.id}",
+                "type": item_type,
+                "level": _quadrant_level(quadrant),
+                "quadrant": quadrant,
+                "title": task.title,
+                "description": strategy.warning_reason if strategy else None,
+                "entity_type": "task",
+                "entity_id": task.id,
+                "occurred_at": _iso(actual_due_at),
+            }
+        )
 
     return items
 
 
-def _task_attention_level(task: Task, strategy: TaskReminderStrategy | None) -> str:
-    if strategy and strategy.warning_level == "critical":
-        return "critical"
-    if strategy and strategy.warning_level == "warning":
-        return "warning"
-    return "warning" if task.priority == "high" else "normal"
+def _task_quadrant(
+    task: Task,
+    strategy: TaskReminderStrategy | None,
+    now: datetime,
+) -> str:
+    important = task.priority in {"high", "urgent"}
+    due_at = _to_utc(task.due_at) or _to_utc(
+        strategy.ai_suggested_remind_at if strategy else None
+    )
+    urgent = (
+        task.priority == "urgent"
+        or (strategy is not None and strategy.warning_level == "critical")
+        or (due_at is not None and due_at <= now + timedelta(hours=24))
+    )
+    if important and urgent:
+        return "important_urgent"
+    if important:
+        return "important_not_urgent"
+    if urgent:
+        return "not_important_urgent"
+    return "not_important_not_urgent"
+
+
+def _quadrant_rank(quadrant: str) -> int:
+    return {
+        "important_urgent": 0,
+        "important_not_urgent": 1,
+        "not_important_urgent": 2,
+        "not_important_not_urgent": 3,
+    }.get(quadrant, 3)
+
+
+def _quadrant_level(quadrant: str) -> str:
+    return {
+        "important_urgent": "critical",
+        "important_not_urgent": "info",
+        "not_important_urgent": "warning",
+        "not_important_not_urgent": "normal",
+    }.get(quadrant, "normal")
 
 
 def _build_daily_trend(transactions: list[LedgerTransaction], now: datetime) -> list[dict[str, object]]:

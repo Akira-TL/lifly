@@ -405,6 +405,7 @@ class HomeAttentionItem {
   final String id;
   final String type;
   final String level;
+  final String quadrant;
   final String title;
   final String? description;
   final String entityType;
@@ -415,6 +416,7 @@ class HomeAttentionItem {
     required this.id,
     required this.type,
     required this.level,
+    this.quadrant = 'not_important_not_urgent',
     required this.title,
     required this.description,
     required this.entityType,
@@ -423,16 +425,27 @@ class HomeAttentionItem {
   });
 
   factory HomeAttentionItem.fromJson(Map<String, dynamic> json) {
+    final level = json['level'] as String? ?? 'normal';
     return HomeAttentionItem(
       id: json['id'] as String? ?? '',
       type: json['type'] as String? ?? 'unknown',
-      level: json['level'] as String? ?? 'normal',
+      level: level,
+      quadrant: json['quadrant'] as String? ?? _quadrantFromLegacyLevel(level),
       title: json['title'] as String? ?? '待关注事项',
       description: json['description'] as String?,
       entityType: json['entity_type'] as String? ?? 'unknown',
       entityId: json['entity_id'] as String? ?? '',
       occurredAt: HomeOverview._dateTime(json['occurred_at']),
     );
+  }
+
+  static String _quadrantFromLegacyLevel(String level) {
+    return switch (level.toLowerCase()) {
+      'critical' || 'error' || 'danger' => 'important_urgent',
+      'warning' || 'warn' => 'not_important_urgent',
+      'info' => 'important_not_urgent',
+      _ => 'not_important_not_urgent',
+    };
   }
 }
 

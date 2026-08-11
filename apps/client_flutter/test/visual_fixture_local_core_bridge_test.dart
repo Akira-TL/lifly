@@ -190,7 +190,16 @@ void main() {
     expect(overview.todayMetrics.memoTotal, 18);
     expect(overview.todayMetrics.taskDueToday, greaterThan(0));
     expect(overview.todayMetrics.taskOverdue, greaterThan(0));
-    expect(overview.attentionItems, isNotEmpty);
+    expect(overview.attentionItems.length, greaterThanOrEqualTo(6));
+    expect(
+      overview.attentionItems.map((item) => item.quadrant).toSet(),
+      containsAll(<String>{
+        'important_urgent',
+        'important_not_urgent',
+        'not_important_urgent',
+        'not_important_not_urgent',
+      }),
+    );
     expect(overview.recentActivity, isNotEmpty);
     expect(overview.financeOverview.monthExpense, greaterThan(0));
     expect(overview.financeOverview.monthIncome, greaterThan(0));

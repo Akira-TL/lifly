@@ -4,6 +4,7 @@ import 'package:client_flutter/app/theme/theme_platform_profile.dart';
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/repositories/home_overview_repository.dart';
+import 'package:client_flutter/data/repositories/task_repository.dart';
 import 'package:client_flutter/domain/entities/home_overview.dart';
 import 'package:client_flutter/features/home/widgets/home_dashboard_view.dart';
 import 'package:client_flutter/features/home/widgets/home_focus_view.dart';
@@ -16,11 +17,13 @@ import 'package:provider/provider.dart';
 
 typedef HomeOverviewLoader =
     Future<HomeOverview> Function(BuildContext context);
+typedef HomeTaskCompleter = Future<void> Function(String taskId);
 
 class HomePage extends StatefulWidget {
   final HomeOverviewLoader? loadOverview;
+  final HomeTaskCompleter? completeTask;
 
-  const HomePage({super.key, this.loadOverview});
+  const HomePage({super.key, this.loadOverview, this.completeTask});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -64,6 +67,64 @@ class _HomePageState extends State<HomePage> {
       localCore: context.read<LocalCoreBridge>(),
       dataMode: context.read<LiflyDataMode>(),
     ).load();
+  }
+
+  Future<void> _completeAttentionTask(HomeAttentionItem item) async {
+    if (item.entityType != 'task' || item.entityId.isEmpty) return;
+    final customCompleter = widget.completeTask;
+    try {
+      if (customCompleter != null) {
+        await customCompleter(item.entityId);
+      } else {
+        await TaskRepository(
+          context.read<ApiClient>(),
+          localCore: context.read<LocalCoreBridge>(),
+          dataMode: context.read<LiflyDataMode>(),
+        ).complete(item.entityId);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('完成任务失败：$error')));
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      final overview = _overview;
+      if (overview != null) {
+        _overview = _withoutAttentionItem(overview, item.entityId);
+      }
+    });
+    if (customCompleter != null) return;
+
+    try {
+      final refreshed = await _resolveOverview();
+      if (mounted) setState(() => _overview = refreshed);
+    } catch (_) {
+      // The task is already complete; keep the optimistic queue instead of
+      // reporting the successful action as a failure.
+    }
+  }
+
+  HomeOverview _withoutAttentionItem(HomeOverview overview, String taskId) {
+    return HomeOverview(
+      schemaVersion: overview.schemaVersion,
+      generatedAt: overview.generatedAt,
+      userTimezone: overview.userTimezone,
+      sourceMode: overview.sourceMode,
+      todayMetrics: overview.todayMetrics,
+      financeOverview: overview.financeOverview,
+      attentionItems: overview.attentionItems
+          .where((item) => item.entityId != taskId)
+          .toList(growable: false),
+      dailyTrend: overview.dailyTrend,
+      recentActivity: overview.recentActivity,
+      syncSummary: overview.syncSummary,
+      importSummary: overview.importSummary,
+      settingsSummary: overview.settingsSummary,
+    );
   }
 
   @override
@@ -124,10 +185,10 @@ class _HomePageState extends State<HomePage> {
           icon: const Icon(Icons.search, size: 18),
         ),
         const SizedBox(width: 8),
-        OutlinedButton.icon(
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size(0, 34),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+        IconButton(
+          key: const Key('home_schedule_action'),
+          tooltip: '日程',
+          style: IconButton.styleFrom(
             side: BorderSide(color: theme.colorScheme.outlineVariant),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(6),
@@ -137,10 +198,9 @@ class _HomePageState extends State<HomePage> {
           onPressed: () => Navigator.of(
             context,
           ).push(MaterialPageRoute(builder: (_) => const TaskListPage())),
-          icon: const Icon(Icons.calendar_today_outlined, size: 16),
-          label: const Text('日程'),
+          icon: const Icon(Icons.calendar_today_outlined, size: 17),
         ),
-        const SizedBox(width: 28),
+        const SizedBox(width: 16),
       ],
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
@@ -190,9 +250,17 @@ class _HomePageState extends State<HomePage> {
     }
 
     if (web) {
-      return HomeFocusView(overview: overview, onRefresh: _loadOverview);
+      return HomeFocusView(
+        overview: overview,
+        onRefresh: _loadOverview,
+        onCompleteTask: _completeAttentionTask,
+      );
     }
-    return HomeDashboardView(overview: overview, onRefresh: _loadOverview);
+    return HomeDashboardView(
+      overview: overview,
+      onRefresh: _loadOverview,
+      onCompleteTask: _completeAttentionTask,
+    );
   }
 }
 

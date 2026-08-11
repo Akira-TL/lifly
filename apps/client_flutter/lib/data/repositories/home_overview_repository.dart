@@ -196,6 +196,7 @@ class HomeOverviewRepository {
       id: local.id,
       type: local.type,
       level: local.level,
+      quadrant: local.quadrant,
       title: local.title,
       description: local.description,
       entityType: local.entityType,

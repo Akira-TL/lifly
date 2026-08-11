@@ -479,6 +479,7 @@ class _SidebarItem extends StatelessWidget {
         child: SizedBox(
           height: 39,
           child: Stack(
+            alignment: Alignment.centerLeft,
             children: [
               if (selected)
                 Positioned(

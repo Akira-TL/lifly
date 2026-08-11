@@ -59,9 +59,13 @@ class LocalHomeOverviewBuilder {
         financeInsights: financeInsights,
       ),
       attentionItems: _buildAttentionItems(
-        overdueTasks,
-        todayTasks,
+        activeTasks
+            .where(
+              (task) => task.taskStatus == 'todo' || task.taskStatus == 'doing',
+            )
+            .toList(growable: false),
         taskStrategies,
+        generatedAt,
       ),
       dailyTrend: _buildDailyTrend(activeTransactions, generatedAt),
       recentActivity: _buildRecentActivity(
@@ -123,56 +127,90 @@ class LocalHomeOverviewBuilder {
   }
 
   List<LocalHomeAttentionItem> _buildAttentionItems(
-    List<LocalTaskRecord> overdueTasks,
-    List<LocalTaskRecord> todayTasks,
+    List<LocalTaskRecord> tasks,
     Map<String, LocalTaskReminderStrategy> taskStrategies,
+    DateTime now,
   ) {
-    final items = <LocalHomeAttentionItem>[];
-    for (final task in overdueTasks.take(3)) {
+    final ranked = tasks.map((task) {
       final strategy = taskStrategies[task.id];
-      items.add(
-        LocalHomeAttentionItem(
-          id: 'overdue_task_${task.id}',
-          type: 'task_overdue',
-          level: 'critical',
-          title: task.title,
-          description: strategy?.warningReason ?? '任务已逾期',
-          entityType: 'task',
-          entityId: task.id,
-          occurredAt: task.dueAt,
-        ),
+      final quadrant = _taskQuadrant(task, strategy, now);
+      return (
+        task: task,
+        strategy: strategy,
+        quadrant: quadrant,
+        rank: _quadrantRank(quadrant),
       );
-    }
+    }).toList(growable: false)
+      ..sort((left, right) {
+        final quadrantOrder = left.rank.compareTo(right.rank);
+        if (quadrantOrder != 0) return quadrantOrder;
+        final leftDue = left.task.dueAt;
+        final rightDue = right.task.dueAt;
+        if (leftDue == null && rightDue == null) {
+          return right.task.updatedAt.compareTo(left.task.updatedAt);
+        }
+        if (leftDue == null) return 1;
+        if (rightDue == null) return -1;
+        return leftDue.compareTo(rightDue);
+      });
 
-    final todayNotOverdue = todayTasks
-        .where((task) => !overdueTasks.any((overdue) => overdue.id == task.id))
-        .take(3 - items.length);
-    for (final task in todayNotOverdue) {
-      final strategy = taskStrategies[task.id];
-      items.add(
-        LocalHomeAttentionItem(
-          id: 'today_task_${task.id}',
-          type: strategy == null ? 'task_due_today' : 'task_warning_strategy',
-          level: _taskAttentionLevel(task, strategy),
-          title: task.title,
-          description: strategy?.warningReason ?? '今天截止',
-          entityType: 'task',
-          entityId: task.id,
-          occurredAt: task.dueAt ?? strategy?.aiSuggestedRemindAt,
-        ),
+    return ranked.take(8).map((entry) {
+      final task = entry.task;
+      final strategy = entry.strategy;
+      final dueAt = task.dueAt ?? strategy?.aiSuggestedRemindAt;
+      final isOverdue = dueAt != null && dueAt.isBefore(now);
+      final isDueToday = dueAt != null && _isSameUtcDay(dueAt, now);
+      return LocalHomeAttentionItem(
+        id: 'focus_task_${task.id}',
+        type: isOverdue
+            ? 'task_overdue'
+            : isDueToday
+            ? (strategy == null ? 'task_due_today' : 'task_warning_strategy')
+            : 'task_focus',
+        level: _quadrantLevel(entry.quadrant),
+        quadrant: entry.quadrant,
+        title: task.title,
+        description: strategy?.warningReason,
+        entityType: 'task',
+        entityId: task.id,
+        occurredAt: dueAt,
       );
-    }
-
-    return items;
+    }).toList(growable: false);
   }
 
-  String _taskAttentionLevel(
+  String _taskQuadrant(
     LocalTaskRecord task,
     LocalTaskReminderStrategy? strategy,
+    DateTime now,
   ) {
-    if (strategy?.warningLevel == 'critical') return 'critical';
-    if (strategy?.warningLevel == 'warning') return 'warning';
-    return task.priority == 'high' ? 'warning' : 'normal';
+    final important = task.priority == 'high' || task.priority == 'urgent';
+    final dueAt = task.dueAt ?? strategy?.aiSuggestedRemindAt;
+    final urgent =
+        task.priority == 'urgent' ||
+        strategy?.warningLevel == 'critical' ||
+        (dueAt != null && !dueAt.isAfter(now.add(const Duration(hours: 24))));
+    if (important && urgent) return 'important_urgent';
+    if (important) return 'important_not_urgent';
+    if (urgent) return 'not_important_urgent';
+    return 'not_important_not_urgent';
+  }
+
+  int _quadrantRank(String quadrant) {
+    return switch (quadrant) {
+      'important_urgent' => 0,
+      'important_not_urgent' => 1,
+      'not_important_urgent' => 2,
+      _ => 3,
+    };
+  }
+
+  String _quadrantLevel(String quadrant) {
+    return switch (quadrant) {
+      'important_urgent' => 'critical',
+      'important_not_urgent' => 'info',
+      'not_important_urgent' => 'warning',
+      _ => 'normal',
+    };
   }
 
   List<LocalHomeDailyTrendItem> _buildDailyTrend(

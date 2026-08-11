@@ -113,7 +113,7 @@ def test_home_overview_settings_summary_exposes_readiness_without_secrets() -> N
     assert "minio_secret_key" not in summary
 
 
-def test_home_overview_attention_items_prioritize_overdue_then_today() -> None:
+def test_home_overview_attention_items_rank_by_quadrant_before_time_status() -> None:
     now = datetime(2026, 7, 7, 12, tzinfo=timezone.utc)
     overdue = Task(
         id="task-overdue",
@@ -153,8 +153,10 @@ def test_home_overview_attention_items_prioritize_overdue_then_today() -> None:
         now,
     )
 
-    assert [item["type"] for item in items] == ["task_overdue", "task_warning_strategy"]
+    assert [item["type"] for item in items] == ["task_warning_strategy", "task_overdue"]
+    assert items[0]["quadrant"] == "important_urgent"
     assert items[0]["level"] == "critical"
+    assert items[1]["quadrant"] == "not_important_urgent"
     assert items[1]["level"] == "warning"
     assert items[0]["entity_type"] == "task"
 

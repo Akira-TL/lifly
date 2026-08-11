@@ -271,7 +271,7 @@ void main() {
     expect(find.text('搜索'), findsNothing);
     expect(find.text('设置'), findsNothing);
     expect(find.byTooltip('搜索'), findsOneWidget);
-    expect(find.text('日程'), findsOneWidget);
+    expect(find.byTooltip('日程'), findsOneWidget);
     expect(find.text('测试备忘'), findsNothing);
 
     await tester.tap(find.text('备忘').last);
@@ -423,6 +423,17 @@ void main() {
     expect(find.text('AI 会话'), findsOneWidget);
     expect(find.text('记账'), findsWidgets);
     expect(find.text('任务'), findsWidgets);
+
+    final todayItem = find.byKey(const Key('web_destination_首页'));
+    final todayIcon = find.descendant(
+      of: todayItem,
+      matching: find.byIcon(Icons.home),
+    );
+    expect(todayIcon, findsOneWidget);
+    expect(
+      (tester.getCenter(todayIcon).dy - tester.getRect(todayItem).center.dy).abs(),
+      lessThan(1),
+    );
   });
 
   testWidgets(

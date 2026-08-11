@@ -80,7 +80,7 @@ class VisualFixtureLocalCoreBridge extends FakeLocalCoreBridge {
       _task(1, '提交本周项目进度总结', '整理完成项、风险和下一阶段计划，发给协作方。', 'urgent', 'todo', day.add(const Duration(hours: 10)), day, 0, 8),
       _task(2, '确认明天上午的体检预约和需要空腹的项目', '检查预约短信、医院位置和交通时间。', 'high', 'todo', day.add(const Duration(hours: 18)), day, 0, 9),
       _task(3, '回复积压的三封重要邮件', null, 'high', 'todo', day.subtract(const Duration(hours: 5)), day, -1, 20),
-      _task(4, '完成 Lifly 手机端真实数据布局检查', '重点看长标题、标签、多状态以及底部导航占用。', 'high', 'doing', day.add(const Duration(days: 1, hours: 12)), day, 0, 12),
+      _task(4, '完成 Lifly 手机端真实数据布局检查', '重点看长标题、标签、多状态以及底部导航占用。', 'high', 'doing', day.add(const Duration(days: 2, hours: 12)), day, 0, 12),
       _task(5, '缴纳本月宽带费用', null, 'normal', 'todo', day.add(const Duration(days: 2, hours: 11)), day, -1, 10),
       _task(6, '买新的咖啡滤纸', 'V60 02，漂白款。', 'low', 'todo', day.add(const Duration(days: 4, hours: 16)), day, -2, 18),
       _task(7, '整理桌面和抽屉', null, 'low', 'doing', day.add(const Duration(days: 5, hours: 20)), day, -3, 14),

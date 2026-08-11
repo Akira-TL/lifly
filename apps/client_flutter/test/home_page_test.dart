@@ -58,6 +58,70 @@ void main() {
     expect(find.byType(Card), findsNothing);
   });
 
+  testWidgets('Web focus tasks complete in place with quadrant color and time bars', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    final completed = <String>[];
+
+    await tester.pumpWidget(
+      _testApp(
+        _overview(attentionItems: _denseAttentionItems()),
+        completeTask: (taskId) async => completed.add(taskId),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('home_focus_queue_grid')), findsOneWidget);
+    final first = find.byKey(const Key('home_focus_item_task-1'));
+    final second = find.byKey(const Key('home_focus_item_task-2'));
+    final third = find.byKey(const Key('home_focus_item_task-3'));
+    expect(first, findsOneWidget);
+    expect(second, findsOneWidget);
+    expect(third, findsOneWidget);
+    expect(
+      (tester.getTopLeft(first).dy - tester.getTopLeft(second).dy).abs(),
+      lessThan(1),
+    );
+    expect(
+      (tester.getTopLeft(first).dy - tester.getTopLeft(third).dy).abs(),
+      lessThan(1),
+    );
+    expect(tester.getTopLeft(first).dx, lessThan(tester.getTopLeft(second).dx));
+    expect(tester.getTopLeft(second).dx, lessThan(tester.getTopLeft(third).dx));
+
+    expect(find.text('已逾期'), findsNothing);
+    expect(find.text('今天截止'), findsNothing);
+    expect(find.byKey(const Key('home_focus_time_bar_task-1')), findsOneWidget);
+
+    final quadrantColors = <Color>{
+      for (final id in ['task-1', 'task-2', 'task-3', 'task-4'])
+        tester
+            .widget<Container>(find.byKey(Key('home_focus_quadrant_$id')))
+            .color!,
+    };
+    expect(quadrantColors, hasLength(4));
+
+    await tester.tap(find.byKey(const Key('home_focus_complete_task-1')));
+    await tester.pumpAndSettle();
+    expect(completed, ['task-1']);
+  });
+
+  testWidgets('Web schedule action stays inside the app bar boundary', (tester) async {
+    tester.view.physicalSize = const Size(900, 720);
+    tester.view.devicePixelRatio = 1;
+
+    await tester.pumpWidget(_testApp(_overview()));
+    await tester.pumpAndSettle();
+
+    final action = find.byKey(const Key('home_schedule_action'));
+    expect(action, findsOneWidget);
+    final rect = tester.getRect(action);
+    expect(rect.right, lessThanOrEqualTo(884));
+    expect(rect.left, greaterThanOrEqualTo(0));
+  });
+
   testWidgets('Narrow home degrades to one continuous column', (tester) async {
     tester.view.physicalSize = const Size(700, 1000);
     tester.view.devicePixelRatio = 1;
@@ -72,42 +136,70 @@ void main() {
     expect(find.byKey(const Key('home_focus_agenda')), findsOneWidget);
   });
 
-  testWidgets('Phone home avoids repeating generic overdue diagnostics', (tester) async {
+  testWidgets('Phone home uses three completable focus tasks without status text', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
+    final completed = <String>[];
 
-    await tester.pumpWidget(_testPhoneApp(_overview()));
+    await tester.pumpWidget(
+      _testPhoneApp(
+        _overview(attentionItems: _denseAttentionItems()),
+        completeTask: (taskId) async => completed.add(taskId),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('确认 Web 首页布局'), findsOneWidget);
+    expect(find.text('整理抽屉'), findsNothing);
     expect(find.text('任务已逾期'), findsNothing);
-    expect(find.text('已逾期'), findsOneWidget);
+    expect(find.text('已逾期'), findsNothing);
+    expect(find.text('今天截止'), findsNothing);
+    expect(find.byKey(const Key('home_attention_time_bar_task-1')), findsOneWidget);
+    expect(find.byKey(const Key('home_attention_complete_task-1')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('home_attention_complete_task-1')));
+    await tester.pumpAndSettle();
+    expect(completed, ['task-1']);
   });
 }
 
-Widget _testPhoneApp(HomeOverview overview) {
+Widget _testPhoneApp(
+  HomeOverview overview, {
+  Future<void> Function(String taskId)? completeTask,
+}) {
   final theme = LiflyCoreTheme.tokens.buildTheme(
     Brightness.light,
     platformProfile: ThemePlatformProfile.defaults(ThemeTargetPlatform.phone),
   );
   return MaterialApp(
     theme: theme,
-    home: HomePage(loadOverview: (_) async => overview),
+    home: HomePage(
+      loadOverview: (_) async => overview,
+      completeTask: completeTask,
+    ),
   );
 }
 
-Widget _testApp(HomeOverview overview) {
+Widget _testApp(
+  HomeOverview overview, {
+  Future<void> Function(String taskId)? completeTask,
+}) {
   final theme = LiflyCoreTheme.tokens.buildTheme(
     Brightness.light,
     platformProfile: ThemePlatformProfile.defaults(ThemeTargetPlatform.web),
   );
   return MaterialApp(
     theme: theme,
-    home: HomePage(loadOverview: (_) async => overview),
+    home: HomePage(
+      loadOverview: (_) async => overview,
+      completeTask: completeTask,
+    ),
   );
 }
 
-HomeOverview _overview() {
+HomeOverview _overview({List<HomeAttentionItem>? attentionItems}) {
   final now = DateTime.utc(2026, 7, 30, 8, 30);
   return HomeOverview(
     schemaVersion: 'home_overview.v1',
@@ -163,28 +255,32 @@ HomeOverview _overview() {
         ),
       ],
     ),
-    attentionItems: [
-      HomeAttentionItem(
-        id: 'task-1',
-        type: 'task_overdue',
-        level: 'critical',
-        title: '确认 Web 首页布局',
-        description: '任务已逾期',
-        entityType: 'task',
-        entityId: 'task-1',
-        occurredAt: now.subtract(const Duration(hours: 2)),
-      ),
-      HomeAttentionItem(
-        id: 'task-2',
-        type: 'task_due_today',
-        level: 'warning',
-        title: '整理导入异常记录',
-        description: '今天 18:00 前完成。',
-        entityType: 'task',
-        entityId: 'task-2',
-        occurredAt: now,
-      ),
-    ],
+    attentionItems:
+        attentionItems ??
+        [
+          HomeAttentionItem(
+            id: 'task-1',
+            type: 'task_overdue',
+            level: 'critical',
+            quadrant: 'important_urgent',
+            title: '确认 Web 首页布局',
+            description: '任务已逾期',
+            entityType: 'task',
+            entityId: 'task-1',
+            occurredAt: now.subtract(const Duration(hours: 2)),
+          ),
+          HomeAttentionItem(
+            id: 'task-2',
+            type: 'task_due_today',
+            level: 'warning',
+            quadrant: 'important_not_urgent',
+            title: '整理导入异常记录',
+            description: '今天 18:00 前完成。',
+            entityType: 'task',
+            entityId: 'task-2',
+            occurredAt: now,
+          ),
+        ],
     dailyTrend: List.generate(
       7,
       (index) => HomeDailyTrendItem(
@@ -251,4 +347,76 @@ HomeOverview _overview() {
       objectStorageConfigured: true,
     ),
   );
+}
+
+List<HomeAttentionItem> _denseAttentionItems() {
+  final now = DateTime.utc(2026, 7, 30, 8, 30);
+  return [
+    HomeAttentionItem(
+      id: 'task-1',
+      type: 'task_overdue',
+      level: 'critical',
+      quadrant: 'important_urgent',
+      title: '确认 Web 首页布局',
+      description: '任务已逾期',
+      entityType: 'task',
+      entityId: 'task-1',
+      occurredAt: now.subtract(const Duration(hours: 2)),
+    ),
+    HomeAttentionItem(
+      id: 'task-2',
+      type: 'task_focus',
+      level: 'info',
+      quadrant: 'important_not_urgent',
+      title: '整理产品路线',
+      description: null,
+      entityType: 'task',
+      entityId: 'task-2',
+      occurredAt: now.add(const Duration(days: 2)),
+    ),
+    HomeAttentionItem(
+      id: 'task-3',
+      type: 'task_due_today',
+      level: 'warning',
+      quadrant: 'not_important_urgent',
+      title: '回复临时消息',
+      description: null,
+      entityType: 'task',
+      entityId: 'task-3',
+      occurredAt: now.add(const Duration(hours: 3)),
+    ),
+    HomeAttentionItem(
+      id: 'task-4',
+      type: 'task_focus',
+      level: 'normal',
+      quadrant: 'not_important_not_urgent',
+      title: '整理抽屉',
+      description: null,
+      entityType: 'task',
+      entityId: 'task-4',
+      occurredAt: now.add(const Duration(days: 5)),
+    ),
+    HomeAttentionItem(
+      id: 'task-5',
+      type: 'task_focus',
+      level: 'info',
+      quadrant: 'important_not_urgent',
+      title: '检查下周计划',
+      description: null,
+      entityType: 'task',
+      entityId: 'task-5',
+      occurredAt: now.add(const Duration(days: 3)),
+    ),
+    HomeAttentionItem(
+      id: 'task-6',
+      type: 'task_focus',
+      level: 'normal',
+      quadrant: 'not_important_not_urgent',
+      title: '整理下载目录',
+      description: null,
+      entityType: 'task',
+      entityId: 'task-6',
+      occurredAt: now.add(const Duration(days: 6)),
+    ),
+  ];
 }

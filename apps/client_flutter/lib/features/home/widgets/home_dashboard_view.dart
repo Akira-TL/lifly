@@ -1,5 +1,6 @@
 import 'package:client_flutter/app/theme/lifly_semantic_colors.dart';
 import 'package:client_flutter/domain/entities/home_overview.dart';
+import 'package:client_flutter/features/home/widgets/home_task_focus_visuals.dart';
 import 'package:client_flutter/shared/widgets/workspace_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -13,11 +14,13 @@ class HomeDashboardView extends StatelessWidget {
 
   final HomeOverview overview;
   final Future<void> Function() onRefresh;
+  final Future<void> Function(HomeAttentionItem item) onCompleteTask;
 
   const HomeDashboardView({
     super.key,
     required this.overview,
     required this.onRefresh,
+    required this.onCompleteTask,
   });
 
   @override
@@ -51,11 +54,13 @@ class HomeDashboardView extends StatelessWidget {
                       _WideDashboard(
                         key: const Key('home_layout_wide'),
                         overview: overview,
+                        onCompleteTask: onCompleteTask,
                       )
                     else
                       _CompactDashboard(
                         key: const Key('home_layout_compact'),
                         overview: overview,
+                        onCompleteTask: onCompleteTask,
                       ),
                   ],
                 ),
@@ -70,8 +75,13 @@ class HomeDashboardView extends StatelessWidget {
 
 class _WideDashboard extends StatelessWidget {
   final HomeOverview overview;
+  final Future<void> Function(HomeAttentionItem item) onCompleteTask;
 
-  const _WideDashboard({super.key, required this.overview});
+  const _WideDashboard({
+    super.key,
+    required this.overview,
+    required this.onCompleteTask,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -82,7 +92,10 @@ class _WideDashboard extends StatelessWidget {
           flex: 7,
           child: Column(
             children: [
-              _AttentionPanel(items: overview.attentionItems),
+              _AttentionPanel(
+                items: overview.attentionItems,
+                onCompleteTask: onCompleteTask,
+              ),
               const SizedBox(height: 14),
               _RecentActivityPanel(items: overview.recentActivity),
             ],
@@ -106,14 +119,22 @@ class _WideDashboard extends StatelessWidget {
 
 class _CompactDashboard extends StatelessWidget {
   final HomeOverview overview;
+  final Future<void> Function(HomeAttentionItem item) onCompleteTask;
 
-  const _CompactDashboard({super.key, required this.overview});
+  const _CompactDashboard({
+    super.key,
+    required this.overview,
+    required this.onCompleteTask,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _AttentionPanel(items: overview.attentionItems),
+        _AttentionPanel(
+          items: overview.attentionItems,
+          onCompleteTask: onCompleteTask,
+        ),
         const SizedBox(height: 14),
         _FinancePanel(finance: overview.financeOverview),
         const SizedBox(height: 14),
@@ -365,8 +386,6 @@ class _TodayMetricStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final semantic = Theme.of(context).semanticColors;
     final definitions = <_MetricDefinition>[
-      _MetricDefinition('逾期', metrics.taskOverdue, semantic.critical),
-      _MetricDefinition('今天截止', metrics.taskDueToday, semantic.warning),
       _MetricDefinition('待处理', metrics.taskTodo, semantic.info),
       _MetricDefinition('任务总数', metrics.taskTotal, semantic.neutral),
       _MetricDefinition('备忘', metrics.memoTotal, semantic.success),
@@ -374,11 +393,7 @@ class _TodayMetricStrip extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 900
-            ? 5
-            : constraints.maxWidth >= 560
-            ? 3
-            : 2;
+        final columns = constraints.maxWidth >= 560 ? 3 : 2;
         final itemWidth = constraints.maxWidth / columns;
         final theme = Theme.of(context);
         return DecoratedBox(
@@ -441,32 +456,44 @@ class _MetricDefinition {
 
 class _AttentionPanel extends StatelessWidget {
   final List<HomeAttentionItem> items;
+  final Future<void> Function(HomeAttentionItem item) onCompleteTask;
 
-  const _AttentionPanel({required this.items});
+  const _AttentionPanel({
+    required this.items,
+    required this.onCompleteTask,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final visibleItems = items.take(3).toList(growable: false);
     return WorkspacePanel(
       key: const Key('home_attention_panel'),
-      title: '今日关注',
-      subtitle: '风险和即将到期的事项排在普通统计之前',
-      trailing: Text(
-        '${items.length} 项',
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
-      ),
+      title: visibleItems.isEmpty
+          ? '今天没有需要优先处理的事项'
+          : '先处理这 ${visibleItems.length} 件事',
+      subtitle: '颜色表示四象限，时间条表示距离现在的远近',
+      trailing: items.length > visibleItems.length
+          ? Text(
+              '+${items.length - visibleItems.length}',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            )
+          : null,
       contentPadding: EdgeInsets.zero,
-      child: items.isEmpty
+      child: visibleItems.isEmpty
           ? const WorkspaceEmptyRow(
               icon: Icons.check_circle_outline,
-              message: '目前没有需要优先处理的事项',
+              message: '当前没有需要优先处理的任务',
             )
           : Column(
               children: [
-                for (var index = 0; index < items.length; index++) ...[
-                  _AttentionRow(item: items[index]),
-                  if (index != items.length - 1)
+                for (var index = 0; index < visibleItems.length; index++) ...[
+                  _AttentionRow(
+                    item: visibleItems[index],
+                    onCompleteTask: onCompleteTask,
+                  ),
+                  if (index != visibleItems.length - 1)
                     Divider(
                       height: 1,
                       indent: 16,
@@ -480,70 +507,135 @@ class _AttentionPanel extends StatelessWidget {
   }
 }
 
-class _AttentionRow extends StatelessWidget {
+class _AttentionRow extends StatefulWidget {
   final HomeAttentionItem item;
+  final Future<void> Function(HomeAttentionItem item) onCompleteTask;
 
-  const _AttentionRow({required this.item});
+  const _AttentionRow({required this.item, required this.onCompleteTask});
+
+  @override
+  State<_AttentionRow> createState() => _AttentionRowState();
+}
+
+class _AttentionRowState extends State<_AttentionRow> {
+  bool _completing = false;
+
+  Future<void> _complete() async {
+    if (_completing || widget.item.entityType != 'task') return;
+    setState(() => _completing = true);
+    try {
+      await widget.onCompleteTask(widget.item);
+    } finally {
+      if (mounted) setState(() => _completing = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final item = widget.item;
     final theme = Theme.of(context);
-    final tone = _levelColor(item.level, theme.semanticColors);
+    final tone = homeTaskQuadrantColor(item.quadrant, theme.semanticColors);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 14, 10),
+      padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 3,
-            height: 38,
-            margin: const EdgeInsets.only(top: 1),
-            decoration: BoxDecoration(
+          Semantics(
+            label: homeTaskQuadrantLabel(item.quadrant),
+            child: Container(
+              width: 4,
+              height: 50,
               color: tone,
-              borderRadius: BorderRadius.circular(3),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 11),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        item.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      _attentionTypeLabel(item.type),
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: tone,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 3),
                 Text(
-                  _attentionDetail(item),
+                  item.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
+                const SizedBox(height: 9),
+                _AttentionTimeBar(item: item),
               ],
             ),
           ),
+          if (item.entityType == 'task') ...[
+            const SizedBox(width: 8),
+            IconButton(
+              key: Key('home_attention_complete_${item.entityId}'),
+              tooltip: '完成任务',
+              onPressed: _completing ? null : _complete,
+              constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+              padding: EdgeInsets.zero,
+              icon: _completing
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.radio_button_unchecked, size: 21),
+            ),
+          ],
         ],
       ),
+    );
+  }
+}
+
+class _AttentionTimeBar extends StatelessWidget {
+  final HomeAttentionItem item;
+
+  const _AttentionTimeBar({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dueAt = item.occurredAt?.toLocal();
+    if (dueAt == null) {
+      return Container(
+        key: Key('home_attention_time_bar_${item.entityId}'),
+        height: 5,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.outlineVariant,
+          borderRadius: BorderRadius.circular(99),
+        ),
+      );
+    }
+    final distance = dueAt.difference(DateTime.now());
+    final tone = homeTaskTimeColor(distance, theme.semanticColors);
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            key: Key('home_attention_time_bar_${item.entityId}'),
+            height: 5,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(99),
+            ),
+            clipBehavior: Clip.antiAlias,
+            alignment: Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: homeTaskTimeRatio(distance),
+              child: ColoredBox(color: tone),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          homeTaskTimeDistanceLabel(distance),
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: tone,
+            fontWeight: FontWeight.w700,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -556,36 +648,6 @@ Color _levelColor(String level, LiflySemanticColors semantic) {
     'info' => semantic.info,
     _ => semantic.neutral,
   };
-}
-
-String _attentionTypeLabel(String type) {
-  return switch (type) {
-    'task_overdue' => '已逾期',
-    'task_due_today' => '今天截止',
-    'budget_warning' => '预算预警',
-    'sync_error' => '同步异常',
-    _ => type.replaceAll('_', ' '),
-  };
-}
-
-String _attentionDetail(HomeAttentionItem item) {
-  final description = item.description?.trim() ?? '';
-  final status = _attentionTypeLabel(item.type);
-  final generic =
-      description.isEmpty ||
-      description == '任务已逾期' ||
-      description == '今天截止' ||
-      description == status;
-  final base = generic
-      ? switch (item.entityType) {
-          'task' => '任务',
-          'memo' => '备忘',
-          'ledger_transaction' => '流水',
-          _ => '待处理内容',
-        }
-      : description;
-  if (item.occurredAt == null) return base;
-  return '$base · ${DateFormat('MM/dd HH:mm').format(item.occurredAt!.toLocal())}';
 }
 
 double _normalizedRatio(double raw) {

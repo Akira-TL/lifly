@@ -693,6 +693,27 @@ void main() {
           },
         ],
       },
+      'attention_items': [
+        {
+          'id': 'focus_task_task-1',
+          'type': 'task_focus',
+          'level': 'info',
+          'quadrant': 'important_not_urgent',
+          'title': '准备季度复盘',
+          'entity_type': 'task',
+          'entity_id': 'task-1',
+          'occurred_at': '2026-07-09T12:00:00Z',
+        },
+        {
+          'id': 'legacy_task_task-2',
+          'type': 'task_overdue',
+          'level': 'critical',
+          'title': '旧服务端关注项',
+          'entity_type': 'task',
+          'entity_id': 'task-2',
+          'occurred_at': '2026-07-06T12:00:00Z',
+        },
+      ],
       'daily_trend': [
         {'day': '2026-07-07', 'total': 18.5},
       ],
@@ -750,6 +771,8 @@ void main() {
       '餐饮',
     );
     expect(overview.financeOverview.insights.single.id, 'budget_ok');
+    expect(overview.attentionItems.first.quadrant, 'important_not_urgent');
+    expect(overview.attentionItems.last.quadrant, 'important_urgent');
     expect(overview.dailyTrend.single.total, 18.5);
     expect(overview.recentActivity.single.entityType, 'ledger_transaction');
     expect(overview.syncStatus, 'ready');
