@@ -1,4 +1,5 @@
 import 'package:client_flutter/data/local_core/local_core_models.dart';
+import 'package:client_flutter/data/local_core/task/local_task_time_reasoning.dart';
 
 class LocalTaskReminderSuggestion {
   final String warningLevel;
@@ -21,9 +22,12 @@ class LocalTaskReminderStrategyEngine {
     LocalTaskRecord task, {
     required DateTime now,
   }) {
-    final baseline = now.toUtc();
-    final dueAt = task.dueAt?.toUtc();
-    final window = _preparationWindow('${task.title}\n${task.description ?? ''}');
+    final facts = LocalTaskTimeReasoning.inspect(task, now: now);
+    final baseline = facts.nowUtc;
+    final dueAt = facts.dueAtUtc;
+    final window = _preparationWindow(
+      '${task.title}\n${task.description ?? ''}',
+    );
     if (dueAt == null && window == null) return null;
 
     if (dueAt == null) {
@@ -35,7 +39,7 @@ class LocalTaskReminderStrategyEngine {
       );
     }
 
-    if (dueAt.isBefore(baseline)) {
+    if (facts.isOverdue) {
       return LocalTaskReminderSuggestion(
         warningLevel: 'critical',
         warningReason: '任务已过截止时间，需要立即处理。',
@@ -44,13 +48,16 @@ class LocalTaskReminderStrategyEngine {
       );
     }
 
-    final remaining = dueAt.difference(baseline);
+    final remaining = Duration(seconds: facts.remainingSeconds ?? 0);
     if (task.priority == 'urgent' || remaining <= const Duration(hours: 6)) {
       return LocalTaskReminderSuggestion(
         warningLevel: 'critical',
         warningReason: '任务距离截止时间很近，需要立即关注。',
         preparationWindowDays: 0,
-        aiSuggestedRemindAt: _maxDate(baseline, dueAt.subtract(const Duration(hours: 2))),
+        aiSuggestedRemindAt: _maxDate(
+          baseline,
+          dueAt.subtract(const Duration(hours: 2)),
+        ),
       );
     }
 
@@ -107,8 +114,8 @@ class LocalTaskReminderStrategyEngine {
     final candidate = days == null
         ? dueAt
         : days <= 0
-            ? dueAt.subtract(const Duration(hours: 2))
-            : dueAt.subtract(Duration(days: days));
+        ? dueAt.subtract(const Duration(hours: 2))
+        : dueAt.subtract(Duration(days: days));
     return _maxDate(now, candidate);
   }
 

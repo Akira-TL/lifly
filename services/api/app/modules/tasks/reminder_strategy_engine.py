@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Reminder, Task, TaskReminderStrategy
+from app.modules.tasks.time_reasoning import build_task_time_facts
 
 
 @dataclass(frozen=True)
@@ -32,8 +33,9 @@ PREPARATION_KEYWORDS: tuple[tuple[str, int, str], ...] = (
 
 
 def suggest_task_reminder_strategy(task: Task, *, now: datetime | None = None) -> TaskReminderSuggestion | None:
-    baseline = now or datetime.now(timezone.utc)
-    due_at = _to_utc(task.due_at)
+    facts = build_task_time_facts(task, now=now or datetime.now(timezone.utc))
+    baseline = facts.now_utc
+    due_at = facts.due_at_utc
     title_text = f"{task.title or ''}\n{task.description or ''}"
     keyword_window = _preparation_window(title_text)
 
@@ -49,7 +51,7 @@ def suggest_task_reminder_strategy(task: Task, *, now: datetime | None = None) -
             ai_suggested_remind_at=None,
         )
 
-    if due_at < baseline:
+    if facts.is_overdue:
         return TaskReminderSuggestion(
             warning_level="critical",
             warning_reason="任务已过截止时间，需要立即处理。",
@@ -57,7 +59,7 @@ def suggest_task_reminder_strategy(task: Task, *, now: datetime | None = None) -
             ai_suggested_remind_at=baseline,
         )
 
-    remaining = due_at - baseline
+    remaining = timedelta(seconds=facts.remaining_seconds or 0)
     if task.priority == "urgent" or remaining <= timedelta(hours=6):
         return TaskReminderSuggestion(
             warning_level="critical",
@@ -220,11 +222,3 @@ def _warning_level(
     if due_at <= now + timedelta(days=1):
         return "warning"
     return "normal"
-
-
-def _to_utc(value: datetime | None) -> datetime | None:
-    if value is None:
-        return None
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
