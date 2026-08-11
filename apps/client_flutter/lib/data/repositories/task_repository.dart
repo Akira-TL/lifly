@@ -216,6 +216,23 @@ class TaskRepository {
     return Map<String, dynamic>.from(res['data'] as Map);
   }
 
+  Future<void> setManualReminder(String taskId, DateTime? remindAt) async {
+    if (remindAt == null) {
+      await dismissReminderStrategy(taskId, {
+        'warning_reason': '用户清除提醒时间',
+        'source': 'user',
+      });
+      return;
+    }
+
+    await confirmReminderStrategy(taskId, {
+      'warning_level': 'normal',
+      'warning_reason': '用户手动设置提醒时间',
+      'ai_suggested_remind_at': remindAt.toUtc().toIso8601String(),
+      'source': 'user',
+    });
+  }
+
   Future<List<Map<String, dynamic>>> reminders({
     String? status = 'pending',
     DateTime? dueBefore,

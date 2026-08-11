@@ -44,14 +44,29 @@ void main() {
     final created = tasks.singleWhere((task) => task.title == '带时间的新任务');
     expect(created.dueAt, isNotNull);
     expect(created.remindAt, isNotNull);
+    final pending = await repo.reminders(status: 'pending');
+    expect(pending, hasLength(1));
+    expect(pending.single['target_id'], created.id);
+    expect(
+      DateTime.parse(pending.single['remind_at'] as String).toUtc(),
+      created.remindAt!.toUtc(),
+    );
   });
 
   testWidgets('task edit can clear due and reminder times', (tester) async {
+    final remindAt = DateTime.utc(2026, 8, 12, 16);
     final task = await repo.create({
       'title': '清理任务时间',
       'due_at': DateTime.utc(2026, 8, 12, 18).toIso8601String(),
-      'remind_at': DateTime.utc(2026, 8, 12, 16).toIso8601String(),
+      'remind_at': remindAt.toIso8601String(),
     });
+    await repo.confirmReminderStrategy(task.id, {
+      'warning_level': 'normal',
+      'warning_reason': '用户手动设置提醒时间',
+      'ai_suggested_remind_at': remindAt.toIso8601String(),
+      'source': 'user',
+    });
+    expect(await repo.reminders(status: 'pending'), hasLength(1));
 
     await tester.pumpWidget(
       _buildApp(
@@ -73,6 +88,8 @@ void main() {
     final updated = await repo.get(task.id);
     expect(updated.dueAt, isNull);
     expect(updated.remindAt, isNull);
+    expect(await repo.reminders(status: 'pending'), isEmpty);
+    expect(await repo.reminders(status: 'cancelled'), hasLength(1));
     expect(find.text('无'), findsWidgets);
   });
 }

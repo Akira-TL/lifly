@@ -130,7 +130,7 @@ class _TaskListPageState extends State<TaskListPage> {
 
     setState(() => _isCreating = true);
     try {
-      await _repo.create({
+      final created = await _repo.create({
         'title': draft.title,
         'description': draft.description.isEmpty ? null : draft.description,
         'priority': draft.priority,
@@ -138,7 +138,19 @@ class _TaskListPageState extends State<TaskListPage> {
         'remind_at': draft.remindAt?.toUtc().toIso8601String(),
         'source': 'flutter',
       });
+      Object? reminderError;
+      if (draft.remindAt != null) {
+        try {
+          await _repo.setManualReminder(created.id, draft.remindAt);
+        } catch (error) {
+          reminderError = error;
+        }
+      }
       await _loadFirstPage();
+      if (!mounted || reminderError == null) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('任务已创建，但提醒设置失败：$reminderError')),
+      );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(

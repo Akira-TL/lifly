@@ -66,6 +66,9 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
 
     setState(() => _isSaving = true);
     try {
+      final reminderChanged =
+          task.remindAt?.toUtc().millisecondsSinceEpoch !=
+          draft.remindAt?.toUtc().millisecondsSinceEpoch;
       final updated = await _repo.update(task.id, {
         'title': draft.title,
         'description': draft.description.isEmpty ? null : draft.description,
@@ -74,11 +77,25 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
         'due_at': draft.dueAt?.toUtc().toIso8601String(),
         'remind_at': draft.remindAt?.toUtc().toIso8601String(),
       });
+      Object? reminderError;
+      if (reminderChanged) {
+        try {
+          await _repo.setManualReminder(task.id, draft.remindAt);
+        } catch (error) {
+          reminderError = error;
+        }
+      }
       if (!mounted) return;
       setState(() => _task = updated);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('任务已更新')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            reminderError == null
+                ? '任务已更新'
+                : '任务已更新，但提醒同步失败：$reminderError',
+          ),
+        ),
+      );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(

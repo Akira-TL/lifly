@@ -135,6 +135,19 @@ async def _upsert_strategy(
             source=str(data.get("source") or "user"),
         )
         db.add(strategy)
+    else:
+        if data.get("warning_level") is not None:
+            strategy.warning_level = str(data["warning_level"])
+        if "warning_reason" in data:
+            strategy.warning_reason = data.get("warning_reason")
+        if "preparation_window_days" in data:
+            strategy.preparation_window_days = data.get("preparation_window_days")
+        if "ai_suggested_remind_at" in data:
+            strategy.ai_suggested_remind_at = _parse_datetime(
+                data.get("ai_suggested_remind_at")
+            )
+        if data.get("source") is not None:
+            strategy.source = str(data["source"])
     strategy.strategy_status = status
     if status == "confirmed":
         strategy.confirmed_at = datetime.now(timezone.utc)
