@@ -7,6 +7,7 @@ class LocalMemoCreateInput {
   final String? title;
   final String contentMarkdown;
   final List<String> tags;
+  final String? mood;
   final String? sourceCaptureId;
 
   const LocalMemoCreateInput({
@@ -14,6 +15,7 @@ class LocalMemoCreateInput {
     required this.title,
     required this.contentMarkdown,
     required this.tags,
+    required this.mood,
     required this.sourceCaptureId,
   });
 
@@ -23,6 +25,7 @@ class LocalMemoCreateInput {
       title: _readOptionalString(input, 'title'),
       contentMarkdown: _readOptionalString(input, 'content_markdown') ?? '',
       tags: _readStringList(input, 'tags'),
+      mood: _readOptionalString(input, 'mood'),
       sourceCaptureId: _readOptionalString(input, 'source_capture_id'),
     );
   }
@@ -48,6 +51,8 @@ class LocalMemoUpdateInput {
   final String? title;
   final String? contentMarkdown;
   final List<String>? tags;
+  final String? mood;
+  final bool hasMood;
 
   const LocalMemoUpdateInput({
     required this.memoId,
@@ -55,6 +60,8 @@ class LocalMemoUpdateInput {
     required this.title,
     required this.contentMarkdown,
     required this.tags,
+    required this.mood,
+    required this.hasMood,
   });
 
   factory LocalMemoUpdateInput.fromMap(Map<String, Object?> input) {
@@ -71,6 +78,8 @@ class LocalMemoUpdateInput {
       title: _readOptionalString(input, 'title'),
       contentMarkdown: _readOptionalString(input, 'content_markdown'),
       tags: input.containsKey('tags') ? _readStringList(input, 'tags') : null,
+      mood: _readOptionalString(input, 'mood'),
+      hasMood: input.containsKey('mood'),
     );
   }
 }
@@ -106,6 +115,7 @@ class LocalMemoMapper {
       title: row['title'] as String?,
       contentMarkdown: row['content_markdown'] as String? ?? '',
       tags: decodeTags(row['tags'] as String?),
+      mood: row['mood'] as String?,
       status: row['status'] as String? ?? 'active',
       revision: row['revision'] as int? ?? 1,
       createdAt: _readDateTime(row['created_at']),
@@ -129,6 +139,7 @@ class LocalMemoMapper {
       'title': memo.title,
       'content_markdown': memo.contentMarkdown,
       'tags': memo.tags,
+      'mood': memo.mood,
       'status': memo.status,
       'revision': memo.revision,
       'created_at': memo.createdAt.toIso8601String(),

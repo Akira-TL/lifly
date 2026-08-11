@@ -44,6 +44,7 @@ class PowerSyncMemoStore {
       title: createInput.title,
       contentMarkdown: createInput.contentMarkdown,
       tags: createInput.tags,
+      mood: createInput.mood,
       status: 'active',
       revision: metadata.revision,
       createdAt: metadata.timestamps.createdAt,
@@ -107,6 +108,7 @@ class PowerSyncMemoStore {
         title: updateInput.title ?? oldMemo.title,
         contentMarkdown: updateInput.contentMarkdown ?? oldMemo.contentMarkdown,
         tags: updateInput.tags ?? oldMemo.tags,
+        mood: updateInput.hasMood ? updateInput.mood : oldMemo.mood,
         status: oldMemo.status,
         revision: metadata.revision,
         createdAt: oldMemo.createdAt,
@@ -368,6 +370,7 @@ class PowerSyncMemoStore {
         title: oldMemo.title,
         contentMarkdown: oldMemo.contentMarkdown,
         tags: oldMemo.tags,
+        mood: oldMemo.mood,
         status: deleteInput.status,
         revision: metadata.revision,
         createdAt: oldMemo.createdAt,
@@ -393,7 +396,7 @@ class PowerSyncMemoStore {
 
   Future<LocalMemoRecord?> _activeMemoById(String memoId) async {
     final row = await syncService.db.getOptional(
-      'SELECT id, type, title, content_markdown, tags, status, revision, created_at, updated_at '
+      'SELECT id, type, title, content_markdown, tags, mood, status, revision, created_at, updated_at '
       'FROM memos WHERE id = ? AND status = ?',
       [memoId, 'active'],
     );
@@ -547,7 +550,7 @@ class PowerSyncMemoStore {
     await syncService.ensureInitialized();
     final likeQuery = '%$query%';
     final rows = await syncService.db.getAll(
-      'SELECT id, type, title, content_markdown, tags, status, revision, created_at, updated_at '
+      'SELECT id, type, title, content_markdown, tags, mood, status, revision, created_at, updated_at '
       'FROM memos '
       'WHERE status = ? AND (? = ? OR lower(coalesce(title, ?) || ? || coalesce(content_markdown, ?)) LIKE ?) '
       'ORDER BY updated_at DESC '
@@ -564,7 +567,7 @@ class PowerSyncMemoStore {
     String memoId,
   ) async {
     final row = await handle.getOptional(
-      'SELECT id, type, title, content_markdown, tags, status, revision, created_at, updated_at '
+      'SELECT id, type, title, content_markdown, tags, mood, status, revision, created_at, updated_at '
       'FROM memos WHERE id = ? AND status = ?',
       [memoId, 'active'],
     );
@@ -579,8 +582,8 @@ class PowerSyncMemoStore {
   }) async {
     await handle.execute(
       'INSERT INTO memos('
-      'id, user_id, type, title, content_markdown, tags, source_capture_id, source, status, created_at, updated_at, revision'
-      ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'id, user_id, type, title, content_markdown, tags, mood, source_capture_id, source, status, created_at, updated_at, revision'
+      ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         memo.id,
         metadata.userId,
@@ -588,6 +591,7 @@ class PowerSyncMemoStore {
         memo.title,
         memo.contentMarkdown,
         LocalMemoMapper.encodeTags(memo.tags),
+        memo.mood,
         sourceCaptureId,
         metadata.source,
         memo.status,
@@ -604,13 +608,14 @@ class PowerSyncMemoStore {
     LocalCoreWriteMetadata metadata,
   ) async {
     await handle.execute(
-      'UPDATE memos SET type = ?, title = ?, content_markdown = ?, tags = ?, updated_at = ?, revision = ? '
+      'UPDATE memos SET type = ?, title = ?, content_markdown = ?, tags = ?, mood = ?, updated_at = ?, revision = ? '
       'WHERE id = ? AND status = ?',
       [
         memo.type,
         memo.title,
         memo.contentMarkdown,
         LocalMemoMapper.encodeTags(memo.tags),
+        memo.mood,
         metadata.timestamps.updatedAtIso,
         metadata.revision,
         memo.id,

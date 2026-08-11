@@ -393,7 +393,7 @@ class MemoRepository {
       title: record.title,
       contentMarkdown: record.contentMarkdown,
       tags: record.tags,
-      mood: null,
+      mood: record.mood,
       status: record.status,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,

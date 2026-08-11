@@ -13,6 +13,7 @@ mixin _FakeMemoStore on _FakeLocalCoreState {
       title: input['title'] as String?,
       contentMarkdown: input['content_markdown'] as String? ?? '',
       tags: (input['tags'] as List?)?.whereType<String>().toList() ?? const [],
+      mood: input['mood'] as String?,
       status: 'active',
       revision: 1,
       createdAt: now,
@@ -62,6 +63,7 @@ mixin _FakeMemoStore on _FakeLocalCoreState {
       contentMarkdown:
           input['content_markdown'] as String? ?? old.contentMarkdown,
       tags: (input['tags'] as List?)?.whereType<String>().toList() ?? old.tags,
+      mood: input.containsKey('mood') ? input['mood'] as String? : old.mood,
       status: old.status,
       revision: old.revision + 1,
       createdAt: old.createdAt,
@@ -90,6 +92,7 @@ mixin _FakeMemoStore on _FakeLocalCoreState {
       title: old.title,
       contentMarkdown: old.contentMarkdown,
       tags: old.tags,
+      mood: old.mood,
       status: input['status'] as String? ?? 'deleted',
       revision: old.revision + 1,
       createdAt: old.createdAt,

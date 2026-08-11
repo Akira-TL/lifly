@@ -35,8 +35,14 @@ void main() {
         'title': 'PowerSync memo',
         'content_markdown': 'created through PowerSync local memo store',
         'tags': ['powersync'],
+        'mood': '开心',
       }, context);
       expect(memo.revision, 1);
+      final createdRow = await service.db.get(
+        'SELECT mood FROM memos WHERE id = ?',
+        [memo.id],
+      );
+      expect(createdRow['mood'], '开心');
 
       final results = await bridge.searchMemos({
         'q': 'local memo store',
@@ -49,8 +55,14 @@ void main() {
         'title': 'Updated PowerSync memo',
         'content_markdown': 'updated through PowerSync local memo store',
         'tags': ['powersync', 'updated'],
+        'mood': '平静',
       }, context);
       expect(updated.revision, 2);
+      final updatedRow = await service.db.get(
+        'SELECT mood FROM memos WHERE id = ?',
+        [memo.id],
+      );
+      expect(updatedRow['mood'], '平静');
 
       final deleted = await bridge.deleteMemo({'memo_id': memo.id}, context);
       expect(deleted.status, 'deleted');

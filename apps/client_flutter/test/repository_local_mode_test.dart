@@ -30,10 +30,20 @@ void main() {
       'title': 'Local memo',
       'content_markdown': 'stored locally',
       'tags': ['local'],
+      'mood': '开心',
     });
+    final updated = await repo.update(memo.id, {'mood': '平静'});
+    final reloaded = await repo.get(memo.id);
+    final cleared = await repo.update(memo.id, {'mood': null});
+    final afterClear = await repo.get(memo.id);
     final page = await repo.listPage(q: 'stored locally');
 
     expect(memo.id, 'local_memo_0001');
+    expect(memo.mood, '开心');
+    expect(updated.mood, '平静');
+    expect(reloaded.mood, '平静');
+    expect(cleared.mood, isNull);
+    expect(afterClear.mood, isNull);
     expect(page.items.map((item) => item.id), contains(memo.id));
   });
 

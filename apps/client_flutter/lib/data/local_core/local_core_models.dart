@@ -29,6 +29,7 @@ class LocalMemoRecord {
   final String? title;
   final String contentMarkdown;
   final List<String> tags;
+  final String? mood;
   final String status;
   final int revision;
   final DateTime createdAt;
@@ -40,6 +41,7 @@ class LocalMemoRecord {
     required this.title,
     required this.contentMarkdown,
     required this.tags,
+    this.mood,
     required this.status,
     required this.revision,
     required this.createdAt,
