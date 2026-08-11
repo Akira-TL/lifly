@@ -56,6 +56,7 @@ void main() {
       final deleted = await secondBridge.deleteMemo({
         'memo_id': memo.id,
       }, context);
+      expect(deleted.status, 'user_trashed');
       expect(deleted.revision, 3);
       secondService.dispose();
 
@@ -76,7 +77,7 @@ void main() {
         'SELECT status, revision FROM memos WHERE id = ?',
         [memo.id],
       );
-      expect(deletedRow['status'], 'deleted');
+      expect(deletedRow['status'], 'user_trashed');
       expect(deletedRow['revision'], 3);
 
       final auditCount = await thirdService.db.get(

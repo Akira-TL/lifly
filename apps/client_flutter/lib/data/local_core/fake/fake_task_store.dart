@@ -134,7 +134,7 @@ mixin _FakeTaskStore on _FakeLocalCoreState {
       priority: old.priority,
       taskStatus: old.taskStatus,
       completedAt: old.completedAt,
-      status: input['status'] as String? ?? 'deleted',
+      status: input['status'] as String? ?? 'user_trashed',
       revision: old.revision + 1,
       createdAt: old.createdAt,
       updatedAt: context.effectiveNow,

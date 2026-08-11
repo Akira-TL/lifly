@@ -51,7 +51,7 @@ void main() {
 
       final deleted = await core.deleteMemo({'memo_id': memo.id}, context);
       expect(deleted.revision, 3);
-      expect(deleted.status, 'deleted');
+      expect(deleted.status, 'user_trashed');
 
       final afterDelete = await core.searchMemos({
         'q': 'updated',
@@ -90,7 +90,7 @@ void main() {
       final deleted = await core.deleteExpense({
         'transaction_id': tx.id,
       }, context);
-      expect(deleted.status, 'deleted');
+      expect(deleted.status, 'user_trashed');
       expect(deleted.revision, 2);
 
       final afterDelete = await core.searchExpenses({
@@ -135,7 +135,7 @@ void main() {
       expect(completed.revision, 3);
 
       final deleted = await core.deleteTask({'task_id': task.id}, context);
-      expect(deleted.status, 'deleted');
+      expect(deleted.status, 'user_trashed');
       expect(deleted.revision, 4);
 
       final afterDelete = await core.listTasks({'limit': 20}, context);

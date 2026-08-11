@@ -374,7 +374,7 @@ mixin _FakeLedgerStore on _FakeLocalCoreState {
       note: old.note,
       categoryId: old.categoryId,
       occurredAt: old.occurredAt,
-      status: input['status'] as String? ?? 'deleted',
+      status: input['status'] as String? ?? 'user_trashed',
       revision: old.revision + 1,
       createdAt: old.createdAt,
       updatedAt: context.effectiveNow,

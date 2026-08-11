@@ -68,7 +68,7 @@ void main() {
       expect(doneList.map((item) => item.id), contains(task.id));
 
       final deleted = await bridge.deleteTask({'task_id': task.id}, context);
-      expect(deleted.status, 'deleted');
+      expect(deleted.status, 'user_trashed');
       expect(deleted.revision, 4);
 
       final afterDelete = await bridge.listTasks({'limit': 20}, context);

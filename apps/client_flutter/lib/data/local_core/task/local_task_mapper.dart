@@ -115,7 +115,7 @@ class LocalTaskDeleteInput {
   factory LocalTaskDeleteInput.fromMap(Map<String, Object?> input) {
     return LocalTaskDeleteInput(
       taskId: _readTaskId(input),
-      status: _readOptionalString(input, 'status') ?? 'deleted',
+      status: _readOptionalString(input, 'status') ?? 'user_trashed',
     );
   }
 }

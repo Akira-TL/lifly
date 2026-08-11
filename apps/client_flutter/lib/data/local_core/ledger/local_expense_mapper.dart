@@ -123,7 +123,7 @@ class LocalExpenseDeleteInput {
   factory LocalExpenseDeleteInput.fromMap(Map<String, Object?> input) {
     return LocalExpenseDeleteInput(
       transactionId: _readTransactionId(input),
-      status: _readOptionalString(input, 'status') ?? 'deleted',
+      status: _readOptionalString(input, 'status') ?? 'user_trashed',
     );
   }
 }

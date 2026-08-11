@@ -77,7 +77,7 @@ void main() {
       final deleted = await thirdBridge.deleteTask({
         'task_id': task.id,
       }, context);
-      expect(deleted.status, 'deleted');
+      expect(deleted.status, 'user_trashed');
       expect(deleted.revision, 4);
       thirdService.dispose();
 
@@ -99,7 +99,7 @@ void main() {
         'SELECT status, revision, task_status, completed_at FROM tasks WHERE id = ?',
         [task.id],
       );
-      expect(deletedRow['status'], 'deleted');
+      expect(deletedRow['status'], 'user_trashed');
       expect(deletedRow['revision'], 4);
       expect(deletedRow['task_status'], 'done');
       expect(deletedRow['completed_at'], isNotNull);

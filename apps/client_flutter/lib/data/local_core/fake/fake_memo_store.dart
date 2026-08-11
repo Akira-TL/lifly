@@ -93,7 +93,7 @@ mixin _FakeMemoStore on _FakeLocalCoreState {
       contentMarkdown: old.contentMarkdown,
       tags: old.tags,
       mood: old.mood,
-      status: input['status'] as String? ?? 'deleted',
+      status: input['status'] as String? ?? 'user_trashed',
       revision: old.revision + 1,
       createdAt: old.createdAt,
       updatedAt: context.effectiveNow,

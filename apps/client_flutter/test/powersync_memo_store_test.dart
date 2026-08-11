@@ -65,7 +65,7 @@ void main() {
       expect(updatedRow['mood'], '平静');
 
       final deleted = await bridge.deleteMemo({'memo_id': memo.id}, context);
-      expect(deleted.status, 'deleted');
+      expect(deleted.status, 'user_trashed');
       expect(deleted.revision, 3);
 
       final afterDelete = await bridge.searchMemos({

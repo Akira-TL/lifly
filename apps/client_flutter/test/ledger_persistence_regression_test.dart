@@ -66,7 +66,7 @@ void main() {
         'transaction_id': expense.id,
       }, context);
       expect(deleted.revision, 2);
-      expect(deleted.status, 'deleted');
+      expect(deleted.status, 'user_trashed');
       secondService.dispose();
 
       final thirdService = await harness.openService();
@@ -93,7 +93,7 @@ void main() {
         'SELECT status, revision FROM ledger_transactions WHERE id = ?',
         [expense.id],
       );
-      expect(deletedRow['status'], 'deleted');
+      expect(deletedRow['status'], 'user_trashed');
       expect(deletedRow['revision'], 2);
 
       final auditCount = await thirdService.db.get(

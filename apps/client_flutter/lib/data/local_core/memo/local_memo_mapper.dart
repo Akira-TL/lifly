@@ -100,7 +100,7 @@ class LocalMemoDeleteInput {
 
     return LocalMemoDeleteInput(
       memoId: memoId.trim(),
-      status: _readOptionalString(input, 'status') ?? 'deleted',
+      status: _readOptionalString(input, 'status') ?? 'user_trashed',
     );
   }
 }

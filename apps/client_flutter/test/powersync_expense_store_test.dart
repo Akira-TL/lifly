@@ -82,7 +82,7 @@ void main() {
       final deleted = await bridge.deleteExpense({
         'transaction_id': expense.id,
       }, context);
-      expect(deleted.status, 'deleted');
+      expect(deleted.status, 'user_trashed');
       expect(deleted.revision, 3);
 
       final afterDelete = await bridge.searchExpenses({
