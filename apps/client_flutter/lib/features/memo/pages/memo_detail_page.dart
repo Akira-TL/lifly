@@ -105,7 +105,7 @@ class _MemoDetailPageState extends State<MemoDetailPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('删除备忘？'),
-        content: const Text('删除后会进入后端回收/删除状态，列表将不再显示。'),
+        content: const Text('删除后将不再显示在备忘列表中。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -212,17 +212,19 @@ class _MemoDetailPageState extends State<MemoDetailPage> {
         title: const Text('备忘详情'),
         actions: [
           IconButton(
+            tooltip: '编辑备忘',
             onPressed: _isSaving ? null : _editMemo,
             icon: const Icon(Icons.edit_outlined),
           ),
           IconButton(
+            tooltip: '删除备忘',
             onPressed: _isSaving ? null : _deleteMemo,
             icon: const Icon(Icons.delete_outline),
           ),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const LoadingState(message: '正在加载备忘')
           : _error != null
           ? ErrorState(message: _error!, onRetry: _load)
           : memo == null
@@ -284,8 +286,27 @@ class _MemoDetailPageState extends State<MemoDetailPage> {
     final mood = memo.mood == null || memo.mood!.isEmpty
         ? ''
         : ' · ${memo.mood}';
-    return '${memo.type} · ${memo.status} · 更新于 $updated$mood';
+    return '${_memoTypeLabel(memo.type)} · ${_memoStatusLabel(memo.status)} · 更新于 $updated$mood';
   }
+}
+
+String _memoTypeLabel(String type) {
+  return switch (type) {
+    'memo' => '备忘',
+    'journal' => '日记',
+    'clip' => '剪藏',
+    'doc' => '文档',
+    _ => '其他',
+  };
+}
+
+String _memoStatusLabel(String status) {
+  return switch (status) {
+    'active' => '正常',
+    'archived' => '已归档',
+    'deleted' => '已删除',
+    _ => '其他状态',
+  };
 }
 
 class _MemoAssetsSection extends StatelessWidget {
@@ -309,9 +330,7 @@ class _MemoAssetsSection extends StatelessWidget {
       children: [
         Row(
           children: [
-            Expanded(
-              child: Text('附件引用', style: theme.textTheme.titleMedium),
-            ),
+            Expanded(child: Text('附件引用', style: theme.textTheme.titleMedium)),
             TextButton.icon(
               onPressed: isAdding ? null : onAddExternalLink,
               icon: isAdding
@@ -335,7 +354,7 @@ class _MemoAssetsSection extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              '还没有附件。可以先添加外链作为附件引用，内部文件上传会在后续版本继续完善。',
+              '还没有附件。可以添加外部链接，文件附件可从附件库统一管理。',
               style: theme.textTheme.bodyMedium,
             ),
           )

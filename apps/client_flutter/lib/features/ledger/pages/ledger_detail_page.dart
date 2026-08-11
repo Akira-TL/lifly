@@ -139,17 +139,19 @@ class _LedgerDetailPageState extends State<LedgerDetailPage> {
         title: const Text('账单详情'),
         actions: [
           IconButton(
+            tooltip: '编辑账单',
             onPressed: _isSaving ? null : _editTransaction,
             icon: const Icon(Icons.edit_outlined),
           ),
           IconButton(
+            tooltip: '删除账单',
             onPressed: _isSaving ? null : _removeTransaction,
             icon: const Icon(Icons.delete_outline),
           ),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const LoadingState(message: '正在加载账单')
           : _error != null
           ? ErrorState(message: _error!, onRetry: _load)
           : transaction == null
@@ -177,13 +179,19 @@ class _LedgerDetailPageState extends State<LedgerDetailPage> {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 20),
-                  _DetailRow(label: '类型', value: transaction.direction),
+                  _DetailRow(
+                    label: '类型',
+                    value: _ledgerDirectionLabel(transaction.direction),
+                  ),
                   _DetailRow(label: '币种', value: transaction.currency),
                   _DetailRow(
                     label: '分类',
                     value: transaction.categoryId ?? '未分类',
                   ),
-                  _DetailRow(label: '来源', value: transaction.source),
+                  _DetailRow(
+                    label: '来源',
+                    value: _ledgerSourceLabel(transaction.source),
+                  ),
                   _DetailRow(
                     label: '发生时间',
                     value: DateFormat(
@@ -202,6 +210,25 @@ class _LedgerDetailPageState extends State<LedgerDetailPage> {
             ),
     );
   }
+}
+
+String _ledgerDirectionLabel(String direction) {
+  return switch (direction) {
+    'expense' => '支出',
+    'income' => '收入',
+    'transfer' => '转账',
+    _ => '其他',
+  };
+}
+
+String _ledgerSourceLabel(String source) {
+  return switch (source) {
+    'local' => '本地记录',
+    'manual' || 'flutter' => '手动记录',
+    'ai' || 'capture' => 'AI 记录',
+    'import' => '账单导入',
+    _ => '其他来源',
+  };
 }
 
 class _DetailRow extends StatelessWidget {

@@ -154,17 +154,19 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
         title: const Text('任务详情'),
         actions: [
           IconButton(
+            tooltip: '编辑任务',
             onPressed: _isSaving ? null : _editTask,
             icon: const Icon(Icons.edit_outlined),
           ),
           IconButton(
+            tooltip: '删除任务',
             onPressed: _isSaving ? null : _removeTask,
             icon: const Icon(Icons.delete_outline),
           ),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const LoadingState(message: '正在加载任务')
           : _error != null
           ? ErrorState(message: _error!, onRetry: _load)
           : task == null
@@ -202,8 +204,14 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
                         : '暂无描述',
                   ),
                   const SizedBox(height: 20),
-                  _DetailRow(label: '状态', value: task.taskStatus),
-                  _DetailRow(label: '优先级', value: task.priority),
+                  _DetailRow(
+                    label: '状态',
+                    value: _taskStatusLabel(task.taskStatus),
+                  ),
+                  _DetailRow(
+                    label: '优先级',
+                    value: _taskPriorityLabel(task.priority),
+                  ),
                   _DetailRow(label: '到期时间', value: _formatDate(task.dueAt)),
                   _DetailRow(label: '提醒时间', value: _formatDate(task.remindAt)),
                   _DetailRow(
@@ -221,6 +229,26 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
     if (value == null) return '无';
     return DateFormat('yyyy-MM-dd HH:mm').format(value.toLocal());
   }
+}
+
+String _taskStatusLabel(String status) {
+  return switch (status) {
+    'todo' => '待办',
+    'doing' => '进行中',
+    'done' => '已完成',
+    'cancelled' => '已取消',
+    _ => '其他状态',
+  };
+}
+
+String _taskPriorityLabel(String priority) {
+  return switch (priority) {
+    'low' => '低优先级',
+    'normal' => '普通',
+    'high' => '高优先级',
+    'urgent' => '紧急',
+    _ => '普通',
+  };
 }
 
 class _DetailRow extends StatelessWidget {
