@@ -171,7 +171,12 @@ class _MemoListPageState extends State<MemoListPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: !_isSearching,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _isSearching) _closeSearch();
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: _isSearching
             ? TextField(
@@ -259,13 +264,14 @@ class _MemoListPageState extends State<MemoListPage> {
           ),
         ],
       ),
-      floatingActionButton: AdaptiveActionFab(
-        heroTag: 'memo-create-fab',
-        tooltip: '新建备忘',
-        label: '新建',
-        icon: Icons.add,
-        isLoading: _isCreating,
-        onPressed: _isCreating ? null : _createMemo,
+        floatingActionButton: AdaptiveActionFab(
+          heroTag: 'memo-create-fab',
+          tooltip: '新建备忘',
+          label: '新建',
+          icon: Icons.add,
+          isLoading: _isCreating,
+          onPressed: _isCreating ? null : _createMemo,
+        ),
       ),
     );
   }

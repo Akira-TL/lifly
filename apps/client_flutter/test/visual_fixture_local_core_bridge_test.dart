@@ -124,6 +124,11 @@ void main() {
     await tester.tap(find.byTooltip('搜索备忘'));
     await tester.pump();
     expect(find.byKey(const Key('memo_inline_search')), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('memo_inline_search')), findsNothing);
+    expect(find.text('备忘录'), findsOneWidget);
   });
 
   testWidgets('visual fixture bridge renders localized compact task states', (
