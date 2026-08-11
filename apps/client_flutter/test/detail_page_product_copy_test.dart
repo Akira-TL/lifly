@@ -5,6 +5,7 @@ import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/repositories/ledger_repository.dart';
 import 'package:client_flutter/data/repositories/memo_repository.dart';
 import 'package:client_flutter/data/repositories/task_repository.dart';
+import 'package:client_flutter/domain/entities/memo.dart';
 import 'package:client_flutter/features/ledger/pages/ledger_detail_page.dart';
 import 'package:client_flutter/features/memo/pages/memo_detail_page.dart';
 import 'package:client_flutter/features/task/pages/task_detail_page.dart';
@@ -64,6 +65,46 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '保存'));
     await tester.pumpAndSettle();
     expect(find.text('只有标题也可以保存'), findsOneWidget);
+
+    final addLinkButton = tester.widget<TextButton>(
+      find.widgetWithText(TextButton, '添加外链'),
+    );
+    expect(addLinkButton.onPressed, isNull);
+    expect(find.textContaining('附件引用需连接云端服务'), findsOneWidget);
+  });
+
+  testWidgets('cloud memo external link validates the URL inline', (tester) async {
+    final memo = Memo(
+      id: 'memo-cloud-1',
+      type: 'memo',
+      title: '云端备忘',
+      contentMarkdown: '正文',
+      tags: const [],
+      status: 'active',
+      createdAt: DateTime.utc(2026, 8, 11, 8),
+      updatedAt: DateTime.utc(2026, 8, 11, 8),
+    );
+    final cloudApi = _MemoDetailApiClient(memo);
+
+    await tester.pumpWidget(
+      _buildApp(
+        localCore: localCore,
+        api: cloudApi,
+        dataMode: LiflyDataMode.api,
+        child: MemoDetailPage(memoId: memo.id, initialMemo: memo),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('添加外链'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.pump();
+    expect(find.text('请输入链接地址'), findsOneWidget);
+
+    await tester.enterText(_textField('URL'), 'https://example.com/article');
+    await tester.pump();
+    expect(find.text('请输入链接地址'), findsNothing);
   });
 
   testWidgets('task detail localizes status and priority', (tester) async {
@@ -167,14 +208,42 @@ Finder _textField(String label) {
 Widget _buildApp({
   required LocalCoreBridge localCore,
   required ApiClient api,
+  LiflyDataMode dataMode = LiflyDataMode.local,
   required Widget child,
 }) {
   return MultiProvider(
     providers: [
       Provider<ApiClient>.value(value: api),
       Provider<LocalCoreBridge>.value(value: localCore),
-      Provider<LiflyDataMode>.value(value: LiflyDataMode.local),
+      Provider<LiflyDataMode>.value(value: dataMode),
     ],
     child: MaterialApp(home: child),
   );
+}
+
+class _MemoDetailApiClient extends ApiClient {
+  _MemoDetailApiClient(this.memo) : super(baseUrl: 'http://localhost/api/v1');
+
+  final Memo memo;
+
+  @override
+  Future<Map<String, dynamic>> get(
+    String path, {
+    Map<String, dynamic>? params,
+  }) async {
+    return {
+      'data': {
+        'id': memo.id,
+        'type': memo.type,
+        'title': memo.title,
+        'content_markdown': memo.contentMarkdown,
+        'tags': memo.tags,
+        'mood': memo.mood,
+        'status': memo.status,
+        'created_at': memo.createdAt.toIso8601String(),
+        'updated_at': memo.updatedAt.toIso8601String(),
+        'assets': const [],
+      },
+    };
+  }
 }

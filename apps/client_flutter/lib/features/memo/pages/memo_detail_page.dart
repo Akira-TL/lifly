@@ -23,6 +23,7 @@ class MemoDetailPage extends StatefulWidget {
 class _MemoDetailPageState extends State<MemoDetailPage> {
   late final MemoRepository _repo;
   late final AssetRepository _assetRepo;
+  late final LiflyDataMode _dataMode;
   Memo? _memo;
   List<MemoAssetRef> _assets = const [];
   bool _isLoading = true;
@@ -34,10 +35,11 @@ class _MemoDetailPageState extends State<MemoDetailPage> {
   void initState() {
     super.initState();
     final api = context.read<ApiClient>();
+    _dataMode = context.read<LiflyDataMode>();
     _repo = MemoRepository(
       api,
       localCore: context.read<LocalCoreBridge>(),
-      dataMode: context.read<LiflyDataMode>(),
+      dataMode: _dataMode,
     );
     _assetRepo = AssetRepository(api);
     _memo = widget.initialMemo;
@@ -270,8 +272,12 @@ class _MemoDetailPageState extends State<MemoDetailPage> {
                   _MemoAssetsSection(
                     refs: _assets,
                     isAdding: _isAddingAsset,
-                    onAddExternalLink: _addExternalAsset,
-                    onRemove: _isSaving ? null : _unbindAsset,
+                    onAddExternalLink: _dataMode == LiflyDataMode.api
+                        ? _addExternalAsset
+                        : null,
+                    onRemove: _dataMode == LiflyDataMode.api && !_isSaving
+                        ? _unbindAsset
+                        : null,
                   ),
                 ],
               ),
@@ -312,7 +318,7 @@ String _memoStatusLabel(String status) {
 class _MemoAssetsSection extends StatelessWidget {
   final List<MemoAssetRef> refs;
   final bool isAdding;
-  final VoidCallback onAddExternalLink;
+  final VoidCallback? onAddExternalLink;
   final ValueChanged<MemoAssetRef>? onRemove;
 
   const _MemoAssetsSection({
@@ -354,7 +360,9 @@ class _MemoAssetsSection extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              '还没有附件。可以添加外部链接，文件附件可从附件库统一管理。',
+              onAddExternalLink == null
+                  ? '本地模式可继续编辑备忘；附件引用需连接云端服务后管理。'
+                  : '还没有附件。可以添加外部链接，文件附件可从附件库统一管理。',
               style: theme.textTheme.bodyMedium,
             ),
           )
@@ -394,6 +402,7 @@ class _ExternalAssetDialog extends StatefulWidget {
 class _ExternalAssetDialogState extends State<_ExternalAssetDialog> {
   final _titleController = TextEditingController();
   final _urlController = TextEditingController();
+  String? _urlError;
 
   @override
   void dispose() {
@@ -416,7 +425,10 @@ class _ExternalAssetDialogState extends State<_ExternalAssetDialog> {
           TextField(
             controller: _urlController,
             keyboardType: TextInputType.url,
-            decoration: const InputDecoration(labelText: 'URL'),
+            decoration: InputDecoration(labelText: 'URL', errorText: _urlError),
+            onChanged: (_) {
+              if (_urlError != null) setState(() => _urlError = null);
+            },
           ),
         ],
       ),
@@ -428,7 +440,10 @@ class _ExternalAssetDialogState extends State<_ExternalAssetDialog> {
         FilledButton(
           onPressed: () {
             final url = _urlController.text.trim();
-            if (url.isEmpty) return;
+            if (url.isEmpty) {
+              setState(() => _urlError = '请输入链接地址');
+              return;
+            }
             Navigator.pop(
               context,
               _ExternalAssetDraft(

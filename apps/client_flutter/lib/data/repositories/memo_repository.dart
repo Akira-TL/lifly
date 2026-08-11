@@ -319,9 +319,7 @@ class MemoRepository {
     String refType = 'attachment',
   }) async {
     if (_useLocalCore) {
-      throw UnsupportedError(
-        'Local Core memo asset binding is not available in v0.5.2.',
-      );
+      throw UnsupportedError('本地模式暂不支持附件引用，请连接云端服务后重试。');
     }
 
     final res = await api.post(
@@ -336,9 +334,7 @@ class MemoRepository {
 
   Future<void> unbindAsset(String memoId, String assetId) async {
     if (_useLocalCore) {
-      throw UnsupportedError(
-        'Local Core memo asset unbinding is not available in v0.5.2.',
-      );
+      throw UnsupportedError('本地模式暂不支持附件引用，请连接云端服务后重试。');
     }
 
     await api.delete('/memos/$memoId/assets/$assetId');
