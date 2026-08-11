@@ -136,6 +136,57 @@ async def test_sync_push_marks_memo_removed() -> None:
 
 
 @pytest.mark.anyio
+async def test_sync_push_memo_partial_restore_preserves_unsent_fields() -> None:
+    session = FakeAsyncSession()
+    created_at = datetime(2026, 7, 3, 8, tzinfo=timezone.utc)
+    deleted_at = datetime(2026, 7, 3, 9, tzinfo=timezone.utc)
+    memo = Memo(
+        id="memo-restore-sync",
+        user_id="local-dev",
+        type="journal",
+        title="Preserve memo",
+        content_markdown="keep body",
+        tags=["keep"],
+        mood="平静",
+        source_capture_id="capture-memo",
+        source="flutter",
+        status="user_trashed",
+        deleted_at=deleted_at,
+        revision=2,
+        created_at=created_at,
+        updated_at=deleted_at,
+    )
+    session.add(memo)
+    request = SyncPushRequest(
+        client_id="client-a",
+        changes=[
+            {
+                "entity_type": "memo",
+                "operation": "upsert",
+                "entity_id": memo.id,
+                "revision": 3,
+                "updated_at": datetime(2026, 7, 3, 10, tzinfo=timezone.utc),
+                "data": {"status": "active"},
+            }
+        ],
+    )
+
+    response = await sync_service.apply_sync_push(session, request)  # type: ignore[arg-type]
+
+    assert response.applied == 1
+    assert memo.status == "active"
+    assert memo.deleted_at is None
+    assert memo.type == "journal"
+    assert memo.title == "Preserve memo"
+    assert memo.content_markdown == "keep body"
+    assert memo.tags == ["keep"]
+    assert memo.mood == "平静"
+    assert memo.source_capture_id == "capture-memo"
+    assert memo.source == "flutter"
+    assert memo.revision == 3
+
+
+@pytest.mark.anyio
 async def test_sync_push_skips_stale_task_revision() -> None:
     session = FakeAsyncSession()
     now = datetime(2026, 7, 3, 11, tzinfo=timezone.utc)
@@ -169,6 +220,127 @@ async def test_sync_push_skips_stale_task_revision() -> None:
     assert response.results[0].reason == "stale_revision"
     assert existing.title == "Existing task"
     assert len(session.audit_logs) == 0
+
+
+@pytest.mark.anyio
+async def test_sync_push_task_partial_restore_preserves_unsent_fields() -> None:
+    session = FakeAsyncSession()
+    created_at = datetime(2026, 7, 3, 9, tzinfo=timezone.utc)
+    deleted_at = datetime(2026, 7, 3, 10, tzinfo=timezone.utc)
+    due_at = datetime(2026, 7, 4, 18, tzinfo=timezone.utc)
+    remind_at = datetime(2026, 7, 4, 16, tzinfo=timezone.utc)
+    completed_at = datetime(2026, 7, 3, 8, tzinfo=timezone.utc)
+    existing = Task(
+        id="task-restore-sync",
+        user_id="local-dev",
+        title="Preserve restored task",
+        description="keep description",
+        due_at=due_at,
+        remind_at=remind_at,
+        priority="high",
+        task_status="done",
+        completed_at=completed_at,
+        source_capture_id="capture-1",
+        source="flutter",
+        status="user_trashed",
+        deleted_at=deleted_at,
+        revision=4,
+        created_at=created_at,
+        updated_at=deleted_at,
+    )
+    session.add(existing)
+    request = SyncPushRequest(
+        client_id="client-a",
+        changes=[
+            {
+                "entity_type": "task",
+                "operation": "upsert",
+                "entity_id": existing.id,
+                "revision": 5,
+                "updated_at": datetime(2026, 7, 3, 11, tzinfo=timezone.utc),
+                "data": {"status": "active"},
+            }
+        ],
+    )
+
+    response = await sync_service.apply_sync_push(session, request)  # type: ignore[arg-type]
+
+    assert response.applied == 1
+    assert existing.status == "active"
+    assert existing.deleted_at is None
+    assert existing.title == "Preserve restored task"
+    assert existing.description == "keep description"
+    assert existing.due_at == due_at
+    assert existing.remind_at == remind_at
+    assert existing.priority == "high"
+    assert existing.task_status == "done"
+    assert existing.completed_at == completed_at
+    assert existing.source_capture_id == "capture-1"
+    assert existing.source == "flutter"
+    assert existing.revision == 5
+
+
+@pytest.mark.anyio
+async def test_sync_push_expense_partial_restore_preserves_unsent_fields() -> None:
+    session = FakeAsyncSession()
+    created_at = datetime(2026, 7, 3, 8, tzinfo=timezone.utc)
+    deleted_at = datetime(2026, 7, 3, 9, tzinfo=timezone.utc)
+    occurred_at = datetime(2026, 7, 2, 18, tzinfo=timezone.utc)
+    tx = LedgerTransaction(
+        id="expense-restore-sync",
+        user_id="local-dev",
+        direction="expense",
+        amount=36.5,
+        currency="CNY",
+        account_id="account-1",
+        category_id="category-1",
+        merchant="Preserve merchant",
+        note="keep note",
+        occurred_at=occurred_at,
+        source="flutter",
+        source_capture_id="capture-expense",
+        import_batch_id="batch-1",
+        confidence=0.9,
+        status="user_trashed",
+        deleted_at=deleted_at,
+        revision=4,
+        created_at=created_at,
+        updated_at=deleted_at,
+    )
+    session.add(tx)
+    request = SyncPushRequest(
+        client_id="client-a",
+        changes=[
+            {
+                "entity_type": "expense",
+                "operation": "upsert",
+                "entity_id": tx.id,
+                "revision": 5,
+                "updated_at": datetime(2026, 7, 3, 10, tzinfo=timezone.utc),
+                "data": {"status": "active"},
+            }
+        ],
+    )
+
+    response = await sync_service.apply_sync_push(session, request)  # type: ignore[arg-type]
+
+    assert response.applied == 1
+    assert response.skipped == 0
+    assert tx.status == "active"
+    assert tx.deleted_at is None
+    assert tx.direction == "expense"
+    assert float(tx.amount) == 36.5
+    assert tx.currency == "CNY"
+    assert tx.account_id == "account-1"
+    assert tx.category_id == "category-1"
+    assert tx.merchant == "Preserve merchant"
+    assert tx.note == "keep note"
+    assert tx.occurred_at == occurred_at
+    assert tx.source == "flutter"
+    assert tx.source_capture_id == "capture-expense"
+    assert tx.import_batch_id == "batch-1"
+    assert tx.confidence == 0.9
+    assert tx.revision == 5
 
 
 @pytest.mark.anyio

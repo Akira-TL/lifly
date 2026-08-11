@@ -94,22 +94,33 @@ async def _apply_memo_change(
         await _write_sync_audit(db, change, client_id, before=before, after=_memo_snapshot(memo))
         return _applied(change)
 
+    is_new = memo is None
     if memo is None:
         memo = Memo(id=change.entity_id, user_id=change.user_id)
         db.add(memo)
 
-    before = _memo_snapshot(memo) if memo.created_at is not None else None
+    before = None if is_new else _memo_snapshot(memo)
     data = change.data
-    memo.type = data.get("type") or memo.type or "memo"
-    memo.title = data.get("title")
-    memo.content_markdown = data.get("content_markdown") or ""
-    memo.tags = data.get("tags")
-    memo.mood = data.get("mood")
-    memo.source_capture_id = data.get("source_capture_id")
-    memo.status = data.get("status") or "active"
-    memo.source = data.get("source") or change.source
+    if is_new or "type" in data:
+        memo.type = data.get("type") or memo.type or "memo"
+    if is_new or "title" in data:
+        memo.title = data.get("title")
+    if is_new or "content_markdown" in data:
+        memo.content_markdown = data.get("content_markdown") or ""
+    if is_new or "tags" in data:
+        memo.tags = data.get("tags")
+    if is_new or "mood" in data:
+        memo.mood = data.get("mood")
+    if is_new or "source_capture_id" in data:
+        memo.source_capture_id = data.get("source_capture_id")
+    if is_new or "status" in data:
+        memo.status = data.get("status") or "active"
+        if memo.status == "active":
+            memo.deleted_at = None
+    if is_new or "source" in data:
+        memo.source = data.get("source") or change.source
     memo.revision = change.revision
-    if memo.created_at is None:
+    if is_new:
         memo.created_at = change.created_at or change.updated_at
     memo.updated_at = change.updated_at
     await db.flush()
@@ -138,24 +149,37 @@ async def _apply_task_change(
         await _write_sync_audit(db, change, client_id, before=before, after=task_to_dict(task))
         return _applied(change)
 
+    is_new = task is None
     if task is None:
         task = Task(id=change.entity_id, user_id=change.user_id, title="")
         db.add(task)
 
-    before = task_to_dict(task) if task.created_at is not None else None
+    before = None if is_new else task_to_dict(task)
     data = change.data
-    task.title = data.get("title") or task.title
-    task.description = data.get("description")
-    task.due_at = _datetime_value(data.get("due_at"))
-    task.remind_at = _datetime_value(data.get("remind_at"))
-    task.priority = data.get("priority") or "normal"
-    task.task_status = data.get("task_status") or "todo"
-    task.completed_at = _datetime_value(data.get("completed_at"))
-    task.source_capture_id = data.get("source_capture_id")
-    task.status = data.get("status") or "active"
-    task.source = data.get("source") or change.source
+    if is_new or "title" in data:
+        task.title = data.get("title") or task.title
+    if is_new or "description" in data:
+        task.description = data.get("description")
+    if is_new or "due_at" in data:
+        task.due_at = _datetime_value(data.get("due_at"))
+    if is_new or "remind_at" in data:
+        task.remind_at = _datetime_value(data.get("remind_at"))
+    if is_new or "priority" in data:
+        task.priority = data.get("priority") or "normal"
+    if is_new or "task_status" in data:
+        task.task_status = data.get("task_status") or "todo"
+    if is_new or "completed_at" in data:
+        task.completed_at = _datetime_value(data.get("completed_at"))
+    if is_new or "source_capture_id" in data:
+        task.source_capture_id = data.get("source_capture_id")
+    if is_new or "status" in data:
+        task.status = data.get("status") or "active"
+        if task.status == "active":
+            task.deleted_at = None
+    if is_new or "source" in data:
+        task.source = data.get("source") or change.source
     task.revision = change.revision
-    if task.created_at is None:
+    if is_new:
         task.created_at = change.created_at or change.updated_at
     task.updated_at = change.updated_at
     await db.flush()
@@ -586,31 +610,53 @@ async def _apply_expense_change(
         await _write_sync_audit(db, change, client_id, before=before, after=ledger_transaction_to_dict(tx))
         return _applied(change)
 
+    is_new = tx is None
     if tx is None:
         tx = LedgerTransaction(id=change.entity_id, user_id=change.user_id)
         db.add(tx)
 
-    before = ledger_transaction_to_dict(tx) if tx.created_at is not None else None
+    before = None if is_new else ledger_transaction_to_dict(tx)
     data = change.data
-    amount = data.get("amount")
-    if amount is None or float(amount) <= 0:
-        return _skipped(change, "invalid_amount", tx.revision if tx.created_at is not None else None)
-
-    tx.direction = data.get("direction") or "expense"
-    tx.amount = float(amount)
-    tx.currency = data.get("currency") or "CNY"
-    tx.account_id = data.get("account_id")
-    tx.category_id = data.get("category_id")
-    tx.merchant = data.get("merchant")
-    tx.note = data.get("note")
-    tx.occurred_at = _datetime_value(data.get("occurred_at"), fallback=change.updated_at)
-    tx.source = data.get("source") or change.source
-    tx.source_capture_id = data.get("source_capture_id")
-    tx.import_batch_id = data.get("import_batch_id")
-    tx.confidence = data.get("confidence")
-    tx.status = data.get("status") or "active"
+    if is_new or "amount" in data:
+        amount = data.get("amount")
+        if amount is None or float(amount) <= 0:
+            return _skipped(
+                change,
+                "invalid_amount",
+                None if is_new else tx.revision,
+            )
+        tx.amount = float(amount)
+    if is_new or "direction" in data:
+        tx.direction = data.get("direction") or "expense"
+    if is_new or "currency" in data:
+        tx.currency = data.get("currency") or "CNY"
+    if is_new or "account_id" in data:
+        tx.account_id = data.get("account_id")
+    if is_new or "category_id" in data:
+        tx.category_id = data.get("category_id")
+    if is_new or "merchant" in data:
+        tx.merchant = data.get("merchant")
+    if is_new or "note" in data:
+        tx.note = data.get("note")
+    if is_new or "occurred_at" in data:
+        tx.occurred_at = _datetime_value(
+            data.get("occurred_at"),
+            fallback=change.updated_at,
+        )
+    if is_new or "source" in data:
+        tx.source = data.get("source") or change.source
+    if is_new or "source_capture_id" in data:
+        tx.source_capture_id = data.get("source_capture_id")
+    if is_new or "import_batch_id" in data:
+        tx.import_batch_id = data.get("import_batch_id")
+    if is_new or "confidence" in data:
+        tx.confidence = data.get("confidence")
+    if is_new or "status" in data:
+        tx.status = data.get("status") or "active"
+        if tx.status == "active":
+            tx.deleted_at = None
     tx.revision = change.revision
-    if tx.created_at is None:
+    if is_new:
         tx.created_at = change.created_at or change.updated_at
     tx.updated_at = change.updated_at
     await db.flush()
