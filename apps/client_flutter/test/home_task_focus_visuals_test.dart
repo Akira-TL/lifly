@@ -144,48 +144,30 @@ void main() {
     },
   );
 
-  test('countdown uses compact units and ticking clocks for critical time', () {
+  test('countdown shows at most two compact unit segments', () {
     expect(
-      homeTaskCountdownLabel(
-        const Duration(days: 3, hours: 2),
-        stage: HomeTaskUrgencyStage.notUrgent,
-      ),
-      '3d',
+      homeTaskCountdownLabel(const Duration(days: 3, hours: 2, minutes: 20)),
+      '3d 02h',
     );
     expect(
-      homeTaskCountdownLabel(
-        const Duration(hours: 5),
-        stage: HomeTaskUrgencyStage.urgent,
-      ),
-      '5h',
+      homeTaskCountdownLabel(const Duration(hours: 5, minutes: 4, seconds: 3)),
+      '5h 04m',
     );
     expect(
-      homeTaskCountdownLabel(
-        const Duration(minutes: 45),
-        stage: HomeTaskUrgencyStage.urgent,
-      ),
+      homeTaskCountdownLabel(const Duration(minutes: 45, seconds: 33)),
       '45m',
     );
     expect(
-      homeTaskCountdownLabel(
-        const Duration(hours: 5, minutes: 4, seconds: 3),
-        stage: HomeTaskUrgencyStage.superUrgent,
-      ),
-      '05:04:03',
+      homeTaskCountdownLabel(const Duration(minutes: 30, seconds: 20)),
+      '30m',
     );
     expect(
-      homeTaskCountdownLabel(
-        const Duration(minutes: 18, seconds: 42),
-        stage: HomeTaskUrgencyStage.superUrgent,
-      ),
-      '18:42',
+      homeTaskCountdownLabel(const Duration(minutes: 18, seconds: 42)),
+      '18m 42s',
     );
     expect(
-      homeTaskCountdownLabel(
-        const Duration(minutes: 29, seconds: 4),
-        stage: HomeTaskUrgencyStage.urgent,
-      ),
-      '29:04',
+      homeTaskCountdownLabel(const Duration(minutes: 29, seconds: 4)),
+      '29m 04s',
     );
   });
 }

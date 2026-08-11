@@ -101,30 +101,24 @@ Duration? homeNextUrgencyTransition(
   return next;
 }
 
-String homeTaskCountdownLabel(
-  Duration remaining, {
-  required HomeTaskUrgencyStage stage,
-}) {
-  if (remaining <= Duration.zero) return '00:00';
-  final ticking =
-      stage == HomeTaskUrgencyStage.superUrgent ||
-      remaining <= const Duration(minutes: 30);
-  if (ticking) {
-    final seconds = remaining.inSeconds;
-    final hours = seconds ~/ 3600;
-    final minutes = (seconds % 3600) ~/ 60;
-    final restSeconds = seconds % 60;
-    if (hours > 0) {
-      return '${hours.toString().padLeft(2, '0')}:'
-          '${minutes.toString().padLeft(2, '0')}:'
-          '${restSeconds.toString().padLeft(2, '0')}';
-    }
-    return '${minutes.toString().padLeft(2, '0')}:'
-        '${restSeconds.toString().padLeft(2, '0')}';
+String homeTaskCountdownLabel(Duration remaining) {
+  if (remaining <= Duration.zero) return '0m 00s';
+  if (remaining >= const Duration(days: 1)) {
+    final days = remaining.inDays;
+    final hours = remaining.inHours.remainder(24);
+    return '${days}d ${hours.toString().padLeft(2, '0')}h';
   }
-  if (remaining >= const Duration(days: 1)) return '${remaining.inDays}d';
-  if (remaining >= const Duration(hours: 1)) return '${remaining.inHours}h';
-  return '${remaining.inMinutes}m';
+  if (remaining >= const Duration(hours: 1)) {
+    final hours = remaining.inHours;
+    final minutes = remaining.inMinutes.remainder(60);
+    return '${hours}h ${minutes.toString().padLeft(2, '0')}m';
+  }
+  if (remaining >= const Duration(minutes: 30)) {
+    return '${remaining.inMinutes}m';
+  }
+  final minutes = remaining.inMinutes;
+  final seconds = remaining.inSeconds.remainder(60);
+  return '${minutes}m ${seconds.toString().padLeft(2, '0')}s';
 }
 
 class HomeTaskFocusTile extends StatefulWidget {
@@ -144,8 +138,13 @@ class HomeTaskFocusTile extends StatefulWidget {
 }
 
 class _HomeTaskFocusTileState extends State<HomeTaskFocusTile> {
+  static const _strikeDuration = Duration(milliseconds: 180);
+  static const _fadeDuration = Duration(milliseconds: 220);
+
   Timer? _timer;
   bool _completing = false;
+  bool _striking = false;
+  bool _fading = false;
   DateTime _now = DateTime.now();
 
   @override
@@ -178,15 +177,11 @@ class _HomeTaskFocusTileState extends State<HomeTaskFocusTile> {
     final superWindow = Duration(
       seconds: widget.item.superUrgencyWindowSeconds,
     );
-    final stage = homeTaskUrgencyStage(remaining, urgencyWindow, superWindow);
-    var delay = switch (stage) {
-      HomeTaskUrgencyStage.superUrgent => const Duration(seconds: 1),
-      HomeTaskUrgencyStage.urgent =>
-        remaining <= const Duration(minutes: 30)
-            ? const Duration(seconds: 1)
-            : const Duration(minutes: 1),
-      HomeTaskUrgencyStage.notUrgent => const Duration(minutes: 5),
-    };
+    var delay = remaining < const Duration(minutes: 30)
+        ? const Duration(seconds: 1)
+        : remaining >= const Duration(days: 1)
+        ? const Duration(hours: 1)
+        : const Duration(minutes: 1);
     final untilUrgent = remaining - urgencyWindow;
     if (untilUrgent > Duration.zero && untilUrgent < delay) delay = untilUrgent;
     final untilSuper = remaining - superWindow;
@@ -206,11 +201,25 @@ class _HomeTaskFocusTileState extends State<HomeTaskFocusTile> {
 
   Future<void> _complete() async {
     if (_completing || widget.item.entityType != 'task') return;
-    setState(() => _completing = true);
+    setState(() {
+      _completing = true;
+      _striking = true;
+    });
+    await Future<void>.delayed(_strikeDuration);
+    if (!mounted) return;
+    setState(() => _fading = true);
+    await Future<void>.delayed(_fadeDuration);
+    if (!mounted) return;
     try {
       await widget.onCompleteTask(widget.item);
     } finally {
-      if (mounted) setState(() => _completing = false);
+      if (mounted) {
+        setState(() {
+          _completing = false;
+          _striking = false;
+          _fading = false;
+        });
+      }
     }
   }
 
@@ -219,14 +228,17 @@ class _HomeTaskFocusTileState extends State<HomeTaskFocusTile> {
     final item = widget.item;
     final theme = Theme.of(context);
     final dueAt = item.occurredAt?.toLocal();
+    final hasDeadline = dueAt != null;
     final remaining = dueAt?.difference(_now) ?? Duration.zero;
     final urgencyWindow = Duration(seconds: item.urgencyWindowSeconds);
     final superWindow = Duration(seconds: item.superUrgencyWindowSeconds);
-    final stage = homeTaskUrgencyStage(remaining, urgencyWindow, superWindow);
+    final stage = hasDeadline
+        ? homeTaskUrgencyStage(remaining, urgencyWindow, superWindow)
+        : HomeTaskUrgencyStage.notUrgent;
     final currentQuadrant = homeTaskCurrentQuadrant(
       item.quadrant,
-      remaining,
-      urgencyWindow,
+      hasDeadline ? remaining : const Duration(days: 36500),
+      hasDeadline ? urgencyWindow : Duration.zero,
     );
     final tone = homeTaskQuadrantColor(currentQuadrant, theme.semanticColors);
     final urgentStart = dueAt?.subtract(urgencyWindow);
@@ -240,128 +252,183 @@ class _HomeTaskFocusTileState extends State<HomeTaskFocusTile> {
             dueAt: dueAt,
             urgencyWindow: urgencyWindow,
           );
-    final stageLabel = switch (stage) {
-      HomeTaskUrgencyStage.notUrgent => '未进入紧急阶段',
-      HomeTaskUrgencyStage.urgent => '紧急',
-      HomeTaskUrgencyStage.superUrgent => '超级紧急',
-    };
+    final stageLabel = !hasDeadline
+        ? '无时限'
+        : switch (stage) {
+            HomeTaskUrgencyStage.notUrgent => '未进入紧急阶段',
+            HomeTaskUrgencyStage.urgent => '紧急',
+            HomeTaskUrgencyStage.superUrgent => '超级紧急',
+          };
 
-    return Semantics(
-      container: true,
-      explicitChildNodes: true,
-      label: '${homeTaskQuadrantLabel(currentQuadrant)}，$stageLabel',
-      child: SizedBox(
-        height: 60,
-        child: DecoratedBox(
-          key: Key('${widget.keyPrefix}_item_${item.entityId}'),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            border: Border.all(
-              color: stage == HomeTaskUrgencyStage.superUrgent
-                  ? tone.withValues(alpha: 0.52)
-                  : theme.colorScheme.outlineVariant,
+    return AnimatedOpacity(
+      key: Key('${widget.keyPrefix}_fade_${item.entityId}'),
+      opacity: _fading ? 0 : 1,
+      duration: _fadeDuration,
+      curve: Curves.easeOut,
+      child: Semantics(
+        container: true,
+        explicitChildNodes: true,
+        label: '${homeTaskQuadrantLabel(currentQuadrant)}，$stageLabel',
+        child: SizedBox(
+          height: 60,
+          child: DecoratedBox(
+            key: Key('${widget.keyPrefix}_item_${item.entityId}'),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              border: Border.all(
+                color: stage == HomeTaskUrgencyStage.superUrgent
+                    ? tone.withValues(alpha: 0.52)
+                    : theme.colorScheme.outlineVariant,
+              ),
+              borderRadius: BorderRadius.circular(7),
+              boxShadow: stage == HomeTaskUrgencyStage.superUrgent
+                  ? [
+                      BoxShadow(
+                        color: tone.withValues(alpha: 0.12),
+                        blurRadius: 8,
+                      ),
+                    ]
+                  : null,
             ),
-            borderRadius: BorderRadius.circular(7),
-            boxShadow: stage == HomeTaskUrgencyStage.superUrgent
-                ? [
-                    BoxShadow(
-                      color: tone.withValues(alpha: 0.12),
-                      blurRadius: 8,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Column(
+                children: [
+                  if (hasDeadline)
+                    Container(
+                      key: Key(
+                        '${widget.keyPrefix}_urgency_bar_${item.entityId}',
+                      ),
+                      height: stage == HomeTaskUrgencyStage.superUrgent ? 5 : 4,
+                      color: tone.withValues(
+                        alpha: stage == HomeTaskUrgencyStage.notUrgent
+                            ? 0.10
+                            : 0.16,
+                      ),
+                      alignment: Alignment.centerLeft,
+                      child: AnimatedFractionallySizedBox(
+                        duration: const Duration(milliseconds: 240),
+                        curve: Curves.easeOut,
+                        widthFactor: ratio,
+                        heightFactor: 1,
+                        alignment: Alignment.centerLeft,
+                        child: ColoredBox(
+                          color: stage == HomeTaskUrgencyStage.urgent
+                              ? tone.withValues(alpha: 0.82)
+                              : tone,
+                        ),
+                      ),
                     ),
-                  ]
-                : null,
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: Column(
-              children: [
-                Container(
-                  key: Key('${widget.keyPrefix}_urgency_bar_${item.entityId}'),
-                  height: stage == HomeTaskUrgencyStage.superUrgent ? 5 : 4,
-                  color: tone.withValues(
-                    alpha: stage == HomeTaskUrgencyStage.notUrgent
-                        ? 0.10
-                        : 0.16,
-                  ),
-                  alignment: Alignment.centerLeft,
-                  child: AnimatedFractionallySizedBox(
-                    duration: const Duration(milliseconds: 240),
-                    curve: Curves.easeOut,
-                    widthFactor: ratio,
-                    heightFactor: 1,
-                    alignment: Alignment.centerLeft,
-                    child: ColoredBox(
-                      color: stage == HomeTaskUrgencyStage.urgent
-                          ? tone.withValues(alpha: 0.82)
-                          : tone,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: Row(
-                    children: [
-                      if (item.entityType == 'task')
-                        IconButton(
-                          key: Key(
-                            '${widget.keyPrefix}_complete_${item.entityId}',
-                          ),
-                          tooltip: '完成任务',
-                          onPressed: _completing ? null : _complete,
-                          constraints: const BoxConstraints.tightFor(
-                            width: 44,
-                            height: 44,
-                          ),
-                          padding: EdgeInsets.zero,
-                          icon: _completing
-                              ? const SizedBox.square(
-                                  dimension: 15,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.radio_button_unchecked,
-                                  size: 20,
+                  Expanded(
+                    child: Row(
+                      children: [
+                        if (item.entityType == 'task')
+                          IconButton(
+                            key: Key(
+                              '${widget.keyPrefix}_complete_${item.entityId}',
+                            ),
+                            tooltip: '完成任务',
+                            onPressed: _completing ? null : _complete,
+                            constraints: const BoxConstraints.tightFor(
+                              width: 44,
+                              height: 44,
+                            ),
+                            padding: EdgeInsets.zero,
+                            icon: Icon(
+                              _completing
+                                  ? Icons.check_circle_outline
+                                  : Icons.radio_button_unchecked,
+                              size: 20,
+                            ),
+                          )
+                        else
+                          const SizedBox(width: 10),
+                        Expanded(
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final titleStyle = theme.textTheme.bodyMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                  );
+                              final painter = TextPainter(
+                                text: TextSpan(
+                                  text: item.title,
+                                  style: titleStyle,
                                 ),
-                        )
-                      else
-                        const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          item.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
+                                maxLines: 1,
+                                ellipsis: '…',
+                                textDirection: Directionality.of(context),
+                              )..layout(maxWidth: constraints.maxWidth);
+                              return Stack(
+                                children: [
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      item.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: titleStyle,
+                                    ),
+                                  ),
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: SizedBox(
+                                      width: painter.width,
+                                      height: painter.height,
+                                      child: AnimatedFractionallySizedBox(
+                                        key: Key(
+                                          '${widget.keyPrefix}_strike_${item.entityId}',
+                                        ),
+                                        duration: _strikeDuration,
+                                        curve: Curves.easeOutCubic,
+                                        widthFactor: _striking ? 1 : 0,
+                                        heightFactor: 1,
+                                        alignment: Alignment.centerLeft,
+                                        child: Center(
+                                          child: Container(
+                                            height: 1.25,
+                                            color: theme.colorScheme.onSurface
+                                                .withValues(alpha: 0.72),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        dueAt == null
-                            ? '—'
-                            : homeTaskCountdownLabel(remaining, stage: stage),
-                        key: Key(
-                          '${widget.keyPrefix}_countdown_${item.entityId}',
-                        ),
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: tone,
-                          fontWeight: stage == HomeTaskUrgencyStage.superUrgent
-                              ? FontWeight.w900
-                              : FontWeight.w800,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                          letterSpacing:
-                              stage == HomeTaskUrgencyStage.superUrgent
-                              ? 0.35
-                              : null,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                    ],
+                        if (hasDeadline) ...[
+                          const SizedBox(width: 10),
+                          Text(
+                            homeTaskCountdownLabel(remaining),
+                            key: Key(
+                              '${widget.keyPrefix}_countdown_${item.entityId}',
+                            ),
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: tone,
+                              fontWeight:
+                                  stage == HomeTaskUrgencyStage.superUrgent
+                                  ? FontWeight.w900
+                                  : FontWeight.w800,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                              letterSpacing:
+                                  stage == HomeTaskUrgencyStage.superUrgent
+                                  ? 0.35
+                                  : null,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(width: 10),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

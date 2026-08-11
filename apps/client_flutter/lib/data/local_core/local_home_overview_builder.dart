@@ -178,7 +178,7 @@ class LocalHomeOverviewBuilder {
         .map((entry) {
           final task = entry.task;
           final strategy = entry.strategy;
-          final dueAt = task.dueAt ?? strategy?.aiSuggestedRemindAt;
+          final dueAt = task.dueAt;
           final isOverdue = dueAt != null && dueAt.isBefore(now);
           final isDueToday = dueAt != null && _isSameUtcDay(dueAt, now);
           return LocalHomeAttentionItem(

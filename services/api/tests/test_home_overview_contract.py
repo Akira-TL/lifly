@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.db.models import ImportBatch, LedgerTransaction, Memo, Task
+from app.db.models import ImportBatch, LedgerTransaction, Memo, Task, TaskReminderStrategy
 from app.modules.search import router as search_router
 
 
@@ -193,6 +193,42 @@ def test_home_overview_attention_items_use_task_specific_urgency_windows() -> No
     assert items[2]["super_urgency_window_seconds"] == 21600
     assert items[3]["urgency_window_seconds"] == 14400
     assert items[3]["super_urgency_window_seconds"] == 1800
+
+
+def test_home_overview_does_not_treat_ai_reminder_as_deadline() -> None:
+    now = datetime(2026, 8, 11, 15, 9, tzinfo=timezone.utc)
+    task = Task(
+        id="task-undated",
+        user_id="local-dev",
+        title="阅读设计心理学",
+        due_at=None,
+        priority="high",
+        task_status="todo",
+        status="active",
+        created_at=now - timedelta(days=2),
+        updated_at=now,
+    )
+    strategy = TaskReminderStrategy(
+        id="strategy-undated",
+        user_id="local-dev",
+        task_id=task.id,
+        warning_level="warning",
+        warning_reason="AI 建议今晚读一章",
+        ai_suggested_remind_at=now + timedelta(hours=1),
+        strategy_status="suggested",
+        source="ai",
+    )
+
+    item = search_router._build_attention_items(
+        [task],
+        {task.id: strategy},
+        now,
+    )[0]
+
+    assert item["occurred_at"] is None
+    assert item["urgency_window_seconds"] == 0
+    assert item["super_urgency_window_seconds"] == 0
+    assert item["quadrant"] == "not_urgent_important"
 
 
 def test_home_overview_daily_trend_and_recent_activity_are_mixed() -> None:

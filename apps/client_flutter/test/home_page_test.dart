@@ -58,69 +58,131 @@ void main() {
     expect(find.byType(Card), findsNothing);
   });
 
-  testWidgets('Web focus tasks use top urgency bars and right-side countdowns', (
+  testWidgets(
+    'Web focus tasks use top urgency bars and right-side countdowns',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 1000);
+      tester.view.devicePixelRatio = 1;
+      final completed = <String>[];
+
+      await tester.pumpWidget(
+        _testApp(
+          _overview(attentionItems: _denseAttentionItems()),
+          completeTask: (taskId) async => completed.add(taskId),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('home_focus_queue_grid')), findsOneWidget);
+      final first = find.byKey(const Key('home_focus_item_task-1'));
+      final second = find.byKey(const Key('home_focus_item_task-2'));
+      final third = find.byKey(const Key('home_focus_item_task-3'));
+      expect(first, findsOneWidget);
+      expect(second, findsOneWidget);
+      expect(third, findsOneWidget);
+      expect(
+        (tester.getTopLeft(first).dy - tester.getTopLeft(second).dy).abs(),
+        lessThan(1),
+      );
+      expect(
+        (tester.getTopLeft(first).dy - tester.getTopLeft(third).dy).abs(),
+        lessThan(1),
+      );
+      expect(
+        tester.getTopLeft(first).dx,
+        lessThan(tester.getTopLeft(second).dx),
+      );
+      expect(
+        tester.getTopLeft(second).dx,
+        lessThan(tester.getTopLeft(third).dx),
+      );
+
+      expect(find.text('已逾期'), findsNothing);
+      expect(find.text('今天截止'), findsNothing);
+      expect(find.byKey(const Key('home_focus_quadrant_task-1')), findsNothing);
+      expect(find.byKey(const Key('home_focus_time_bar_task-1')), findsNothing);
+      final urgencyBar = find.byKey(const Key('home_focus_urgency_bar_task-1'));
+      expect(urgencyBar, findsOneWidget);
+      expect(
+        tester.getSize(urgencyBar).width,
+        greaterThan(tester.getSize(first).width - 3),
+      );
+      final urgencyFill = find.descendant(
+        of: find.descendant(
+          of: urgencyBar,
+          matching: find.byType(AnimatedFractionallySizedBox),
+        ),
+        matching: find.byType(ColoredBox),
+      );
+      expect(urgencyFill, findsOneWidget);
+      expect(
+        tester.getSize(urgencyFill).height,
+        tester.getSize(urgencyBar).height,
+      );
+      expect(tester.getSize(urgencyFill).width, greaterThan(0));
+      final countdown = find.byKey(const Key('home_focus_countdown_task-1'));
+      expect(countdown, findsOneWidget);
+      expect(
+        tester.getCenter(countdown).dx,
+        greaterThan(tester.getCenter(first).dx),
+      );
+
+      await tester.tap(find.byKey(const Key('home_focus_complete_task-1')));
+      await tester.pump();
+      expect(completed, isEmpty);
+      final strike = find.byKey(const Key('home_focus_strike_task-1'));
+      expect(strike, findsOneWidget);
+      expect(
+        tester.widget<AnimatedFractionallySizedBox>(strike).widthFactor,
+        1,
+      );
+
+      await tester.pump(const Duration(milliseconds: 190));
+      final fade = find.byKey(const Key('home_focus_fade_task-1'));
+      expect(fade, findsOneWidget);
+      expect(tester.widget<AnimatedOpacity>(fade).opacity, 0);
+      expect(completed, isEmpty);
+
+      await tester.pump(const Duration(milliseconds: 230));
+      expect(completed, ['task-1']);
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets('Web focus task without deadline hides time visuals', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 1000);
     tester.view.devicePixelRatio = 1;
-    final completed = <String>[];
-
-    await tester.pumpWidget(
-      _testApp(
-        _overview(attentionItems: _denseAttentionItems()),
-        completeTask: (taskId) async => completed.add(taskId),
-      ),
+    final item = HomeAttentionItem(
+      id: 'undated',
+      type: 'task_focus',
+      level: 'info',
+      quadrant: 'not_urgent_important',
+      urgencyWindowSeconds: 0,
+      superUrgencyWindowSeconds: 0,
+      title: '阅读设计心理学',
+      description: null,
+      entityType: 'task',
+      entityId: 'undated',
+      occurredAt: null,
     );
+
+    await tester.pumpWidget(_testApp(_overview(attentionItems: [item])));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('home_focus_queue_grid')), findsOneWidget);
-    final first = find.byKey(const Key('home_focus_item_task-1'));
-    final second = find.byKey(const Key('home_focus_item_task-2'));
-    final third = find.byKey(const Key('home_focus_item_task-3'));
-    expect(first, findsOneWidget);
-    expect(second, findsOneWidget);
-    expect(third, findsOneWidget);
+    expect(find.text('阅读设计心理学'), findsOneWidget);
     expect(
-      (tester.getTopLeft(first).dy - tester.getTopLeft(second).dy).abs(),
-      lessThan(1),
+      find.byKey(const Key('home_focus_urgency_bar_undated')),
+      findsNothing,
     );
-    expect(
-      (tester.getTopLeft(first).dy - tester.getTopLeft(third).dy).abs(),
-      lessThan(1),
-    );
-    expect(tester.getTopLeft(first).dx, lessThan(tester.getTopLeft(second).dx));
-    expect(tester.getTopLeft(second).dx, lessThan(tester.getTopLeft(third).dx));
-
-    expect(find.text('已逾期'), findsNothing);
-    expect(find.text('今天截止'), findsNothing);
-    expect(find.byKey(const Key('home_focus_quadrant_task-1')), findsNothing);
-    expect(find.byKey(const Key('home_focus_time_bar_task-1')), findsNothing);
-    final urgencyBar = find.byKey(const Key('home_focus_urgency_bar_task-1'));
-    expect(urgencyBar, findsOneWidget);
-    expect(
-      tester.getSize(urgencyBar).width,
-      greaterThan(tester.getSize(first).width - 3),
-    );
-    final urgencyFill = find.descendant(
-      of: find.descendant(
-        of: urgencyBar,
-        matching: find.byType(AnimatedFractionallySizedBox),
-      ),
-      matching: find.byType(ColoredBox),
-    );
-    expect(urgencyFill, findsOneWidget);
-    expect(tester.getSize(urgencyFill).height, tester.getSize(urgencyBar).height);
-    expect(tester.getSize(urgencyFill).width, greaterThan(0));
-    final countdown = find.byKey(const Key('home_focus_countdown_task-1'));
-    expect(countdown, findsOneWidget);
-    expect(tester.getCenter(countdown).dx, greaterThan(tester.getCenter(first).dx));
-
-    await tester.tap(find.byKey(const Key('home_focus_complete_task-1')));
-    await tester.pumpAndSettle();
-    expect(completed, ['task-1']);
+    expect(find.byKey(const Key('home_focus_countdown_undated')), findsNothing);
+    expect(find.text('—'), findsNothing);
   });
 
-  testWidgets('Web schedule action stays inside the app bar boundary', (tester) async {
+  testWidgets('Web schedule action stays inside the app bar boundary', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(900, 720);
     tester.view.devicePixelRatio = 1;
 
@@ -148,34 +210,44 @@ void main() {
     expect(find.byKey(const Key('home_focus_agenda')), findsOneWidget);
   });
 
-  testWidgets('Phone home uses three completable focus tasks without status text', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(390, 844);
-    tester.view.devicePixelRatio = 1;
-    final completed = <String>[];
+  testWidgets(
+    'Phone home uses three completable focus tasks without status text',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      final completed = <String>[];
 
-    await tester.pumpWidget(
-      _testPhoneApp(
-        _overview(attentionItems: _denseAttentionItems()),
-        completeTask: (taskId) async => completed.add(taskId),
-      ),
-    );
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        _testPhoneApp(
+          _overview(attentionItems: _denseAttentionItems()),
+          completeTask: (taskId) async => completed.add(taskId),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('确认 Web 首页布局'), findsOneWidget);
-    expect(find.text('整理抽屉'), findsNothing);
-    expect(find.text('任务已逾期'), findsNothing);
-    expect(find.text('已逾期'), findsNothing);
-    expect(find.text('今天截止'), findsNothing);
-    expect(find.byKey(const Key('home_attention_urgency_bar_task-1')), findsOneWidget);
-    expect(find.byKey(const Key('home_attention_countdown_task-1')), findsOneWidget);
-    expect(find.byKey(const Key('home_attention_complete_task-1')), findsOneWidget);
+      expect(find.text('确认 Web 首页布局'), findsOneWidget);
+      expect(find.text('整理抽屉'), findsNothing);
+      expect(find.text('任务已逾期'), findsNothing);
+      expect(find.text('已逾期'), findsNothing);
+      expect(find.text('今天截止'), findsNothing);
+      expect(
+        find.byKey(const Key('home_attention_urgency_bar_task-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('home_attention_countdown_task-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('home_attention_complete_task-1')),
+        findsOneWidget,
+      );
 
-    await tester.tap(find.byKey(const Key('home_attention_complete_task-1')));
-    await tester.pumpAndSettle();
-    expect(completed, ['task-1']);
-  });
+      await tester.tap(find.byKey(const Key('home_attention_complete_task-1')));
+      await tester.pumpAndSettle();
+      expect(completed, ['task-1']);
+    },
+  );
 }
 
 Widget _testPhoneApp(

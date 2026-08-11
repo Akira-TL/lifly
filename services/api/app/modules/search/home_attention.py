@@ -29,9 +29,7 @@ def build_attention_items(
         urgency_window = _task_urgency_window(task, strategy, now)
         super_window = _task_super_urgency_window(task, strategy, urgency_window)
         quadrant = _task_quadrant(task, urgency_window, now)
-        due_at = _to_utc(task.due_at) or _to_utc(
-            strategy.ai_suggested_remind_at if strategy else None
-        )
+        due_at = _to_utc(task.due_at)
         stage_rank = _urgency_stage_rank(due_at, now, urgency_window, super_window)
         ranked.append(
             (
@@ -58,9 +56,7 @@ def build_attention_items(
         urgency_window,
         super_window,
     ) in ranked[:8]:
-        actual_due_at = _to_utc(task.due_at) or _to_utc(
-            strategy.ai_suggested_remind_at if strategy else None
-        )
+        actual_due_at = _to_utc(task.due_at)
         is_overdue = actual_due_at is not None and actual_due_at < now
         is_due_today = _same_utc_day(actual_due_at, now)
         if is_overdue:
