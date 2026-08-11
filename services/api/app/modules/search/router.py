@@ -66,21 +66,31 @@ def _build_attention_items(
     now: datetime,
 ) -> list[dict[str, object | None]]:
     active_tasks = [task for task in tasks if task.task_status in {"todo", "doing"}]
-    ranked: list[tuple[int, datetime, Task, TaskReminderStrategy | None, str]] = []
+    ranked: list[
+        tuple[int, datetime, Task, TaskReminderStrategy | None, str, timedelta]
+    ] = []
     far_future = now + timedelta(days=36500)
     for task in active_tasks:
         strategy = strategies.get(task.id)
-        quadrant = _task_quadrant(task, strategy, now)
+        urgency_window = _task_urgency_window(task, strategy, now)
+        quadrant = _task_quadrant(task, urgency_window, now)
         due_at = _to_utc(task.due_at) or _to_utc(
             strategy.ai_suggested_remind_at if strategy else None
         )
         ranked.append(
-            (_quadrant_rank(quadrant), due_at or far_future, task, strategy, quadrant)
+            (
+                _quadrant_rank(quadrant),
+                due_at or far_future,
+                task,
+                strategy,
+                quadrant,
+                urgency_window,
+            )
         )
 
     ranked.sort(key=lambda item: (item[0], item[1]))
     items: list[dict[str, object | None]] = []
-    for _, due_at, task, strategy, quadrant in ranked[:8]:
+    for _, due_at, task, strategy, quadrant, urgency_window in ranked[:8]:
         actual_due_at = _to_utc(task.due_at) or _to_utc(
             strategy.ai_suggested_remind_at if strategy else None
         )
@@ -100,6 +110,7 @@ def _build_attention_items(
                 "type": item_type,
                 "level": _quadrant_level(quadrant),
                 "quadrant": quadrant,
+                "urgency_window_seconds": max(0, int(urgency_window.total_seconds())),
                 "title": task.title,
                 "description": strategy.warning_reason if strategy else None,
                 "entity_type": "task",
@@ -111,44 +122,74 @@ def _build_attention_items(
     return items
 
 
-def _task_quadrant(
+def _task_urgency_window(
     task: Task,
     strategy: TaskReminderStrategy | None,
     now: datetime,
-) -> str:
+) -> timedelta:
+    due_at = _to_utc(task.due_at)
+    if due_at is None:
+        return timedelta(0)
+
+    reminder_candidates = [
+        _to_utc(task.remind_at),
+        _to_utc(strategy.ai_suggested_remind_at if strategy else None),
+    ]
+    for remind_at in reminder_candidates:
+        if remind_at is not None and remind_at < due_at:
+            return due_at - remind_at
+
+    preparation_days = strategy.preparation_window_days if strategy else None
+    if preparation_days is not None:
+        return timedelta(days=preparation_days) if preparation_days > 0 else timedelta(hours=2)
+
+    remaining = max(due_at - now, timedelta(0))
+    text = f"{task.title}\n{task.description or ''}"
+    if any(keyword in text for keyword in ("火车", "高铁", "航班", "飞机", "体检", "预约")):
+        return timedelta(hours=1)
+    if any(keyword in text for keyword in ("项目", "总结", "报告", "周报", "提交")):
+        return timedelta(days=3) if remaining >= timedelta(days=3) else max(
+            timedelta(hours=2), remaining
+        )
+    if any(keyword in text for keyword in ("回复", "确认", "缴费", "支付", "购买")):
+        return timedelta(minutes=15)
+    if remaining >= timedelta(days=7):
+        return timedelta(days=2)
+    if remaining >= timedelta(days=2):
+        return timedelta(hours=12)
+    if remaining >= timedelta(hours=6):
+        return timedelta(hours=2)
+    return timedelta(minutes=30)
+
+
+def _task_quadrant(task: Task, urgency_window: timedelta, now: datetime) -> str:
     important = task.priority in {"high", "urgent"}
-    due_at = _to_utc(task.due_at) or _to_utc(
-        strategy.ai_suggested_remind_at if strategy else None
-    )
-    urgent = (
-        task.priority == "urgent"
-        or (strategy is not None and strategy.warning_level == "critical")
-        or (due_at is not None and due_at <= now + timedelta(hours=24))
-    )
-    if important and urgent:
-        return "important_urgent"
-    if important:
-        return "important_not_urgent"
+    due_at = _to_utc(task.due_at)
+    urgent = due_at is not None and due_at <= now + urgency_window
+    if urgent and important:
+        return "urgent_important"
     if urgent:
-        return "not_important_urgent"
-    return "not_important_not_urgent"
+        return "urgent_not_important"
+    if important:
+        return "not_urgent_important"
+    return "not_urgent_not_important"
 
 
 def _quadrant_rank(quadrant: str) -> int:
     return {
-        "important_urgent": 0,
-        "important_not_urgent": 1,
-        "not_important_urgent": 2,
-        "not_important_not_urgent": 3,
+        "urgent_important": 0,
+        "urgent_not_important": 1,
+        "not_urgent_important": 2,
+        "not_urgent_not_important": 3,
     }.get(quadrant, 3)
 
 
 def _quadrant_level(quadrant: str) -> str:
     return {
-        "important_urgent": "critical",
-        "important_not_urgent": "info",
-        "not_important_urgent": "warning",
-        "not_important_not_urgent": "normal",
+        "urgent_important": "critical",
+        "urgent_not_important": "warning",
+        "not_urgent_important": "info",
+        "not_urgent_not_important": "normal",
     }.get(quadrant, "normal")
 
 

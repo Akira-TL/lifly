@@ -155,7 +155,8 @@ class HomeOverview {
 
   static double _numValue(Object? value) => value is num ? value.toDouble() : 0;
 
-  static double? _nullableNum(Object? value) => value is num ? value.toDouble() : null;
+  static double? _nullableNum(Object? value) =>
+      value is num ? value.toDouble() : null;
 
   static int _intValue(Object? value) => value is num ? value.toInt() : 0;
 
@@ -406,6 +407,7 @@ class HomeAttentionItem {
   final String type;
   final String level;
   final String quadrant;
+  final int urgencyWindowSeconds;
   final String title;
   final String? description;
   final String entityType;
@@ -416,7 +418,8 @@ class HomeAttentionItem {
     required this.id,
     required this.type,
     required this.level,
-    this.quadrant = 'not_important_not_urgent',
+    this.quadrant = 'not_urgent_not_important',
+    this.urgencyWindowSeconds = 0,
     required this.title,
     required this.description,
     required this.entityType,
@@ -430,7 +433,11 @@ class HomeAttentionItem {
       id: json['id'] as String? ?? '',
       type: json['type'] as String? ?? 'unknown',
       level: level,
-      quadrant: json['quadrant'] as String? ?? _quadrantFromLegacyLevel(level),
+      quadrant: _normalizeQuadrant(
+        json['quadrant'] as String? ?? _quadrantFromLegacyLevel(level),
+      ),
+      urgencyWindowSeconds:
+          (json['urgency_window_seconds'] as num?)?.toInt() ?? 0,
       title: json['title'] as String? ?? '待关注事项',
       description: json['description'] as String?,
       entityType: json['entity_type'] as String? ?? 'unknown',
@@ -441,10 +448,20 @@ class HomeAttentionItem {
 
   static String _quadrantFromLegacyLevel(String level) {
     return switch (level.toLowerCase()) {
-      'critical' || 'error' || 'danger' => 'important_urgent',
-      'warning' || 'warn' => 'not_important_urgent',
-      'info' => 'important_not_urgent',
-      _ => 'not_important_not_urgent',
+      'critical' || 'error' || 'danger' => 'urgent_important',
+      'warning' || 'warn' => 'urgent_not_important',
+      'info' => 'not_urgent_important',
+      _ => 'not_urgent_not_important',
+    };
+  }
+
+  static String _normalizeQuadrant(String quadrant) {
+    return switch (quadrant) {
+      'important_urgent' => 'urgent_important',
+      'not_important_urgent' => 'urgent_not_important',
+      'important_not_urgent' => 'not_urgent_important',
+      'not_important_not_urgent' => 'not_urgent_not_important',
+      _ => quadrant,
     };
   }
 }

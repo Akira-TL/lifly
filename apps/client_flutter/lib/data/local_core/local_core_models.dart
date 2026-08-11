@@ -698,6 +698,7 @@ class LocalHomeAttentionItem {
   final String type;
   final String level;
   final String quadrant;
+  final int urgencyWindowSeconds;
   final String title;
   final String? description;
   final String entityType;
@@ -708,7 +709,8 @@ class LocalHomeAttentionItem {
     required this.id,
     required this.type,
     required this.level,
-    this.quadrant = 'not_important_not_urgent',
+    this.quadrant = 'not_urgent_not_important',
+    this.urgencyWindowSeconds = 0,
     required this.title,
     required this.description,
     required this.entityType,

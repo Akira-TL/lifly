@@ -194,11 +194,15 @@ void main() {
     expect(
       overview.attentionItems.map((item) => item.quadrant).toSet(),
       containsAll(<String>{
-        'important_urgent',
-        'important_not_urgent',
-        'not_important_urgent',
-        'not_important_not_urgent',
+        'urgent_important',
+        'urgent_not_important',
+        'not_urgent_important',
+        'not_urgent_not_important',
       }),
+    );
+    expect(
+      overview.attentionItems.every((item) => item.urgencyWindowSeconds >= 0),
+      isTrue,
     );
     expect(overview.recentActivity, isNotEmpty);
     expect(overview.financeOverview.monthExpense, greaterThan(0));

@@ -94,10 +94,7 @@ class _FocusQueueSection extends StatelessWidget {
   final List<HomeAttentionItem> items;
   final Future<void> Function(HomeAttentionItem item) onCompleteTask;
 
-  const _FocusQueueSection({
-    required this.items,
-    required this.onCompleteTask,
-  });
+  const _FocusQueueSection({required this.items, required this.onCompleteTask});
 
   @override
   Widget build(BuildContext context) {
@@ -116,7 +113,6 @@ class _FocusQueueSection extends StatelessWidget {
               title: visibleItems.isEmpty
                   ? '今天没有需要优先处理的事项'
                   : '先处理这 ${visibleItems.length} 件事',
-              subtitle: '颜色表示重要与紧急程度，时间条表示距离现在的远近',
               actionLabel: items.length > visibleItems.length
                   ? '还有 ${items.length - visibleItems.length} 项'
                   : null,
@@ -133,20 +129,22 @@ class _FocusQueueSection extends StatelessWidget {
                   crossAxisCount: gridColumns,
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 8,
-                  mainAxisExtent: 74,
+                  mainAxisExtent: 60,
                 ),
-                itemBuilder: (context, index) => _FocusTaskTile(
+                itemBuilder: (context, index) => HomeTaskFocusTile(
                   item: visibleItems[index],
                   onCompleteTask: onCompleteTask,
+                  keyPrefix: 'home_focus',
                 ),
               )
             else
               Column(
                 children: [
                   for (var index = 0; index < visibleItems.length; index++) ...[
-                    _FocusTaskTile(
+                    HomeTaskFocusTile(
                       item: visibleItems[index],
                       onCompleteTask: onCompleteTask,
+                      keyPrefix: 'home_focus',
                     ),
                     if (index != visibleItems.length - 1)
                       const SizedBox(height: 6),
@@ -156,149 +154,6 @@ class _FocusQueueSection extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-class _FocusTaskTile extends StatefulWidget {
-  final HomeAttentionItem item;
-  final Future<void> Function(HomeAttentionItem item) onCompleteTask;
-
-  const _FocusTaskTile({required this.item, required this.onCompleteTask});
-
-  @override
-  State<_FocusTaskTile> createState() => _FocusTaskTileState();
-}
-
-class _FocusTaskTileState extends State<_FocusTaskTile> {
-  bool _completing = false;
-
-  Future<void> _complete() async {
-    if (_completing || widget.item.entityType != 'task') return;
-    setState(() => _completing = true);
-    try {
-      await widget.onCompleteTask(widget.item);
-    } finally {
-      if (mounted) setState(() => _completing = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final item = widget.item;
-    final theme = Theme.of(context);
-    final quadrantTone = homeTaskQuadrantColor(item.quadrant, theme.semanticColors);
-    return DecoratedBox(
-      key: Key('home_focus_item_${item.entityId}'),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(
-          bottom: BorderSide(color: theme.colorScheme.outlineVariant),
-        ),
-      ),
-      child: Row(
-        children: [
-          Semantics(
-            label: homeTaskQuadrantLabel(item.quadrant),
-            child: Container(
-              key: Key('home_focus_quadrant_${item.entityId}'),
-              width: 4,
-              color: quadrantTone,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 9),
-                _FocusTimeDistanceBar(item: item),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          if (item.entityType == 'task')
-            IconButton(
-              key: Key('home_focus_complete_${item.entityId}'),
-              tooltip: '完成任务',
-              onPressed: _completing ? null : _complete,
-              constraints: const BoxConstraints.tightFor(width: 44, height: 44),
-              padding: EdgeInsets.zero,
-              icon: _completing
-                  ? const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.radio_button_unchecked, size: 21),
-            ),
-          const SizedBox(width: 4),
-        ],
-      ),
-    );
-  }
-}
-
-class _FocusTimeDistanceBar extends StatelessWidget {
-  final HomeAttentionItem item;
-
-  const _FocusTimeDistanceBar({required this.item});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final dueAt = item.occurredAt?.toLocal();
-    if (dueAt == null) {
-      return Container(
-        key: Key('home_focus_time_bar_${item.entityId}'),
-        height: 5,
-        decoration: BoxDecoration(
-          color: theme.colorScheme.outlineVariant,
-          borderRadius: BorderRadius.circular(99),
-        ),
-      );
-    }
-    final distance = dueAt.difference(DateTime.now());
-    final tone = homeTaskTimeColor(distance, theme.semanticColors);
-    final ratio = homeTaskTimeRatio(distance);
-    return Row(
-      children: [
-        Expanded(
-          child: Container(
-            key: Key('home_focus_time_bar_${item.entityId}'),
-            height: 5,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.55),
-              borderRadius: BorderRadius.circular(99),
-            ),
-            clipBehavior: Clip.antiAlias,
-            alignment: Alignment.centerLeft,
-            child: FractionallySizedBox(
-              widthFactor: ratio,
-              child: ColoredBox(color: tone),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          homeTaskTimeDistanceLabel(distance),
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: tone,
-            fontSize: 9,
-            fontWeight: FontWeight.w700,
-            fontFeatures: const [FontFeature.tabularFigures()],
-          ),
-        ),
-      ],
     );
   }
 }
@@ -446,12 +301,12 @@ class _RecentMemoRow extends StatelessWidget {
 
 class _FocusSectionHeader extends StatelessWidget {
   final String title;
-  final String subtitle;
+  final String? subtitle;
   final String? actionLabel;
 
   const _FocusSectionHeader({
     required this.title,
-    required this.subtitle,
+    this.subtitle,
     this.actionLabel,
   });
 
@@ -475,14 +330,16 @@ class _FocusSectionHeader extends StatelessWidget {
                     letterSpacing: -0.2,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontSize: 10,
+                if (subtitle?.trim().isNotEmpty == true) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle!,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontSize: 10,
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),

@@ -197,6 +197,7 @@ class HomeOverviewRepository {
       type: local.type,
       level: local.level,
       quadrant: local.quadrant,
+      urgencyWindowSeconds: local.urgencyWindowSeconds,
       title: local.title,
       description: local.description,
       entityType: local.entityType,

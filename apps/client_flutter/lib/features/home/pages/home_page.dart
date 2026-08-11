@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/app/theme/theme_package.dart';
 import 'package:client_flutter/app/theme/theme_platform_profile.dart';
@@ -8,6 +10,7 @@ import 'package:client_flutter/data/repositories/task_repository.dart';
 import 'package:client_flutter/domain/entities/home_overview.dart';
 import 'package:client_flutter/features/home/widgets/home_dashboard_view.dart';
 import 'package:client_flutter/features/home/widgets/home_focus_view.dart';
+import 'package:client_flutter/features/home/widgets/home_task_focus_visuals.dart';
 import 'package:client_flutter/features/search/pages/search_page.dart';
 import 'package:client_flutter/features/settings/settings_page.dart';
 import 'package:client_flutter/features/task/pages/task_list_page.dart';
@@ -31,6 +34,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   HomeOverview? _overview;
+  Timer? _urgencyRefreshTimer;
   bool _isLoading = true;
   String? _error;
 
@@ -50,11 +54,35 @@ class _HomePageState extends State<HomePage> {
       final overview = await _resolveOverview();
       if (!mounted) return;
       setState(() => _overview = overview);
+      _scheduleUrgencyRefresh(overview);
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = '首页概览加载失败：$error');
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _scheduleUrgencyRefresh(HomeOverview overview) {
+    _urgencyRefreshTimer?.cancel();
+    final next = homeNextUrgencyTransition(
+      overview.attentionItems,
+      DateTime.now(),
+    );
+    if (next == null) return;
+    _urgencyRefreshTimer = Timer(next + const Duration(milliseconds: 100), () {
+      _refreshAfterUrgencyTransition();
+    });
+  }
+
+  Future<void> _refreshAfterUrgencyTransition() async {
+    try {
+      final overview = await _resolveOverview();
+      if (!mounted) return;
+      setState(() => _overview = overview);
+      _scheduleUrgencyRefresh(overview);
+    } catch (_) {
+      // Keep the current overview. The next normal refresh retries the source.
     }
   }
 
@@ -97,11 +125,18 @@ class _HomePageState extends State<HomePage> {
         _overview = _withoutAttentionItem(overview, item.entityId);
       }
     });
+    final optimisticOverview = _overview;
+    if (optimisticOverview != null) {
+      _scheduleUrgencyRefresh(optimisticOverview);
+    }
     if (customCompleter != null) return;
 
     try {
       final refreshed = await _resolveOverview();
-      if (mounted) setState(() => _overview = refreshed);
+      if (mounted) {
+        setState(() => _overview = refreshed);
+        _scheduleUrgencyRefresh(refreshed);
+      }
     } catch (_) {
       // The task is already complete; keep the optimistic queue instead of
       // reporting the successful action as a failure.
@@ -125,6 +160,12 @@ class _HomePageState extends State<HomePage> {
       importSummary: overview.importSummary,
       settingsSummary: overview.settingsSummary,
     );
+  }
+
+  @override
+  void dispose() {
+    _urgencyRefreshTimer?.cancel();
+    super.dispose();
   }
 
   @override

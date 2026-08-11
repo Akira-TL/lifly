@@ -58,7 +58,7 @@ void main() {
     expect(find.byType(Card), findsNothing);
   });
 
-  testWidgets('Web focus tasks complete in place with quadrant color and time bars', (
+  testWidgets('Web focus tasks use top urgency bars and right-side countdowns', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 1000);
@@ -93,15 +93,17 @@ void main() {
 
     expect(find.text('已逾期'), findsNothing);
     expect(find.text('今天截止'), findsNothing);
-    expect(find.byKey(const Key('home_focus_time_bar_task-1')), findsOneWidget);
-
-    final quadrantColors = <Color>{
-      for (final id in ['task-1', 'task-2', 'task-3', 'task-4'])
-        tester
-            .widget<Container>(find.byKey(Key('home_focus_quadrant_$id')))
-            .color!,
-    };
-    expect(quadrantColors, hasLength(4));
+    expect(find.byKey(const Key('home_focus_quadrant_task-1')), findsNothing);
+    expect(find.byKey(const Key('home_focus_time_bar_task-1')), findsNothing);
+    final urgencyBar = find.byKey(const Key('home_focus_urgency_bar_task-1'));
+    expect(urgencyBar, findsOneWidget);
+    expect(
+      tester.getSize(urgencyBar).width,
+      greaterThan(tester.getSize(first).width - 3),
+    );
+    final countdown = find.byKey(const Key('home_focus_countdown_task-1'));
+    expect(countdown, findsOneWidget);
+    expect(tester.getCenter(countdown).dx, greaterThan(tester.getCenter(first).dx));
 
     await tester.tap(find.byKey(const Key('home_focus_complete_task-1')));
     await tester.pumpAndSettle();
@@ -156,7 +158,8 @@ void main() {
     expect(find.text('任务已逾期'), findsNothing);
     expect(find.text('已逾期'), findsNothing);
     expect(find.text('今天截止'), findsNothing);
-    expect(find.byKey(const Key('home_attention_time_bar_task-1')), findsOneWidget);
+    expect(find.byKey(const Key('home_attention_urgency_bar_task-1')), findsOneWidget);
+    expect(find.byKey(const Key('home_attention_countdown_task-1')), findsOneWidget);
     expect(find.byKey(const Key('home_attention_complete_task-1')), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('home_attention_complete_task-1')));
@@ -350,46 +353,50 @@ HomeOverview _overview({List<HomeAttentionItem>? attentionItems}) {
 }
 
 List<HomeAttentionItem> _denseAttentionItems() {
-  final now = DateTime.utc(2026, 7, 30, 8, 30);
+  final now = DateTime.now().toUtc();
   return [
     HomeAttentionItem(
       id: 'task-1',
-      type: 'task_overdue',
+      type: 'task_focus',
       level: 'critical',
-      quadrant: 'important_urgent',
+      quadrant: 'urgent_important',
+      urgencyWindowSeconds: const Duration(hours: 1).inSeconds,
       title: '确认 Web 首页布局',
-      description: '任务已逾期',
+      description: null,
       entityType: 'task',
       entityId: 'task-1',
-      occurredAt: now.subtract(const Duration(hours: 2)),
+      occurredAt: now.add(const Duration(minutes: 30)),
     ),
     HomeAttentionItem(
       id: 'task-2',
       type: 'task_focus',
-      level: 'info',
-      quadrant: 'important_not_urgent',
-      title: '整理产品路线',
-      description: null,
-      entityType: 'task',
-      entityId: 'task-2',
-      occurredAt: now.add(const Duration(days: 2)),
-    ),
-    HomeAttentionItem(
-      id: 'task-3',
-      type: 'task_due_today',
       level: 'warning',
-      quadrant: 'not_important_urgent',
+      quadrant: 'urgent_not_important',
+      urgencyWindowSeconds: const Duration(minutes: 5).inSeconds,
       title: '回复临时消息',
       description: null,
       entityType: 'task',
+      entityId: 'task-2',
+      occurredAt: now.add(const Duration(minutes: 4)),
+    ),
+    HomeAttentionItem(
+      id: 'task-3',
+      type: 'task_focus',
+      level: 'info',
+      quadrant: 'not_urgent_important',
+      urgencyWindowSeconds: const Duration(days: 1).inSeconds,
+      title: '整理产品路线',
+      description: null,
+      entityType: 'task',
       entityId: 'task-3',
-      occurredAt: now.add(const Duration(hours: 3)),
+      occurredAt: now.add(const Duration(days: 2)),
     ),
     HomeAttentionItem(
       id: 'task-4',
       type: 'task_focus',
       level: 'normal',
-      quadrant: 'not_important_not_urgent',
+      quadrant: 'not_urgent_not_important',
+      urgencyWindowSeconds: const Duration(hours: 4).inSeconds,
       title: '整理抽屉',
       description: null,
       entityType: 'task',
@@ -400,7 +407,8 @@ List<HomeAttentionItem> _denseAttentionItems() {
       id: 'task-5',
       type: 'task_focus',
       level: 'info',
-      quadrant: 'important_not_urgent',
+      quadrant: 'not_urgent_important',
+      urgencyWindowSeconds: const Duration(days: 2).inSeconds,
       title: '检查下周计划',
       description: null,
       entityType: 'task',
@@ -411,7 +419,8 @@ List<HomeAttentionItem> _denseAttentionItems() {
       id: 'task-6',
       type: 'task_focus',
       level: 'normal',
-      quadrant: 'not_important_not_urgent',
+      quadrant: 'not_urgent_not_important',
+      urgencyWindowSeconds: const Duration(hours: 2).inSeconds,
       title: '整理下载目录',
       description: null,
       entityType: 'task',

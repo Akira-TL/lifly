@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.db.models import ImportBatch, LedgerTransaction, Memo, Task, TaskReminderStrategy
+from app.db.models import ImportBatch, LedgerTransaction, Memo, Task
 from app.modules.search import router as search_router
 
 
@@ -113,52 +113,80 @@ def test_home_overview_settings_summary_exposes_readiness_without_secrets() -> N
     assert "minio_secret_key" not in summary
 
 
-def test_home_overview_attention_items_rank_by_quadrant_before_time_status() -> None:
+def test_home_overview_attention_items_use_task_specific_urgency_windows() -> None:
     now = datetime(2026, 7, 7, 12, tzinfo=timezone.utc)
-    overdue = Task(
-        id="task-overdue",
+    urgent_important = Task(
+        id="task-urgent-important",
         user_id="local-dev",
-        title="逾期任务",
-        due_at=now - timedelta(days=1),
-        priority="normal",
-        task_status="todo",
-        status="active",
-        updated_at=now - timedelta(days=1),
-    )
-    today = Task(
-        id="task-today",
-        user_id="local-dev",
-        title="今天任务",
-        due_at=now.replace(hour=18),
+        title="赶火车",
+        due_at=now + timedelta(minutes=50),
+        remind_at=now,
         priority="high",
         task_status="todo",
         status="active",
         updated_at=now,
     )
-
-    strategy = TaskReminderStrategy(
-        id="strategy-today",
+    urgent_unimportant = Task(
+        id="task-urgent-unimportant",
         user_id="local-dev",
-        task_id="task-today",
-        warning_level="warning",
-        warning_reason="AI 建议提前准备",
-        strategy_status="suggested",
-        source="ai",
+        title="回复确认消息",
+        due_at=now + timedelta(minutes=4),
+        remind_at=now - timedelta(minutes=1),
+        priority="normal",
+        task_status="todo",
+        status="active",
+        updated_at=now,
+    )
+    nonurgent_important = Task(
+        id="task-nonurgent-important",
+        user_id="local-dev",
+        title="完成一周项目总结",
+        due_at=now + timedelta(days=6),
+        remind_at=now + timedelta(days=3),
+        priority="high",
+        task_status="todo",
+        status="active",
+        updated_at=now,
+    )
+    nonurgent_unimportant = Task(
+        id="task-nonurgent-unimportant",
+        user_id="local-dev",
+        title="整理抽屉",
+        due_at=now + timedelta(days=5),
+        remind_at=now + timedelta(days=4, hours=20),
+        priority="low",
+        task_status="todo",
+        status="active",
         updated_at=now,
     )
 
     items = search_router._build_attention_items(
-        [today, overdue],
-        {"task-today": strategy},
+        [
+            nonurgent_unimportant,
+            nonurgent_important,
+            urgent_unimportant,
+            urgent_important,
+        ],
+        {},
         now,
     )
 
-    assert [item["type"] for item in items] == ["task_warning_strategy", "task_overdue"]
-    assert items[0]["quadrant"] == "important_urgent"
-    assert items[0]["level"] == "critical"
-    assert items[1]["quadrant"] == "not_important_urgent"
-    assert items[1]["level"] == "warning"
-    assert items[0]["entity_type"] == "task"
+    assert [item["entity_id"] for item in items] == [
+        "task-urgent-important",
+        "task-urgent-unimportant",
+        "task-nonurgent-important",
+        "task-nonurgent-unimportant",
+    ]
+    assert [item["quadrant"] for item in items] == [
+        "urgent_important",
+        "urgent_not_important",
+        "not_urgent_important",
+        "not_urgent_not_important",
+    ]
+    assert items[0]["urgency_window_seconds"] == 3000
+    assert items[1]["urgency_window_seconds"] == 300
+    assert items[2]["urgency_window_seconds"] == 259200
+    assert items[3]["urgency_window_seconds"] == 14400
 
 
 def test_home_overview_daily_trend_and_recent_activity_are_mixed() -> None:

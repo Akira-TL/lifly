@@ -180,7 +180,7 @@ class VisualFixtureLocalCoreBridge extends FakeLocalCoreBridge {
       title: title,
       description: description,
       dueAt: dueAt,
-      remindAt: dueAt?.subtract(const Duration(hours: 1)),
+      remindAt: dueAt?.subtract(_fixtureUrgencyWindow(title)),
       priority: priority,
       taskStatus: taskStatus,
       completedAt: completedAt,
@@ -189,6 +189,20 @@ class VisualFixtureLocalCoreBridge extends FakeLocalCoreBridge {
       createdAt: createdAt,
       updatedAt: completedAt ?? createdAt,
     );
+  }
+
+  Duration _fixtureUrgencyWindow(String title) {
+    if (title.contains('体检') || title.contains('预约')) {
+      return const Duration(hours: 1);
+    }
+    if (title.contains('项目') || title.contains('Lifly')) {
+      return const Duration(days: 3);
+    }
+    if (title.contains('回复') || title.contains('缴纳') || title.contains('购买')) {
+      return const Duration(minutes: 15);
+    }
+    if (title.contains('整理')) return const Duration(hours: 4);
+    return const Duration(hours: 2);
   }
 
   LocalLedgerTransactionRecord _tx(
