@@ -46,9 +46,9 @@ class AiTaskTimingValidation:
     super_urgent_start_at_utc: datetime | None
 
 
-def build_task_time_facts(task: Task, *, now: datetime) -> TaskTimeFacts:
+def build_time_facts(*, now: datetime, due_at: datetime | None) -> TaskTimeFacts:
     now_utc = _to_utc(now)
-    due_at_utc = _to_utc(task.due_at)
+    due_at_utc = _to_utc(due_at)
     remaining_seconds = None
     if due_at_utc is not None:
         remaining_seconds = int((due_at_utc - now_utc).total_seconds())
@@ -60,9 +60,26 @@ def build_task_time_facts(task: Task, *, now: datetime) -> TaskTimeFacts:
     )
 
 
+def build_task_time_facts(task: Task, *, now: datetime) -> TaskTimeFacts:
+    return build_time_facts(now=now, due_at=task.due_at)
+
+
+def sum_duration_seconds(parts_seconds: list[int] | tuple[int, ...]) -> int:
+    total = 0
+    for value in parts_seconds:
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise ValueError("精确时长必须是非负整数秒")
+        total += value
+    if total > MAX_AI_LEAD_SECONDS:
+        raise ValueError("精确时长总和超过 31536000 秒")
+    return total
+
+
 def validate_ai_task_timing(
     facts: TaskTimeFacts,
     proposal: AiTaskTimingProposal,
+    *,
+    minimum_urgent_lead_seconds: int | None = None,
 ) -> AiTaskTimingValidation:
     errors: list[str] = []
     urgent = proposal.urgent_lead_seconds
@@ -89,6 +106,13 @@ def validate_ai_task_timing(
         and super_urgent > urgent
     ):
         errors.append("super_urgent_lead_seconds 必须小于等于 urgent_lead_seconds")
+    if minimum_urgent_lead_seconds is not None:
+        if not _is_valid_lead(minimum_urgent_lead_seconds):
+            errors.append("minimum_urgent_lead_seconds 必须是 1 到 31536000 的整数秒")
+        elif _is_valid_lead(urgent) and urgent < minimum_urgent_lead_seconds:
+            errors.append(
+                f"urgent_lead_seconds 小于精确时间约束 {minimum_urgent_lead_seconds} 秒"
+            )
 
     if errors:
         return AiTaskTimingValidation(
@@ -130,6 +154,7 @@ def task_time_ai_contract() -> dict[str, object]:
         "rules": [
             "精确时间计算必须使用 time_facts，不得由模型自行做日期或时区算术。",
             "模型只估计重要性以及两个提前量，提前量统一使用整数秒。",
+            "任务文本包含明确时长时，必须先用 sum_durations 做精确加总，并把结果作为最小紧急提前量交给 validate。",
             "模型输出后必须调用 timing_validation；校验失败时修正输出，禁止绕过校验。",
             "无截止时间任务的两个提前量必须为 null。",
         ],
@@ -137,6 +162,18 @@ def task_time_ai_contract() -> dict[str, object]:
             "important",
             "urgent_lead_seconds",
             "super_urgent_lead_seconds",
+        ],
+        "tools": {
+            "inspect": "计算 now / DDL / remaining_seconds / overdue，禁止模型自行做日期算术。",
+            "sum_durations": "对任务文本中明确给出的多个耗时做精确整数秒加总。",
+            "validate": "校验 AI 提前量与精确最小时长，并计算 urgent_start / super_start / 当前阶段。",
+        },
+        "tool_flow": [
+            "inspect",
+            "sum_exact_durations_when_present",
+            "semantic_proposal",
+            "validate",
+            "retry_on_validation_error",
         ],
         "validation_required": True,
     }

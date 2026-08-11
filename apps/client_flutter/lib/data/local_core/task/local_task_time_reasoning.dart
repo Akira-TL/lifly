@@ -75,10 +75,25 @@ class LocalTaskTimeReasoning {
     );
   }
 
+  static int sumDurationSeconds(Iterable<int> partsSeconds) {
+    var total = 0;
+    for (final value in partsSeconds) {
+      if (value < 0) {
+        throw ArgumentError.value(value, 'partsSeconds', '精确时长必须是非负整数秒');
+      }
+      total += value;
+    }
+    if (total > _maxAiLeadSeconds) {
+      throw ArgumentError.value(total, 'partsSeconds', '精确时长总和超过 31536000 秒');
+    }
+    return total;
+  }
+
   static LocalAiTaskTimingValidation validate(
     LocalTaskTimeFacts facts,
-    LocalAiTaskTimingProposal proposal,
-  ) {
+    LocalAiTaskTimingProposal proposal, {
+    int? minimumUrgentLeadSeconds,
+  }) {
     final errors = <String>[];
     final urgent = proposal.urgentLeadSeconds;
     final superUrgent = proposal.superUrgentLeadSeconds;
@@ -106,6 +121,13 @@ class LocalTaskTimeReasoning {
         _isValidLead(superUrgent) &&
         superUrgent! > urgent!) {
       errors.add('super_urgent_lead_seconds 必须小于等于 urgent_lead_seconds');
+    }
+    if (minimumUrgentLeadSeconds != null) {
+      if (!_isValidLead(minimumUrgentLeadSeconds)) {
+        errors.add('minimum_urgent_lead_seconds 必须是 1 到 31536000 的整数秒');
+      } else if (_isValidLead(urgent) && urgent! < minimumUrgentLeadSeconds) {
+        errors.add('urgent_lead_seconds 小于精确时间约束 $minimumUrgentLeadSeconds 秒');
+      }
     }
 
     if (errors.isNotEmpty) {
@@ -151,6 +173,7 @@ class LocalTaskTimeReasoning {
       'rules': const [
         '精确时间计算必须使用 time_facts，不得由模型自行做日期或时区算术。',
         '模型只估计重要性以及两个提前量，提前量统一使用整数秒。',
+        '任务文本包含明确时长时，必须先用 sum_durations 做精确加总，并把结果作为最小紧急提前量交给 validate。',
         '模型输出后必须调用 timing_validation；校验失败时修正输出，禁止绕过校验。',
         '无截止时间任务的两个提前量必须为 null。',
       ],
@@ -158,6 +181,18 @@ class LocalTaskTimeReasoning {
         'important',
         'urgent_lead_seconds',
         'super_urgent_lead_seconds',
+      ],
+      'tools': const {
+        'inspect': '计算 now / DDL / remaining_seconds / overdue，禁止模型自行做日期算术。',
+        'sum_durations': '对任务文本中明确给出的多个耗时做精确整数秒加总。',
+        'validate': '校验 AI 提前量与精确最小时长，并计算 urgent_start / super_start / 当前阶段。',
+      },
+      'tool_flow': const [
+        'inspect',
+        'sum_exact_durations_when_present',
+        'semantic_proposal',
+        'validate',
+        'retry_on_validation_error',
       ],
       'validation_required': true,
     };

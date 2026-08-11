@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import inspect
+import json
 from typing import Any
 
 import pytest
@@ -12,9 +13,11 @@ from app.modules.tasks.reminder_strategy_engine import suggest_task_reminder_str
 from app.modules.tasks.time_reasoning import (
     AiTaskTimingProposal,
     build_task_time_facts,
+    sum_duration_seconds,
     task_time_ai_contract,
     validate_ai_task_timing,
 )
+from app.modules.tasks.time_reasoning_cli import main as time_reasoning_cli_main
 
 
 def test_task_reminder_strategy_model_and_routes_exist() -> None:
@@ -288,4 +291,90 @@ def test_ai_time_contract_forbids_model_datetime_arithmetic() -> None:
         "urgent_lead_seconds",
         "super_urgent_lead_seconds",
     ]
+    assert contract["tool_flow"] == [
+        "inspect",
+        "sum_exact_durations_when_present",
+        "semantic_proposal",
+        "validate",
+        "retry_on_validation_error",
+    ]
     assert contract["validation_required"] is True
+
+
+def test_time_reasoning_cli_inspects_and_validates_without_model_math(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = time_reasoning_cli_main(
+        [
+            "inspect",
+            "--now",
+            "2026-08-11T23:09:00+08:00",
+            "--due-at",
+            "2026-08-12T08:30:00+08:00",
+        ]
+    )
+    inspected = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert inspected["remaining_seconds"] == 33660
+    assert inspected["is_overdue"] is False
+
+    exit_code = time_reasoning_cli_main(
+        ["sum", "--seconds", "2400", "1200"]
+    )
+    summed = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert summed["total_seconds"] == 3600
+
+    exit_code = time_reasoning_cli_main(
+        [
+            "validate",
+            "--now",
+            "2026-08-12T08:10:00+08:00",
+            "--due-at",
+            "2026-08-12T08:30:00+08:00",
+            "--important",
+            "true",
+            "--urgent-lead-seconds",
+            "3600",
+            "--super-urgent-lead-seconds",
+            "1800",
+        ]
+    )
+    validated = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert validated["valid"] is True
+    assert validated["stage"] == "super_urgent"
+    assert validated["urgent_start_at_utc"] == "2026-08-11T23:30:00+00:00"
+
+
+def test_exact_duration_evidence_blocks_ai_underestimation() -> None:
+    exact_minimum = sum_duration_seconds([40 * 60, 20 * 60])
+    task = Task(
+        id="task-exact-duration",
+        user_id="local-dev",
+        title="赶高铁",
+        due_at=datetime(2026, 8, 12, 8, 30, tzinfo=timezone(timedelta(hours=8))),
+        priority="high",
+        task_status="todo",
+        status="active",
+    )
+    facts = build_task_time_facts(
+        task,
+        now=datetime(2026, 8, 12, 7, 35, tzinfo=timezone(timedelta(hours=8))),
+    )
+
+    validation = validate_ai_task_timing(
+        facts,
+        AiTaskTimingProposal(
+            important=True,
+            urgent_lead_seconds=1800,
+            super_urgent_lead_seconds=1200,
+        ),
+        minimum_urgent_lead_seconds=exact_minimum,
+    )
+
+    assert exact_minimum == 3600
+    assert validation.valid is False
+    assert "urgent_lead_seconds 小于精确时间约束 3600 秒" in validation.errors

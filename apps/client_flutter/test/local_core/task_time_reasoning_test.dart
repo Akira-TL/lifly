@@ -73,6 +73,26 @@ void main() {
       invalid.errors,
       contains('super_urgent_lead_seconds 必须小于等于 urgent_lead_seconds'),
     );
+
+    final exactMinimum = LocalTaskTimeReasoning.sumDurationSeconds([
+      40 * 60,
+      20 * 60,
+    ]);
+    final underestimated = LocalTaskTimeReasoning.validate(
+      facts,
+      const LocalAiTaskTimingProposal(
+        important: true,
+        urgentLeadSeconds: 1800,
+        superUrgentLeadSeconds: 1200,
+      ),
+      minimumUrgentLeadSeconds: exactMinimum,
+    );
+    expect(exactMinimum, 3600);
+    expect(underestimated.valid, isFalse);
+    expect(
+      underestimated.errors,
+      contains('urgent_lead_seconds 小于精确时间约束 3600 秒'),
+    );
   });
 
   test('deadline-free tasks cannot receive invented timing windows', () {
@@ -92,6 +112,14 @@ void main() {
     expect(facts.remainingSeconds, isNull);
     expect(validation.valid, isFalse);
     expect(validation.errors, contains('无截止时间任务不得生成紧急时间窗口'));
-    expect(LocalTaskTimeReasoning.aiContract()['validation_required'], isTrue);
+    final contract = LocalTaskTimeReasoning.aiContract();
+    expect(contract['validation_required'], isTrue);
+    expect(contract['tool_flow'], [
+      'inspect',
+      'sum_exact_durations_when_present',
+      'semantic_proposal',
+      'validate',
+      'retry_on_validation_error',
+    ]);
   });
 }
