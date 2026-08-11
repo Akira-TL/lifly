@@ -198,6 +198,8 @@ class HomeOverviewRepository {
       level: local.level,
       quadrant: local.quadrant,
       urgencyWindowSeconds: local.urgencyWindowSeconds,
+      superUrgencyWindowSeconds: local.superUrgencyWindowSeconds,
+      progressStartedAt: local.progressStartedAt,
       title: local.title,
       description: local.description,
       entityType: local.entityType,

@@ -699,6 +699,8 @@ class LocalHomeAttentionItem {
   final String level;
   final String quadrant;
   final int urgencyWindowSeconds;
+  final int superUrgencyWindowSeconds;
+  final DateTime? progressStartedAt;
   final String title;
   final String? description;
   final String entityType;
@@ -711,6 +713,8 @@ class LocalHomeAttentionItem {
     required this.level,
     this.quadrant = 'not_urgent_not_important',
     this.urgencyWindowSeconds = 0,
+    this.superUrgencyWindowSeconds = 0,
+    this.progressStartedAt,
     required this.title,
     required this.description,
     required this.entityType,

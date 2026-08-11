@@ -700,6 +700,8 @@ void main() {
           'level': 'info',
           'quadrant': 'not_urgent_important',
           'urgency_window_seconds': 259200,
+          'super_urgency_window_seconds': 21600,
+          'progress_started_at': '2026-07-01T12:00:00Z',
           'title': '准备季度复盘',
           'entity_type': 'task',
           'entity_id': 'task-1',
@@ -774,6 +776,11 @@ void main() {
     expect(overview.financeOverview.insights.single.id, 'budget_ok');
     expect(overview.attentionItems.first.quadrant, 'not_urgent_important');
     expect(overview.attentionItems.first.urgencyWindowSeconds, 259200);
+    expect(overview.attentionItems.first.superUrgencyWindowSeconds, 21600);
+    expect(
+      overview.attentionItems.first.progressStartedAt,
+      DateTime.utc(2026, 7, 1, 12),
+    );
     expect(overview.attentionItems.last.quadrant, 'urgent_important');
     expect(overview.dailyTrend.single.total, 18.5);
     expect(overview.recentActivity.single.entityType, 'ledger_transaction');

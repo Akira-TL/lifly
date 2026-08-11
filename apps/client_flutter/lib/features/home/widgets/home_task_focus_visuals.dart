@@ -4,6 +4,8 @@ import 'package:client_flutter/app/theme/lifly_semantic_colors.dart';
 import 'package:client_flutter/domain/entities/home_overview.dart';
 import 'package:flutter/material.dart';
 
+enum HomeTaskUrgencyStage { notUrgent, urgent, superUrgent }
+
 Color homeTaskQuadrantColor(String quadrant, LiflySemanticColors colors) {
   return switch (quadrant) {
     'urgent_important' || 'important_urgent' => colors.critical,
@@ -43,11 +45,38 @@ String homeTaskCurrentQuadrant(
   return 'not_urgent_not_important';
 }
 
-double homeTaskUrgencyRatio(Duration remaining, Duration urgencyWindow) {
-  if (remaining <= Duration.zero) return 0;
+HomeTaskUrgencyStage homeTaskUrgencyStage(
+  Duration remaining,
+  Duration urgencyWindow,
+  Duration superUrgencyWindow,
+) {
+  if (remaining <= superUrgencyWindow) {
+    return HomeTaskUrgencyStage.superUrgent;
+  }
+  if (remaining <= urgencyWindow) return HomeTaskUrgencyStage.urgent;
+  return HomeTaskUrgencyStage.notUrgent;
+}
+
+double homeTaskTimelineProgress({
+  required DateTime now,
+  required DateTime createdAt,
+  required DateTime dueAt,
+  required Duration urgencyWindow,
+}) {
   if (urgencyWindow <= Duration.zero) return 1;
-  final ratio = remaining.inMilliseconds / urgencyWindow.inMilliseconds;
-  return ratio.clamp(0, 1).toDouble();
+  final urgentStart = dueAt.subtract(urgencyWindow);
+  if (now.isBefore(urgentStart)) {
+    final totalCalm = urgentStart.difference(createdAt);
+    if (totalCalm <= Duration.zero) return 0;
+    final calmRemaining = urgentStart.difference(now);
+    return (calmRemaining.inMilliseconds / totalCalm.inMilliseconds)
+        .clamp(0, 1)
+        .toDouble();
+  }
+  final urgentElapsed = now.difference(urgentStart);
+  return (urgentElapsed.inMilliseconds / urgencyWindow.inMilliseconds)
+      .clamp(0, 1)
+      .toDouble();
 }
 
 Duration? homeNextUrgencyTransition(
@@ -58,28 +87,44 @@ Duration? homeNextUrgencyTransition(
   for (final item in items) {
     final dueAt = item.occurredAt;
     if (dueAt == null || item.urgencyWindowSeconds <= 0) continue;
-    final transitionAt = dueAt.subtract(
-      Duration(seconds: item.urgencyWindowSeconds),
-    );
-    final delay = transitionAt.difference(now);
-    if (delay <= Duration.zero) continue;
-    if (next == null || delay < next) next = delay;
+    final thresholds = <DateTime>[
+      dueAt.subtract(Duration(seconds: item.urgencyWindowSeconds)),
+      if (item.superUrgencyWindowSeconds > 0)
+        dueAt.subtract(Duration(seconds: item.superUrgencyWindowSeconds)),
+    ];
+    for (final threshold in thresholds) {
+      final delay = threshold.difference(now);
+      if (delay <= Duration.zero) continue;
+      if (next == null || delay < next) next = delay;
+    }
   }
   return next;
 }
 
-String homeTaskCountdownLabel(Duration remaining) {
-  if (remaining <= Duration.zero) return '0秒';
-  if (remaining < const Duration(minutes: 1)) {
-    return '${remaining.inSeconds}秒';
+String homeTaskCountdownLabel(
+  Duration remaining, {
+  required HomeTaskUrgencyStage stage,
+}) {
+  if (remaining <= Duration.zero) return '00:00';
+  final ticking =
+      stage == HomeTaskUrgencyStage.superUrgent ||
+      remaining <= const Duration(minutes: 30);
+  if (ticking) {
+    final seconds = remaining.inSeconds;
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
+    final restSeconds = seconds % 60;
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:'
+          '${minutes.toString().padLeft(2, '0')}:'
+          '${restSeconds.toString().padLeft(2, '0')}';
+    }
+    return '${minutes.toString().padLeft(2, '0')}:'
+        '${restSeconds.toString().padLeft(2, '0')}';
   }
-  if (remaining < const Duration(hours: 1)) {
-    return '${remaining.inMinutes}分钟';
-  }
-  if (remaining < const Duration(days: 1)) {
-    return '${remaining.inHours}小时';
-  }
-  return '${remaining.inDays}天';
+  if (remaining >= const Duration(days: 1)) return '${remaining.inDays}d';
+  if (remaining >= const Duration(hours: 1)) return '${remaining.inHours}h';
+  return '${remaining.inMinutes}m';
 }
 
 class HomeTaskFocusTile extends StatefulWidget {
@@ -114,7 +159,10 @@ class _HomeTaskFocusTileState extends State<HomeTaskFocusTile> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.item.occurredAt != widget.item.occurredAt ||
         oldWidget.item.urgencyWindowSeconds !=
-            widget.item.urgencyWindowSeconds) {
+            widget.item.urgencyWindowSeconds ||
+        oldWidget.item.superUrgencyWindowSeconds !=
+            widget.item.superUrgencyWindowSeconds ||
+        oldWidget.item.progressStartedAt != widget.item.progressStartedAt) {
       _timer?.cancel();
       _now = DateTime.now();
       _scheduleNextTick();
@@ -126,18 +174,23 @@ class _HomeTaskFocusTileState extends State<HomeTaskFocusTile> {
     if (dueAt == null) return;
     final remaining = dueAt.difference(_now);
     if (remaining <= Duration.zero) return;
-    final displayDelay = remaining < const Duration(minutes: 1)
-        ? const Duration(seconds: 1)
-        : remaining < const Duration(hours: 1)
-        ? const Duration(minutes: 1)
-        : remaining < const Duration(days: 1)
-        ? const Duration(hours: 1)
-        : const Duration(days: 1);
     final urgencyWindow = Duration(seconds: widget.item.urgencyWindowSeconds);
+    final superWindow = Duration(
+      seconds: widget.item.superUrgencyWindowSeconds,
+    );
+    final stage = homeTaskUrgencyStage(remaining, urgencyWindow, superWindow);
+    var delay = switch (stage) {
+      HomeTaskUrgencyStage.superUrgent => const Duration(seconds: 1),
+      HomeTaskUrgencyStage.urgent =>
+        remaining <= const Duration(minutes: 30)
+            ? const Duration(seconds: 1)
+            : const Duration(minutes: 1),
+      HomeTaskUrgencyStage.notUrgent => const Duration(minutes: 5),
+    };
     final untilUrgent = remaining - urgencyWindow;
-    final delay = untilUrgent > Duration.zero && untilUrgent < displayDelay
-        ? untilUrgent
-        : displayDelay;
+    if (untilUrgent > Duration.zero && untilUrgent < delay) delay = untilUrgent;
+    final untilSuper = remaining - superWindow;
+    if (untilSuper > Duration.zero && untilSuper < delay) delay = untilSuper;
     _timer = Timer(delay, () {
       if (!mounted) return;
       setState(() => _now = DateTime.now());
@@ -168,28 +221,55 @@ class _HomeTaskFocusTileState extends State<HomeTaskFocusTile> {
     final dueAt = item.occurredAt?.toLocal();
     final remaining = dueAt?.difference(_now) ?? Duration.zero;
     final urgencyWindow = Duration(seconds: item.urgencyWindowSeconds);
+    final superWindow = Duration(seconds: item.superUrgencyWindowSeconds);
+    final stage = homeTaskUrgencyStage(remaining, urgencyWindow, superWindow);
     final currentQuadrant = homeTaskCurrentQuadrant(
       item.quadrant,
       remaining,
       urgencyWindow,
     );
     final tone = homeTaskQuadrantColor(currentQuadrant, theme.semanticColors);
-    final ratio = dueAt == null
+    final urgentStart = dueAt?.subtract(urgencyWindow);
+    final fallbackStart = urgentStart?.subtract(urgencyWindow);
+    final progressStart = item.progressStartedAt?.toLocal() ?? fallbackStart;
+    final ratio = dueAt == null || progressStart == null
         ? 1.0
-        : homeTaskUrgencyRatio(remaining, urgencyWindow);
+        : homeTaskTimelineProgress(
+            now: _now,
+            createdAt: progressStart,
+            dueAt: dueAt,
+            urgencyWindow: urgencyWindow,
+          );
+    final stageLabel = switch (stage) {
+      HomeTaskUrgencyStage.notUrgent => '未进入紧急阶段',
+      HomeTaskUrgencyStage.urgent => '紧急',
+      HomeTaskUrgencyStage.superUrgent => '超级紧急',
+    };
 
     return Semantics(
       container: true,
       explicitChildNodes: true,
-      label: homeTaskQuadrantLabel(currentQuadrant),
+      label: '${homeTaskQuadrantLabel(currentQuadrant)}，$stageLabel',
       child: SizedBox(
         height: 60,
         child: DecoratedBox(
           key: Key('${widget.keyPrefix}_item_${item.entityId}'),
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
-            border: Border.all(color: theme.colorScheme.outlineVariant),
+            border: Border.all(
+              color: stage == HomeTaskUrgencyStage.superUrgent
+                  ? tone.withValues(alpha: 0.52)
+                  : theme.colorScheme.outlineVariant,
+            ),
             borderRadius: BorderRadius.circular(7),
+            boxShadow: stage == HomeTaskUrgencyStage.superUrgent
+                ? [
+                    BoxShadow(
+                      color: tone.withValues(alpha: 0.12),
+                      blurRadius: 8,
+                    ),
+                  ]
+                : null,
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(6),
@@ -197,12 +277,23 @@ class _HomeTaskFocusTileState extends State<HomeTaskFocusTile> {
               children: [
                 Container(
                   key: Key('${widget.keyPrefix}_urgency_bar_${item.entityId}'),
-                  height: 4,
-                  color: tone.withValues(alpha: 0.16),
+                  height: stage == HomeTaskUrgencyStage.superUrgent ? 5 : 4,
+                  color: tone.withValues(
+                    alpha: stage == HomeTaskUrgencyStage.notUrgent
+                        ? 0.10
+                        : 0.16,
+                  ),
                   alignment: Alignment.centerLeft,
-                  child: FractionallySizedBox(
+                  child: AnimatedFractionallySizedBox(
+                    duration: const Duration(milliseconds: 240),
+                    curve: Curves.easeOut,
                     widthFactor: ratio,
-                    child: ColoredBox(color: tone),
+                    alignment: Alignment.centerLeft,
+                    child: ColoredBox(
+                      color: stage == HomeTaskUrgencyStage.urgent
+                          ? tone.withValues(alpha: 0.82)
+                          : tone,
+                    ),
                   ),
                 ),
                 Expanded(
@@ -247,14 +338,22 @@ class _HomeTaskFocusTileState extends State<HomeTaskFocusTile> {
                       ),
                       const SizedBox(width: 10),
                       Text(
-                        dueAt == null ? '—' : homeTaskCountdownLabel(remaining),
+                        dueAt == null
+                            ? '—'
+                            : homeTaskCountdownLabel(remaining, stage: stage),
                         key: Key(
                           '${widget.keyPrefix}_countdown_${item.entityId}',
                         ),
                         style: theme.textTheme.labelMedium?.copyWith(
                           color: tone,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: stage == HomeTaskUrgencyStage.superUrgent
+                              ? FontWeight.w900
+                              : FontWeight.w800,
                           fontFeatures: const [FontFeature.tabularFigures()],
+                          letterSpacing:
+                              stage == HomeTaskUrgencyStage.superUrgent
+                              ? 0.35
+                              : null,
                         ),
                       ),
                       const SizedBox(width: 10),

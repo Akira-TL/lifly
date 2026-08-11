@@ -124,6 +124,7 @@ def test_home_overview_attention_items_use_task_specific_urgency_windows() -> No
         priority="high",
         task_status="todo",
         status="active",
+        created_at=now - timedelta(hours=2),
         updated_at=now,
     )
     urgent_unimportant = Task(
@@ -184,9 +185,14 @@ def test_home_overview_attention_items_use_task_specific_urgency_windows() -> No
         "not_urgent_not_important",
     ]
     assert items[0]["urgency_window_seconds"] == 3000
+    assert items[0]["super_urgency_window_seconds"] == 1800
+    assert items[0]["progress_started_at"] == (now - timedelta(hours=2)).isoformat()
     assert items[1]["urgency_window_seconds"] == 300
+    assert items[1]["super_urgency_window_seconds"] == 300
     assert items[2]["urgency_window_seconds"] == 259200
+    assert items[2]["super_urgency_window_seconds"] == 21600
     assert items[3]["urgency_window_seconds"] == 14400
+    assert items[3]["super_urgency_window_seconds"] == 1800
 
 
 def test_home_overview_daily_trend_and_recent_activity_are_mixed() -> None:

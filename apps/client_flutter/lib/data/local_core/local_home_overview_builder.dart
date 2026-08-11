@@ -136,19 +136,33 @@ class LocalHomeOverviewBuilder {
             .map((task) {
               final strategy = taskStrategies[task.id];
               final urgencyWindow = _taskUrgencyWindow(task, strategy, now);
+              final superUrgencyWindow = _taskSuperUrgencyWindow(
+                task,
+                strategy,
+                urgencyWindow,
+              );
               final quadrant = _taskQuadrant(task, urgencyWindow, now);
               return (
                 task: task,
                 strategy: strategy,
                 quadrant: quadrant,
                 urgencyWindow: urgencyWindow,
+                superUrgencyWindow: superUrgencyWindow,
                 rank: _quadrantRank(quadrant),
+                stageRank: _urgencyStageRank(
+                  task.dueAt,
+                  now,
+                  urgencyWindow,
+                  superUrgencyWindow,
+                ),
               );
             })
             .toList(growable: false)
           ..sort((left, right) {
             final quadrantOrder = left.rank.compareTo(right.rank);
             if (quadrantOrder != 0) return quadrantOrder;
+            final stageOrder = left.stageRank.compareTo(right.stageRank);
+            if (stageOrder != 0) return stageOrder;
             final leftDue = left.task.dueAt;
             final rightDue = right.task.dueAt;
             if (leftDue == null && rightDue == null) {
@@ -179,6 +193,8 @@ class LocalHomeOverviewBuilder {
             level: _quadrantLevel(entry.quadrant),
             quadrant: entry.quadrant,
             urgencyWindowSeconds: entry.urgencyWindow.inSeconds,
+            superUrgencyWindowSeconds: entry.superUrgencyWindow.inSeconds,
+            progressStartedAt: task.createdAt,
             title: task.title,
             description: strategy?.warningReason,
             entityType: 'task',
@@ -239,6 +255,51 @@ class LocalHomeOverviewBuilder {
     return const Duration(minutes: 30);
   }
 
+  Duration _taskSuperUrgencyWindow(
+    LocalTaskRecord task,
+    LocalTaskReminderStrategy? strategy,
+    Duration urgencyWindow,
+  ) {
+    if (urgencyWindow <= Duration.zero) return Duration.zero;
+    final text = '${task.title}\n${task.description ?? ''}';
+    if (['火车', '高铁', '航班', '飞机'].any(text.contains)) {
+      return _minDuration(urgencyWindow, const Duration(minutes: 30));
+    }
+    if (['体检', '预约'].any(text.contains)) {
+      return _minDuration(urgencyWindow, const Duration(minutes: 20));
+    }
+    if (['项目', '总结', '报告', '周报', '提交'].any(text.contains)) {
+      return _minDuration(urgencyWindow, const Duration(hours: 6));
+    }
+    if (['回复', '确认', '缴费', '支付', '购买'].any(text.contains)) {
+      return _minDuration(urgencyWindow, const Duration(minutes: 5));
+    }
+    if (strategy?.warningLevel == 'critical') {
+      return _minDuration(urgencyWindow, const Duration(hours: 2));
+    }
+    if (urgencyWindow >= const Duration(days: 1)) {
+      return const Duration(hours: 3);
+    }
+    if (urgencyWindow >= const Duration(hours: 6)) {
+      return const Duration(hours: 1);
+    }
+    if (urgencyWindow >= const Duration(hours: 2)) {
+      return const Duration(minutes: 30);
+    }
+    if (urgencyWindow >= const Duration(minutes: 30)) {
+      return const Duration(minutes: 10);
+    }
+    final seconds = (urgencyWindow.inSeconds / 3).round().clamp(
+      60,
+      urgencyWindow.inSeconds,
+    );
+    return Duration(seconds: seconds);
+  }
+
+  Duration _minDuration(Duration left, Duration right) {
+    return left <= right ? left : right;
+  }
+
   String _taskQuadrant(
     LocalTaskRecord task,
     Duration urgencyWindow,
@@ -252,6 +313,19 @@ class LocalHomeOverviewBuilder {
     if (urgent) return 'urgent_not_important';
     if (important) return 'not_urgent_important';
     return 'not_urgent_not_important';
+  }
+
+  int _urgencyStageRank(
+    DateTime? dueAt,
+    DateTime now,
+    Duration urgencyWindow,
+    Duration superUrgencyWindow,
+  ) {
+    if (dueAt == null) return 2;
+    final remaining = dueAt.toUtc().difference(now.toUtc());
+    if (remaining <= superUrgencyWindow) return 0;
+    if (remaining <= urgencyWindow) return 1;
+    return 2;
   }
 
   int _quadrantRank(String quadrant) {

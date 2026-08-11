@@ -77,14 +77,14 @@ class VisualFixtureLocalCoreBridge extends FakeLocalCoreBridge {
     ]);
 
     _tasks.addAll([
-      _task(1, '提交本周项目进度总结', '整理完成项、风险和下一阶段计划，发给协作方。', 'urgent', 'todo', day.add(const Duration(hours: 10)), day, 0, 8),
-      _task(2, '确认明天上午的体检预约和需要空腹的项目', '检查预约短信、医院位置和交通时间。', 'high', 'todo', day.add(const Duration(hours: 18)), day, 0, 9),
-      _task(3, '回复积压的三封重要邮件', null, 'high', 'todo', day.subtract(const Duration(hours: 5)), day, -1, 20),
-      _task(4, '完成 Lifly 手机端真实数据布局检查', '重点看长标题、标签、多状态以及底部导航占用。', 'high', 'doing', day.add(const Duration(days: 2, hours: 12)), day, 0, 12),
-      _task(5, '缴纳本月宽带费用', null, 'normal', 'todo', day.add(const Duration(days: 2, hours: 11)), day, -1, 10),
-      _task(6, '买新的咖啡滤纸', 'V60 02，漂白款。', 'low', 'todo', day.add(const Duration(days: 4, hours: 16)), day, -2, 18),
+      _task(1, '完成 Lifly 下阶段产品路线', '重要但还没有进入紧急窗口，用于演示缓冲条从满宽向左收缩。', 'high', 'todo', fixtureNow.add(const Duration(days: 2, hours: 6)), day, 0, 8, createdAtOverride: fixtureNow.subtract(const Duration(hours: 18)), urgencyWindowOverride: const Duration(hours: 12)),
+      _task(2, '整理下载目录', '不重要且不紧急，但已经接近自己的紧急开始点。', 'low', 'todo', fixtureNow.add(const Duration(hours: 5)), day, 0, 9, createdAtOverride: fixtureNow.subtract(const Duration(hours: 22)), urgencyWindowOverride: const Duration(hours: 1)),
+      _task(3, '准备今晚重要会议材料', '已经进入紧急阶段，红色进度开始从左向右增长。', 'high', 'todo', fixtureNow.add(const Duration(hours: 2)), day, 0, 10, createdAtOverride: fixtureNow.subtract(const Duration(days: 1)), urgencyWindowOverride: const Duration(hours: 3)),
+      _task(4, '取快递', '普通事项已经拖进紧急窗口，橙色进度明显增长。', 'normal', 'todo', fixtureNow.add(const Duration(minutes: 45)), day, 0, 11, createdAtOverride: fixtureNow.subtract(const Duration(hours: 8)), urgencyWindowOverride: const Duration(hours: 1, minutes: 40)),
+      _task(5, '完成项目发布前最终检查', '超级紧急重要，仍有一小时以上但需要跳秒倒计时。', 'high', 'doing', fixtureNow.add(const Duration(hours: 1, minutes: 12, seconds: 34)), day, 0, 12, createdAtOverride: fixtureNow.subtract(const Duration(days: 2)), urgencyWindowOverride: const Duration(hours: 6)),
+      _task(6, '确认体检签到窗口', '超级紧急但不重要，演示分钟秒倒计时。', 'normal', 'todo', fixtureNow.add(const Duration(minutes: 18, seconds: 42)), day, 0, 13, createdAtOverride: fixtureNow.subtract(const Duration(hours: 6)), urgencyWindowOverride: const Duration(hours: 6, minutes: 20)),
       _task(7, '整理桌面和抽屉', null, 'low', 'doing', day.add(const Duration(days: 5, hours: 20)), day, -3, 14),
-      _task(8, '预约眼镜复查', '最近看远处稍微有点疲劳。', 'normal', 'todo', day.subtract(const Duration(days: 1, hours: 2)), day, -4, 19),
+      _task(8, '预约眼镜复查', '最近看远处稍微有点疲劳。', 'normal', 'todo', fixtureNow.add(const Duration(days: 8)), day, -4, 19),
       _task(9, '更新家庭设备保修记录', null, 'normal', 'todo', day.add(const Duration(days: 7, hours: 9)), day, -5, 16),
       _task(10, '周末跑步 8km', '如果膝盖不舒服就改成快走。', 'normal', 'todo', day.add(const Duration(days: 6, hours: 7)), day, -5, 10),
       _task(11, '把旧照片备份到移动硬盘', null, 'low', 'doing', null, day, -8, 21),
@@ -166,8 +166,10 @@ class VisualFixtureLocalCoreBridge extends FakeLocalCoreBridge {
     int createdDayOffset,
     int createdHour, {
     int? completedDaysAgo,
+    DateTime? createdAtOverride,
+    Duration? urgencyWindowOverride,
   }) {
-    final createdAt = day.add(
+    final createdAt = createdAtOverride ?? day.add(
       Duration(days: createdDayOffset, hours: createdHour),
     );
     final completedAt = completedDaysAgo == null
@@ -180,7 +182,7 @@ class VisualFixtureLocalCoreBridge extends FakeLocalCoreBridge {
       title: title,
       description: description,
       dueAt: dueAt,
-      remindAt: dueAt?.subtract(_fixtureUrgencyWindow(title)),
+      remindAt: dueAt?.subtract(urgencyWindowOverride ?? _fixtureUrgencyWindow(title)),
       priority: priority,
       taskStatus: taskStatus,
       completedAt: completedAt,

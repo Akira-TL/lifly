@@ -408,6 +408,8 @@ class HomeAttentionItem {
   final String level;
   final String quadrant;
   final int urgencyWindowSeconds;
+  final int superUrgencyWindowSeconds;
+  final DateTime? progressStartedAt;
   final String title;
   final String? description;
   final String entityType;
@@ -420,6 +422,8 @@ class HomeAttentionItem {
     required this.level,
     this.quadrant = 'not_urgent_not_important',
     this.urgencyWindowSeconds = 0,
+    this.superUrgencyWindowSeconds = 0,
+    this.progressStartedAt,
     required this.title,
     required this.description,
     required this.entityType,
@@ -438,6 +442,9 @@ class HomeAttentionItem {
       ),
       urgencyWindowSeconds:
           (json['urgency_window_seconds'] as num?)?.toInt() ?? 0,
+      superUrgencyWindowSeconds:
+          (json['super_urgency_window_seconds'] as num?)?.toInt() ?? 0,
+      progressStartedAt: HomeOverview._dateTime(json['progress_started_at']),
       title: json['title'] as String? ?? '待关注事项',
       description: json['description'] as String?,
       entityType: json['entity_type'] as String? ?? 'unknown',

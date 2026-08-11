@@ -62,46 +62,130 @@ void main() {
     expect(homeNextUrgencyTransition(items, now), const Duration(minutes: 45));
   });
 
+  test('urgency stage distinguishes calm urgent and super urgent', () {
+    expect(
+      homeTaskUrgencyStage(
+        const Duration(hours: 5),
+        const Duration(hours: 4),
+        const Duration(hours: 1),
+      ),
+      HomeTaskUrgencyStage.notUrgent,
+    );
+    expect(
+      homeTaskUrgencyStage(
+        const Duration(hours: 2),
+        const Duration(hours: 4),
+        const Duration(hours: 1),
+      ),
+      HomeTaskUrgencyStage.urgent,
+    );
+    expect(
+      homeTaskUrgencyStage(
+        const Duration(minutes: 30),
+        const Duration(hours: 4),
+        const Duration(hours: 1),
+      ),
+      HomeTaskUrgencyStage.superUrgent,
+    );
+  });
+
   test(
-    'urgency progress is remaining time divided by the AI urgency window',
+    'top progress shrinks before urgency then grows after urgency starts',
     () {
+      final createdAt = DateTime.utc(2026, 8, 11, 10);
+      final dueAt = DateTime.utc(2026, 8, 11, 20);
+      const urgencyWindow = Duration(hours: 4);
+
       expect(
-        homeTaskUrgencyRatio(
-          const Duration(hours: 36),
-          const Duration(days: 3),
-        ),
-        0.5,
-      );
-      expect(
-        homeTaskUrgencyRatio(
-          const Duration(minutes: 5),
-          const Duration(minutes: 5),
+        homeTaskTimelineProgress(
+          now: createdAt,
+          createdAt: createdAt,
+          dueAt: dueAt,
+          urgencyWindow: urgencyWindow,
         ),
         1,
       );
       expect(
-        homeTaskUrgencyRatio(
-          const Duration(minutes: 2, seconds: 30),
-          const Duration(minutes: 5),
+        homeTaskTimelineProgress(
+          now: DateTime.utc(2026, 8, 11, 13),
+          createdAt: createdAt,
+          dueAt: dueAt,
+          urgencyWindow: urgencyWindow,
         ),
         0.5,
       );
       expect(
-        homeTaskUrgencyRatio(const Duration(days: 8), const Duration(days: 3)),
+        homeTaskTimelineProgress(
+          now: DateTime.utc(2026, 8, 11, 16),
+          createdAt: createdAt,
+          dueAt: dueAt,
+          urgencyWindow: urgencyWindow,
+        ),
+        0,
+      );
+      expect(
+        homeTaskTimelineProgress(
+          now: DateTime.utc(2026, 8, 11, 18),
+          createdAt: createdAt,
+          dueAt: dueAt,
+          urgencyWindow: urgencyWindow,
+        ),
+        0.5,
+      );
+      expect(
+        homeTaskTimelineProgress(
+          now: dueAt,
+          createdAt: createdAt,
+          dueAt: dueAt,
+          urgencyWindow: urgencyWindow,
+        ),
         1,
       );
-      expect(homeTaskUrgencyRatio(Duration.zero, const Duration(hours: 1)), 0);
     },
   );
 
-  test(
-    'countdown selects seconds minutes hours and days from remaining time',
-    () {
-      expect(homeTaskCountdownLabel(const Duration(seconds: 45)), '45秒');
-      expect(homeTaskCountdownLabel(const Duration(minutes: 15)), '15分钟');
-      expect(homeTaskCountdownLabel(const Duration(hours: 5)), '5小时');
-      expect(homeTaskCountdownLabel(const Duration(days: 3, hours: 2)), '3天');
-      expect(homeTaskCountdownLabel(const Duration(seconds: -1)), '0秒');
-    },
-  );
+  test('countdown uses compact units and ticking clocks for critical time', () {
+    expect(
+      homeTaskCountdownLabel(
+        const Duration(days: 3, hours: 2),
+        stage: HomeTaskUrgencyStage.notUrgent,
+      ),
+      '3d',
+    );
+    expect(
+      homeTaskCountdownLabel(
+        const Duration(hours: 5),
+        stage: HomeTaskUrgencyStage.urgent,
+      ),
+      '5h',
+    );
+    expect(
+      homeTaskCountdownLabel(
+        const Duration(minutes: 45),
+        stage: HomeTaskUrgencyStage.urgent,
+      ),
+      '45m',
+    );
+    expect(
+      homeTaskCountdownLabel(
+        const Duration(hours: 5, minutes: 4, seconds: 3),
+        stage: HomeTaskUrgencyStage.superUrgent,
+      ),
+      '05:04:03',
+    );
+    expect(
+      homeTaskCountdownLabel(
+        const Duration(minutes: 18, seconds: 42),
+        stage: HomeTaskUrgencyStage.superUrgent,
+      ),
+      '18:42',
+    );
+    expect(
+      homeTaskCountdownLabel(
+        const Duration(minutes: 29, seconds: 4),
+        stage: HomeTaskUrgencyStage.urgent,
+      ),
+      '29:04',
+    );
+  });
 }

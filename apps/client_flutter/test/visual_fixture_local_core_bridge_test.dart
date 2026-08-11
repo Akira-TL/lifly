@@ -3,6 +3,7 @@ import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/local_core/fake_local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_context.dart';
+import 'package:client_flutter/features/home/widgets/home_task_focus_visuals.dart';
 import 'package:client_flutter/features/ledger/pages/ledger_list_page.dart';
 import 'package:client_flutter/features/memo/pages/memo_list_page.dart';
 import 'package:client_flutter/features/task/pages/task_list_page.dart';
@@ -44,15 +45,6 @@ void main() {
       'doing',
       'done',
     }));
-    expect(
-      tasks.any(
-        (item) =>
-            item.taskStatus != 'done' &&
-            item.dueAt != null &&
-            item.dueAt!.isBefore(now),
-      ),
-      isTrue,
-    );
     expect(
       tasks.any(
         (item) =>
@@ -139,8 +131,8 @@ void main() {
     await tester.pumpWidget(_fixtureApp(bridge, const TaskListPage()));
     await tester.pumpAndSettle();
 
-    final first = find.text('提交本周项目进度总结');
-    final second = find.text('确认明天上午的体检预约和需要空腹的项目');
+    final first = find.text('完成 Lifly 下阶段产品路线');
+    final second = find.text('整理下载目录');
     expect(first, findsOneWidget);
     expect(second, findsOneWidget);
     expect(tester.getTopLeft(second).dy - tester.getTopLeft(first).dy, lessThan(90));
@@ -189,7 +181,7 @@ void main() {
     expect(overview.sourceMode, 'visual_fixture');
     expect(overview.todayMetrics.memoTotal, 18);
     expect(overview.todayMetrics.taskDueToday, greaterThan(0));
-    expect(overview.todayMetrics.taskOverdue, greaterThan(0));
+    expect(overview.todayMetrics.taskOverdue, 0);
     expect(overview.attentionItems.length, greaterThanOrEqualTo(6));
     expect(
       overview.attentionItems.map((item) => item.quadrant).toSet(),
@@ -204,6 +196,42 @@ void main() {
       overview.attentionItems.every((item) => item.urgencyWindowSeconds >= 0),
       isTrue,
     );
+    expect(
+      overview.attentionItems.every(
+        (item) =>
+            item.superUrgencyWindowSeconds >= 0 &&
+            item.superUrgencyWindowSeconds <= item.urgencyWindowSeconds,
+      ),
+      isTrue,
+    );
+    final demoItems = overview.attentionItems.take(6).toList(growable: false);
+    expect(demoItems.every((item) => item.progressStartedAt != null), isTrue);
+    final stages = demoItems.map((item) {
+      final remaining = item.occurredAt!.difference(now);
+      return homeTaskUrgencyStage(
+        remaining,
+        Duration(seconds: item.urgencyWindowSeconds),
+        Duration(seconds: item.superUrgencyWindowSeconds),
+      );
+    }).toSet();
+    expect(
+      stages,
+      containsAll(<HomeTaskUrgencyStage>{
+        HomeTaskUrgencyStage.notUrgent,
+        HomeTaskUrgencyStage.urgent,
+        HomeTaskUrgencyStage.superUrgent,
+      }),
+    );
+    final progressBuckets = demoItems.map((item) {
+      final ratio = homeTaskTimelineProgress(
+        now: now,
+        createdAt: item.progressStartedAt!,
+        dueAt: item.occurredAt!,
+        urgencyWindow: Duration(seconds: item.urgencyWindowSeconds),
+      );
+      return (ratio * 10).round();
+    }).toSet();
+    expect(progressBuckets.length, greaterThanOrEqualTo(5));
     expect(overview.recentActivity, isNotEmpty);
     expect(overview.financeOverview.monthExpense, greaterThan(0));
     expect(overview.financeOverview.monthIncome, greaterThan(0));
