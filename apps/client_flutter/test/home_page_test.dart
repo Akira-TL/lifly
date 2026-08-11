@@ -101,6 +101,16 @@ void main() {
       tester.getSize(urgencyBar).width,
       greaterThan(tester.getSize(first).width - 3),
     );
+    final urgencyFill = find.descendant(
+      of: find.descendant(
+        of: urgencyBar,
+        matching: find.byType(AnimatedFractionallySizedBox),
+      ),
+      matching: find.byType(ColoredBox),
+    );
+    expect(urgencyFill, findsOneWidget);
+    expect(tester.getSize(urgencyFill).height, tester.getSize(urgencyBar).height);
+    expect(tester.getSize(urgencyFill).width, greaterThan(0));
     final countdown = find.byKey(const Key('home_focus_countdown_task-1'));
     expect(countdown, findsOneWidget);
     expect(tester.getCenter(countdown).dx, greaterThan(tester.getCenter(first).dx));

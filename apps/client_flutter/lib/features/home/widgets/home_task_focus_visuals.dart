@@ -288,6 +288,7 @@ class _HomeTaskFocusTileState extends State<HomeTaskFocusTile> {
                     duration: const Duration(milliseconds: 240),
                     curve: Curves.easeOut,
                     widthFactor: ratio,
+                    heightFactor: 1,
                     alignment: Alignment.centerLeft,
                     child: ColoredBox(
                       color: stage == HomeTaskUrgencyStage.urgent
