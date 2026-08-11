@@ -17,7 +17,7 @@ void main() {
       ),
     );
 
-    expect(find.text('当前模式：Local Core，导入预览需要 Cloud API。'), findsOneWidget);
+    expect(find.text('当前为本地模式，导入预览需要连接云端服务。'), findsOneWidget);
     expect(find.text('选择账单文件'), findsOneWidget);
 
     await tester.tap(find.text('选择账单文件'));

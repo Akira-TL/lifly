@@ -11,8 +11,8 @@ enum LiflyDataMode {
 
   String get label {
     return switch (this) {
-      LiflyDataMode.api => 'Cloud API',
-      LiflyDataMode.local => 'Local Core',
+      LiflyDataMode.api => '云端模式',
+      LiflyDataMode.local => '本地模式',
     };
   }
 }

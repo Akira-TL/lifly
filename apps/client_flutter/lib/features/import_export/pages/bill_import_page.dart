@@ -155,8 +155,8 @@ class _IntroCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               apiMode
-                  ? '当前模式：Cloud API，可上传预览。'
-                  : '当前模式：Local Core，导入预览需要 Cloud API。',
+                  ? '当前为云端模式，可上传并生成预览。'
+                  : '当前为本地模式，导入预览需要连接云端服务。',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: apiMode
                     ? theme.colorScheme.primary
@@ -190,7 +190,7 @@ class _ProviderCard extends StatelessWidget {
           initialValue: provider,
           decoration: const InputDecoration(
             labelText: '账单来源',
-            helperText: 'auto 会自动识别微信 / 支付宝格式',
+            helperText: '选择自动识别时会判断微信 / 支付宝格式',
           ),
           items: ImportProvider.values
               .map(

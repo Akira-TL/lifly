@@ -69,7 +69,7 @@ class ManagementHubPage extends StatelessWidget {
               const SizedBox(height: 24),
               _ManagementSection(
                 title: '系统与诊断',
-                subtitle: '调整外观并检查 API、Local Core 与 PowerSync。',
+                subtitle: '调整外观，并检查数据连接、本地能力与同步状态。',
                 entries: [
                   _ManagementEntry(
                     key: const Key('management_settings'),

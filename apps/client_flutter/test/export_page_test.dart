@@ -14,7 +14,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('当前模式：Local Core，导出需要 Cloud API。'), findsOneWidget);
+    expect(find.text('当前为本地模式，导出需要连接云端服务。'), findsOneWidget);
 
     await tester.tap(find.text('生成导出预览'));
     await tester.pumpAndSettle();

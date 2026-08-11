@@ -22,8 +22,8 @@ class ImportExportSettingsSection extends StatelessWidget {
             title: const Text('数据管理'),
             subtitle: Text(
               _apiMode
-                  ? 'Cloud API：可导入、提交、追踪批次并导出数据'
-                  : 'Local Core：导入导出需要切换到 Cloud API',
+                  ? '云端模式：可导入、提交、追踪批次并导出数据'
+                  : '本地模式：导入导出需要连接云端服务',
             ),
             trailing: Icon(
               _apiMode ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,

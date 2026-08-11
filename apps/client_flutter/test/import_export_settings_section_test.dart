@@ -6,6 +6,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 void main() {
+  test('data mode labels stay product-facing', () {
+    expect(LiflyDataMode.api.label, '云端模式');
+    expect(LiflyDataMode.local.label, '本地模式');
+  });
+
   testWidgets('ImportExportSettingsSection enables data actions in api mode', (
     tester,
   ) async {
@@ -13,7 +18,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('数据管理'), findsOneWidget);
-    expect(find.text('Cloud API：可导入、提交、追踪批次并导出数据'), findsOneWidget);
+    expect(find.text('云端模式：可导入、提交、追踪批次并导出数据'), findsOneWidget);
     expect(find.text('账单导入'), findsOneWidget);
     expect(find.text('导入批次'), findsOneWidget);
     expect(find.text('数据导出'), findsOneWidget);
@@ -32,7 +37,7 @@ void main() {
       await tester.pumpWidget(_buildSection(LiflyDataMode.local));
       await tester.pumpAndSettle();
 
-      expect(find.text('Local Core：导入导出需要切换到 Cloud API'), findsOneWidget);
+      expect(find.text('本地模式：导入导出需要连接云端服务'), findsOneWidget);
       expect(find.byIcon(Icons.lock_outline), findsNWidgets(3));
 
       await tester.tap(find.text('数据导出'));

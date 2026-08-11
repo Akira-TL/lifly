@@ -151,8 +151,8 @@ class _IntroCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               apiMode
-                  ? '当前模式：Cloud API，可生成和下载导出。'
-                  : '当前模式：Local Core，导出需要 Cloud API。',
+                  ? '当前为云端模式，可生成和下载导出。'
+                  : '当前为本地模式，导出需要连接云端服务。',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: apiMode
                     ? theme.colorScheme.primary
@@ -186,7 +186,7 @@ class _ExportSelectorCard extends StatelessWidget {
           initialValue: entityType,
           decoration: const InputDecoration(
             labelText: '导出范围',
-            helperText: 'ledger_transactions 对应记账流水',
+            helperText: '记账流水会包含在导出数据中',
           ),
           items: ExportEntityType.values
               .map((entityType) {
