@@ -413,6 +413,7 @@ class _LedgerEditorDialogState extends State<_LedgerEditorDialog> {
   final _merchantController = TextEditingController();
   final _noteController = TextEditingController();
   String _direction = 'expense';
+  String? _amountError;
 
   @override
   void dispose() {
@@ -444,7 +445,13 @@ class _LedgerEditorDialogState extends State<_LedgerEditorDialog> {
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
-              decoration: const InputDecoration(labelText: '金额'),
+              decoration: InputDecoration(
+                labelText: '金额',
+                errorText: _amountError,
+              ),
+              onChanged: (_) {
+                if (_amountError != null) setState(() => _amountError = null);
+              },
             ),
             TextField(
               controller: _merchantController,
@@ -465,7 +472,10 @@ class _LedgerEditorDialogState extends State<_LedgerEditorDialog> {
         FilledButton(
           onPressed: () {
             final amount = double.tryParse(_amountController.text.trim());
-            if (amount == null || amount <= 0) return;
+            if (amount == null || amount <= 0) {
+              setState(() => _amountError = '请输入大于 0 的金额');
+              return;
+            }
             Navigator.pop(
               context,
               _LedgerDraft(

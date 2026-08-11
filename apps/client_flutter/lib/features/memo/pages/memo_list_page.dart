@@ -388,6 +388,7 @@ class _MemoEditorDialogState extends State<_MemoEditorDialog> {
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
   final _tagsController = TextEditingController();
+  String? _contentError;
 
   @override
   void dispose() {
@@ -408,12 +409,21 @@ class _MemoEditorDialogState extends State<_MemoEditorDialog> {
             TextField(
               controller: _titleController,
               decoration: const InputDecoration(labelText: '标题'),
+              onChanged: (_) {
+                if (_contentError != null) setState(() => _contentError = null);
+              },
             ),
             TextField(
               controller: _contentController,
               minLines: 3,
               maxLines: 6,
-              decoration: const InputDecoration(labelText: '内容'),
+              decoration: InputDecoration(
+                labelText: '内容',
+                errorText: _contentError,
+              ),
+              onChanged: (_) {
+                if (_contentError != null) setState(() => _contentError = null);
+              },
             ),
             TextField(
               controller: _tagsController,
@@ -429,8 +439,12 @@ class _MemoEditorDialogState extends State<_MemoEditorDialog> {
         ),
         FilledButton(
           onPressed: () {
+            final title = _titleController.text.trim();
             final content = _contentController.text.trim();
-            if (content.isEmpty) return;
+            if (title.isEmpty && content.isEmpty) {
+              setState(() => _contentError = '请输入标题或内容');
+              return;
+            }
             final tags = _tagsController.text
                 .split(RegExp(r'[,，]'))
                 .map((tag) => tag.trim())
@@ -439,7 +453,7 @@ class _MemoEditorDialogState extends State<_MemoEditorDialog> {
             Navigator.pop(
               context,
               _MemoDraft(
-                title: _titleController.text.trim(),
+                title: title,
                 content: content,
                 tags: tags,
               ),
