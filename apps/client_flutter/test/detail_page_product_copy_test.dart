@@ -48,6 +48,22 @@ void main() {
     expect(find.textContaining('active'), findsNothing);
     expect(find.byTooltip('编辑备忘'), findsOneWidget);
     expect(find.byTooltip('删除备忘'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('编辑备忘'));
+    await tester.pumpAndSettle();
+    await tester.enterText(_textField('标题'), '');
+    await tester.enterText(_textField('内容'), '');
+    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.pump();
+    expect(find.text('请输入标题或内容'), findsOneWidget);
+    expect(find.text('编辑备忘'), findsOneWidget);
+
+    await tester.enterText(_textField('标题'), '只有标题也可以保存');
+    await tester.pump();
+    expect(find.text('请输入标题或内容'), findsNothing);
+    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.pumpAndSettle();
+    expect(find.text('只有标题也可以保存'), findsOneWidget);
   });
 
   testWidgets('task detail localizes status and priority', (tester) async {
@@ -77,6 +93,21 @@ void main() {
     expect(find.text('urgent'), findsNothing);
     expect(find.byTooltip('编辑任务'), findsOneWidget);
     expect(find.byTooltip('删除任务'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('编辑任务'));
+    await tester.pumpAndSettle();
+    await tester.enterText(_textField('标题'), '');
+    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.pump();
+    expect(find.text('请输入任务标题'), findsOneWidget);
+    expect(find.text('编辑任务'), findsOneWidget);
+
+    await tester.enterText(_textField('标题'), '修正后的任务标题');
+    await tester.pump();
+    expect(find.text('请输入任务标题'), findsNothing);
+    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.pumpAndSettle();
+    expect(find.text('修正后的任务标题'), findsOneWidget);
   });
 
   testWidgets('ledger detail localizes direction and source', (tester) async {
@@ -109,7 +140,28 @@ void main() {
     expect(find.text('local'), findsNothing);
     expect(find.byTooltip('编辑账单'), findsOneWidget);
     expect(find.byTooltip('删除账单'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('编辑账单'));
+    await tester.pumpAndSettle();
+    await tester.enterText(_textField('金额'), '0');
+    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.pump();
+    expect(find.text('请输入大于 0 的金额'), findsOneWidget);
+    expect(find.text('编辑账单'), findsOneWidget);
+
+    await tester.enterText(_textField('金额'), '36.50');
+    await tester.pump();
+    expect(find.text('请输入大于 0 的金额'), findsNothing);
+    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('36.50'), findsOneWidget);
   });
+}
+
+Finder _textField(String label) {
+  return find.byWidgetPredicate(
+    (widget) => widget is TextField && widget.decoration?.labelText == label,
+  );
 }
 
 Widget _buildApp({

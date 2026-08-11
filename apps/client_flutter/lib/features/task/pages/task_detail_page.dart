@@ -303,6 +303,7 @@ class _TaskEditDialogState extends State<_TaskEditDialog> {
   late final TextEditingController _descriptionController;
   late String _priority;
   late String _taskStatus;
+  String? _titleError;
 
   @override
   void initState() {
@@ -332,7 +333,13 @@ class _TaskEditDialogState extends State<_TaskEditDialog> {
           children: [
             TextField(
               controller: _titleController,
-              decoration: const InputDecoration(labelText: '标题'),
+              decoration: InputDecoration(
+                labelText: '标题',
+                errorText: _titleError,
+              ),
+              onChanged: (_) {
+                if (_titleError != null) setState(() => _titleError = null);
+              },
             ),
             TextField(
               controller: _descriptionController,
@@ -373,7 +380,10 @@ class _TaskEditDialogState extends State<_TaskEditDialog> {
         FilledButton(
           onPressed: () {
             final title = _titleController.text.trim();
-            if (title.isEmpty) return;
+            if (title.isEmpty) {
+              setState(() => _titleError = '请输入任务标题');
+              return;
+            }
             Navigator.pop(
               context,
               _TaskEditDraft(
