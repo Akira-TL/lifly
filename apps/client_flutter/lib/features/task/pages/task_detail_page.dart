@@ -3,6 +3,7 @@ import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/repositories/task_repository.dart';
 import 'package:client_flutter/domain/entities/task.dart';
+import 'package:client_flutter/features/task/widgets/task_date_time_field.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -70,8 +71,8 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
         'description': draft.description.isEmpty ? null : draft.description,
         'priority': draft.priority,
         'task_status': draft.taskStatus,
-        'due_at': task.dueAt?.toUtc().toIso8601String(),
-        'remind_at': task.remindAt?.toUtc().toIso8601String(),
+        'due_at': draft.dueAt?.toUtc().toIso8601String(),
+        'remind_at': draft.remindAt?.toUtc().toIso8601String(),
       });
       if (!mounted) return;
       setState(() => _task = updated);
@@ -280,12 +281,16 @@ class _TaskEditDraft {
   final String description;
   final String priority;
   final String taskStatus;
+  final DateTime? dueAt;
+  final DateTime? remindAt;
 
   const _TaskEditDraft({
     required this.title,
     required this.description,
     required this.priority,
     required this.taskStatus,
+    required this.dueAt,
+    required this.remindAt,
   });
 }
 
@@ -303,6 +308,8 @@ class _TaskEditDialogState extends State<_TaskEditDialog> {
   late final TextEditingController _descriptionController;
   late String _priority;
   late String _taskStatus;
+  DateTime? _dueAt;
+  DateTime? _remindAt;
   String? _titleError;
 
   @override
@@ -314,6 +321,8 @@ class _TaskEditDialogState extends State<_TaskEditDialog> {
     );
     _priority = widget.task.priority;
     _taskStatus = widget.task.taskStatus;
+    _dueAt = widget.task.dueAt?.toLocal();
+    _remindAt = widget.task.remindAt?.toLocal();
   }
 
   @override
@@ -369,6 +378,20 @@ class _TaskEditDialogState extends State<_TaskEditDialog> {
               onChanged: (value) =>
                   setState(() => _taskStatus = value ?? 'todo'),
             ),
+            TaskDateTimeField(
+              label: '到期时间',
+              value: _dueAt,
+              pickerKey: const Key('task_due_picker'),
+              clearKey: const Key('task_due_clear'),
+              onChanged: (value) => setState(() => _dueAt = value),
+            ),
+            TaskDateTimeField(
+              label: '提醒时间',
+              value: _remindAt,
+              pickerKey: const Key('task_reminder_picker'),
+              clearKey: const Key('task_reminder_clear'),
+              onChanged: (value) => setState(() => _remindAt = value),
+            ),
           ],
         ),
       ),
@@ -391,6 +414,8 @@ class _TaskEditDialogState extends State<_TaskEditDialog> {
                 description: _descriptionController.text.trim(),
                 priority: _priority,
                 taskStatus: _taskStatus,
+                dueAt: _dueAt,
+                remindAt: _remindAt,
               ),
             );
           },

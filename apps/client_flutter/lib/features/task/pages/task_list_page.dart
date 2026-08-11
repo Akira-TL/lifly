@@ -4,6 +4,7 @@ import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/repositories/task_repository.dart';
 import 'package:client_flutter/domain/entities/task.dart';
 import 'package:client_flutter/features/task/pages/task_detail_page.dart';
+import 'package:client_flutter/features/task/widgets/task_date_time_field.dart';
 import 'package:client_flutter/shared/widgets/adaptive_action_fab.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
 import 'package:client_flutter/shared/widgets/dense_list_row.dart';
@@ -133,6 +134,8 @@ class _TaskListPageState extends State<TaskListPage> {
         'title': draft.title,
         'description': draft.description.isEmpty ? null : draft.description,
         'priority': draft.priority,
+        'due_at': draft.dueAt?.toUtc().toIso8601String(),
+        'remind_at': draft.remindAt?.toUtc().toIso8601String(),
         'source': 'flutter',
       });
       await _loadFirstPage();
@@ -356,11 +359,15 @@ class _TaskDraft {
   final String title;
   final String description;
   final String priority;
+  final DateTime? dueAt;
+  final DateTime? remindAt;
 
   const _TaskDraft({
     required this.title,
     required this.description,
     required this.priority,
+    required this.dueAt,
+    required this.remindAt,
   });
 }
 
@@ -375,6 +382,8 @@ class _TaskEditorDialogState extends State<_TaskEditorDialog> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   String _priority = 'normal';
+  DateTime? _dueAt;
+  DateTime? _remindAt;
   String? _titleError;
 
   @override
@@ -418,6 +427,20 @@ class _TaskEditorDialogState extends State<_TaskEditorDialog> {
               onChanged: (value) =>
                   setState(() => _priority = value ?? 'normal'),
             ),
+            TaskDateTimeField(
+              label: '到期时间',
+              value: _dueAt,
+              pickerKey: const Key('task_due_picker'),
+              clearKey: const Key('task_due_clear'),
+              onChanged: (value) => setState(() => _dueAt = value),
+            ),
+            TaskDateTimeField(
+              label: '提醒时间',
+              value: _remindAt,
+              pickerKey: const Key('task_reminder_picker'),
+              clearKey: const Key('task_reminder_clear'),
+              onChanged: (value) => setState(() => _remindAt = value),
+            ),
           ],
         ),
       ),
@@ -439,6 +462,8 @@ class _TaskEditorDialogState extends State<_TaskEditorDialog> {
                 title: title,
                 description: _descriptionController.text.trim(),
                 priority: _priority,
+                dueAt: _dueAt,
+                remindAt: _remindAt,
               ),
             );
           },
