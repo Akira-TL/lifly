@@ -20,7 +20,6 @@ from app.db.models import (
     Task,
 )
 from app.modules.ledger.service import ledger_budget_to_dict, ledger_transaction_to_dict
-from app.modules.memos.service import memo_to_response
 from app.modules.sync.schemas import (
     PowerSyncCredentialsResponse,
     SyncApplyResult,
@@ -28,9 +27,13 @@ from app.modules.sync.schemas import (
     SyncPushRequest,
     SyncPushResponse,
 )
+from app.modules.sync.snapshots import (
+    capture_session_snapshot,
+    capture_turn_snapshot,
+    memo_snapshot,
+)
 from app.modules.tasks.reminder_delivery_service import reminder_to_dict
 from app.modules.tasks.service import task_to_dict
-from app.schemas.common import json_serialize
 
 
 def issue_powersync_credentials() -> PowerSyncCredentialsResponse:
@@ -85,13 +88,13 @@ async def _apply_memo_change(
     if change.operation == "delete":
         if memo is None:
             return _skipped(change, "missing_entity", None)
-        before = _memo_snapshot(memo)
+        before = memo_snapshot(memo)
         memo.status = change.data.get("status") or "deleted"
         memo.deleted_at = change.deleted_at
         memo.updated_at = change.updated_at
         memo.revision = change.revision
         await db.flush()
-        await _write_sync_audit(db, change, client_id, before=before, after=_memo_snapshot(memo))
+        await _write_sync_audit(db, change, client_id, before=before, after=memo_snapshot(memo))
         return _applied(change)
 
     is_new = memo is None
@@ -99,7 +102,7 @@ async def _apply_memo_change(
         memo = Memo(id=change.entity_id, user_id=change.user_id)
         db.add(memo)
 
-    before = None if is_new else _memo_snapshot(memo)
+    before = None if is_new else memo_snapshot(memo)
     data = change.data
     if is_new or "type" in data:
         memo.type = data.get("type") or memo.type or "memo"
@@ -124,7 +127,7 @@ async def _apply_memo_change(
         memo.created_at = change.created_at or change.updated_at
     memo.updated_at = change.updated_at
     await db.flush()
-    await _write_sync_audit(db, change, client_id, before=before, after=_memo_snapshot(memo))
+    await _write_sync_audit(db, change, client_id, before=before, after=memo_snapshot(memo))
     return _applied(change)
 
 
@@ -425,7 +428,7 @@ async def _apply_capture_session_change(
     if change.operation == "delete":
         if session is None:
             return _skipped(change, "missing_entity", None)
-        before = _capture_session_snapshot(session)
+        before = capture_session_snapshot(session)
         session.session_status = "dismissed"
         session.dismissed_at = change.deleted_at or change.updated_at
         session.updated_at = change.updated_at
@@ -436,7 +439,7 @@ async def _apply_capture_session_change(
             change,
             client_id,
             before=before,
-            after=_capture_session_snapshot(session),
+            after=capture_session_snapshot(session),
         )
         return _applied(change)
 
@@ -455,7 +458,7 @@ async def _apply_capture_session_change(
         db.add(session)
         before = None
     else:
-        before = _capture_session_snapshot(session)
+        before = capture_session_snapshot(session)
 
     if "original_text" in data:
         session.original_text = str(data.get("original_text") or "")
@@ -498,7 +501,7 @@ async def _apply_capture_session_change(
         change,
         client_id,
         before=before,
-        after=_capture_session_snapshot(session),
+        after=capture_session_snapshot(session),
     )
     return _applied(change)
 
@@ -515,7 +518,7 @@ async def _apply_capture_turn_change(
     if change.operation == "delete":
         if turn is None:
             return _skipped(change, "missing_entity", None)
-        before = _capture_turn_snapshot(turn)
+        before = capture_turn_snapshot(turn)
         turn.turn_status = "deleted"
         turn.updated_at = change.updated_at
         turn.revision = change.revision
@@ -525,7 +528,7 @@ async def _apply_capture_turn_change(
             change,
             client_id,
             before=before,
-            after=_capture_turn_snapshot(turn),
+            after=capture_turn_snapshot(turn),
         )
         return _applied(change)
 
@@ -547,7 +550,7 @@ async def _apply_capture_turn_change(
         db.add(turn)
         before = None
     else:
-        before = _capture_turn_snapshot(turn)
+        before = capture_turn_snapshot(turn)
 
     turn.capture_id = capture_id
     if "turn_index" in data:
@@ -584,7 +587,7 @@ async def _apply_capture_turn_change(
         change,
         client_id,
         before=before,
-        after=_capture_turn_snapshot(turn),
+        after=capture_turn_snapshot(turn),
     )
     return _applied(change)
 
@@ -695,57 +698,6 @@ def _skipped(change: SyncChange, reason: str, revision: int | None) -> SyncApply
         reason=reason,
     )
 
-
-def _memo_snapshot(memo: Memo) -> dict:
-    return json_serialize(memo_to_response(memo).model_dump())
-
-
-def _capture_session_snapshot(session: McpCaptureSession) -> dict:
-    return json_serialize(
-        {
-            "capture_id": session.capture_id,
-            "user_id": session.user_id,
-            "original_text": session.original_text,
-            "timezone": session.timezone,
-            "locale": session.locale,
-            "actions": list(session.actions or []),
-            "requires_confirmation": bool(session.requires_confirmation),
-            "committed": bool(session.committed),
-            "session_status": session.session_status,
-            "source_channel": session.source_channel,
-            "expires_at": session.expires_at,
-            "committed_at": session.committed_at,
-            "dismissed_at": session.dismissed_at,
-            "revision": session.revision,
-            "created_at": session.created_at,
-            "updated_at": session.updated_at,
-        }
-    )
-
-
-def _capture_turn_snapshot(turn: McpCaptureTurn) -> dict:
-    return json_serialize(
-        {
-            "id": turn.id,
-            "user_id": turn.user_id,
-            "capture_id": turn.capture_id,
-            "turn_index": turn.turn_index,
-            "role": turn.role,
-            "text": turn.text,
-            "asset_ids": list(turn.asset_ids or []),
-            "asset_context": list(turn.asset_context or []),
-            "actions": list(turn.actions or []),
-            "selected_action_indexes": list(turn.selected_action_indexes or []),
-            "result_entities": list(turn.result_entities or []),
-            "undo_token": turn.undo_token,
-            "supersedes_turn_id": turn.supersedes_turn_id,
-            "turn_status": turn.turn_status,
-            "source_channel": turn.source_channel,
-            "revision": turn.revision,
-            "created_at": turn.created_at,
-            "updated_at": turn.updated_at,
-        }
-    )
 
 
 def _bool_value(value: Any, *, fallback: bool = False) -> bool:
