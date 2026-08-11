@@ -68,7 +68,10 @@ void main() {
     expect(api.calls.single.filename, 'wechat.csv');
     expect(api.calls.single.params, {'provider': 'auto'});
     expect(find.text('预览已生成'), findsOneWidget);
-    expect(find.text('识别来源：wechat'), findsOneWidget);
+    expect(find.text('导入编号：batch-001'), findsOneWidget);
+    expect(find.text('识别来源：微信支付'), findsOneWidget);
+    expect(find.textContaining('Batch ID'), findsNothing);
+    expect(find.text('识别来源：wechat'), findsNothing);
     expect(find.text('总行数：3'), findsOneWidget);
     expect(find.text('错误：1'), findsOneWidget);
     expect(find.text('咖啡店 · 18.50'), findsOneWidget);

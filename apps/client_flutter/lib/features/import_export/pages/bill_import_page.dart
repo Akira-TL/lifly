@@ -306,8 +306,8 @@ class _PreviewSummaryCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            SelectableText('Batch ID：${preview.batchId}'),
-            Text('识别来源：${preview.sourceProvider}'),
+            SelectableText('导入编号：${preview.batchId}'),
+            Text('识别来源：${_sourceProviderLabel(preview.sourceProvider)}'),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
@@ -340,6 +340,15 @@ class _PreviewSummaryCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _sourceProviderLabel(String sourceProvider) {
+  return switch (sourceProvider) {
+    'wechat' => '微信支付',
+    'alipay' => '支付宝',
+    'generic' => '通用账单',
+    _ => '自动识别',
+  };
 }
 
 class _StatChip extends StatelessWidget {
