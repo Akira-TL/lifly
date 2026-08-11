@@ -8,7 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.db.models import AuditLog, LedgerTransaction, Memo, Task, Tombstone
-from app.schemas.common import ApiResponse
+from app.modules.ledger.service import ledger_transaction_to_dict
+from app.modules.memos.service import memo_to_response
+from app.modules.tasks.service import task_to_dict
+from app.schemas.common import ApiResponse, json_serialize
 
 router = APIRouter()
 
@@ -95,6 +98,19 @@ async def ai_audit_summary(db: AsyncSession = Depends(get_db)):
 # ─── Trash ───────────────────────────────────────────────────────────────────
 
 TRASHABLE_MODELS = {"memo": Memo, "ledger_transaction": LedgerTransaction, "task": Task}
+TRASHED_STATUSES = {"user_trashed", "ai_trashed"}
+
+
+def _trash_snapshot(entity_type: str, obj: Memo | Task | LedgerTransaction) -> dict:
+    if entity_type == "memo":
+        snapshot = json_serialize(memo_to_response(obj).model_dump())
+    elif entity_type == "task":
+        snapshot = task_to_dict(obj)
+    else:
+        snapshot = ledger_transaction_to_dict(obj)
+    snapshot["revision"] = obj.revision
+    snapshot["deleted_at"] = obj.deleted_at.isoformat() if obj.deleted_at else None
+    return snapshot
 
 
 @router.get("/trash")
@@ -139,10 +155,37 @@ async def restore(entity_type: str, entity_id: str, db: AsyncSession = Depends(g
     obj = result.scalar_one_or_none()
     if not obj:
         raise HTTPException(status_code=404)
+    if obj.status not in TRASHED_STATUSES:
+        raise HTTPException(status_code=409, detail="Entity is not in trash")
+
+    before = _trash_snapshot(entity_type, obj)
+    now = datetime.now(timezone.utc)
     obj.status = "active"
     obj.deleted_at = None
+    obj.updated_at = now
+    obj.revision += 1
+    after = _trash_snapshot(entity_type, obj)
+    db.add(
+        AuditLog(
+            user_id="local-dev",
+            actor_type="user",
+            action="restore",
+            entity_type=entity_type,
+            entity_id=entity_id,
+            before_snapshot=before,
+            after_snapshot=after,
+            source_channel="api",
+        )
+    )
     await db.commit()
-    return ApiResponse(data={"entity_type": entity_type, "entity_id": entity_id, "status": "active"})
+    return ApiResponse(
+        data={
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "status": "active",
+            "revision": obj.revision,
+        }
+    )
 
 
 @router.post("/trash/purge")
