@@ -303,6 +303,18 @@ class MemoRepository {
     await api.delete('/memos/$id');
   }
 
+  Future<Memo> restore(String id) async {
+    if (_useLocalCore) {
+      final record = await localCore!.restoreMemo({
+        'memo_id': id,
+      }, LocalCoreContext.flutterUser());
+      return _memoFromLocal(record);
+    }
+
+    await api.post('/trash/memo/$id/restore', data: const {});
+    return get(id);
+  }
+
   Future<List<MemoAssetRef>> listAssets(String memoId) async {
     if (_useLocalCore) return const [];
 

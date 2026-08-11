@@ -103,6 +103,36 @@ mixin _FakeMemoStore on _FakeLocalCoreState {
   }
 
   @override
+  Future<LocalMemoRecord> restoreMemo(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final memoId = input['memo_id'] as String? ?? input['id'] as String?;
+    final index = _memos.indexWhere(
+      (memo) =>
+          memo.id == memoId &&
+          const {'user_trashed', 'ai_trashed'}.contains(memo.status),
+    );
+    if (index < 0) throw StateError('Memo not found in trash: $memoId');
+
+    final old = _memos[index];
+    final restored = LocalMemoRecord(
+      id: old.id,
+      type: old.type,
+      title: old.title,
+      contentMarkdown: old.contentMarkdown,
+      tags: old.tags,
+      mood: old.mood,
+      status: 'active',
+      revision: old.revision + 1,
+      createdAt: old.createdAt,
+      updatedAt: context.effectiveNow,
+    );
+    _memos[index] = restored;
+    return restored;
+  }
+
+  @override
   Future<List<LocalMemoClassification>> getMemoClassifications(
     Map<String, Object?> input,
     LocalCoreContext context,

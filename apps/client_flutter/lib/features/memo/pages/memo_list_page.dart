@@ -152,6 +152,36 @@ class _MemoListPageState extends State<MemoListPage> {
     }
   }
 
+  void _showDeleteUndo(String memoId) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: const Text('备忘已删除'),
+        action: SnackBarAction(
+          label: '撤销',
+          onPressed: () => _restoreMemo(memoId),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _restoreMemo(String memoId) async {
+    try {
+      await _repo.restore(memoId);
+      await _loadFirstPage();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('备忘已恢复')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('恢复备忘失败：$error')));
+    }
+  }
+
   void _setType(String? type) {
     if (_selectedType == type) return;
     setState(() => _selectedType = type);
@@ -246,16 +276,21 @@ class _MemoListPageState extends State<MemoListPage> {
                   return _MemoTile(
                     memo: _items[index],
                     onTap: () async {
-                      await Navigator.push<bool>(
+                      final memo = _items[index];
+                      final deleted = await Navigator.push<bool>(
                         context,
                         MaterialPageRoute(
                           builder: (_) => MemoDetailPage(
-                            memoId: _items[index].id,
-                            initialMemo: _items[index],
+                            memoId: memo.id,
+                            initialMemo: memo,
                           ),
                         ),
                       );
-                      if (context.mounted) await _loadFirstPage();
+                      if (!context.mounted) return;
+                      await _loadFirstPage();
+                      if (deleted == true && context.mounted) {
+                        _showDeleteUndo(memo.id);
+                      }
                     },
                   );
                 },

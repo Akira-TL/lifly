@@ -80,12 +80,37 @@ void main() {
       expect(deletedRow['status'], 'user_trashed');
       expect(deletedRow['revision'], 3);
 
-      final auditCount = await thirdService.db.get(
-        'SELECT count(*) AS count FROM audit_logs WHERE entity_type = ? AND entity_id = ?',
+      final restored = await thirdBridge.restoreMemo({
+        'memo_id': memo.id,
+      }, context);
+      expect(restored.status, 'active');
+      expect(restored.revision, 4);
+
+      final restoredRow = await thirdService.db.get(
+        'SELECT status, revision, deleted_at FROM memos WHERE id = ?',
+        [memo.id],
+      );
+      expect(restoredRow['status'], 'active');
+      expect(restoredRow['revision'], 4);
+      expect(restoredRow['deleted_at'], isNull);
+
+      final auditRows = await thirdService.db.getAll(
+        'SELECT action FROM audit_logs WHERE entity_type = ? AND entity_id = ? ORDER BY created_at',
         ['memo', memo.id],
       );
-      expect(auditCount['count'], 3);
+      expect(auditRows, hasLength(4));
+      expect(auditRows.last['action'], 'memo.restore');
       thirdService.dispose();
+
+      final fourthService = await harness.openService();
+      expect(fourthService, isNotNull);
+      final fourthBridge = PowerSyncLocalCoreBridge(syncService: fourthService!);
+      final visibleAfterRestore = await fourthBridge.searchMemos({
+        'q': 'after update',
+        'limit': 20,
+      }, context);
+      expect(visibleAfterRestore.map((item) => item.id), contains(memo.id));
+      fourthService.dispose();
     },
   );
 }

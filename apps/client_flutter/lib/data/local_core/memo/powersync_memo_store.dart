@@ -394,6 +394,55 @@ class PowerSyncMemoStore {
     return deletedMemo;
   }
 
+  Future<LocalMemoRecord> restoreMemo(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final memoId = input['memo_id'] as String? ?? input['id'] as String?;
+    if (memoId == null || memoId.trim().isEmpty) {
+      throw ArgumentError('memo_id is required');
+    }
+    late final LocalMemoRecord restoredMemo;
+
+    await LocalCoreWriteExecutor(syncService: syncService).run((handle) async {
+      final oldMemo = await _findTrashedMemo(handle, memoId);
+      if (oldMemo == null) {
+        throw StateError('Memo not found in trash: $memoId');
+      }
+      final metadata = policy.metadataForUpdate(
+        context,
+        currentRevision: oldMemo.revision,
+        createdAt: oldMemo.createdAt,
+      );
+      restoredMemo = LocalMemoRecord(
+        id: oldMemo.id,
+        type: oldMemo.type,
+        title: oldMemo.title,
+        contentMarkdown: oldMemo.contentMarkdown,
+        tags: oldMemo.tags,
+        mood: oldMemo.mood,
+        status: 'active',
+        revision: metadata.revision,
+        createdAt: oldMemo.createdAt,
+        updatedAt: metadata.timestamps.updatedAt,
+      );
+      await _restoreMemo(handle, restoredMemo, metadata);
+      await auditLogWriter.write(
+        handle,
+        LocalCoreAuditLogInput(
+          context: context,
+          action: 'memo.restore',
+          entityType: 'memo',
+          entityId: restoredMemo.id,
+          beforeSnapshot: LocalMemoMapper.snapshot(oldMemo),
+          afterSnapshot: LocalMemoMapper.snapshot(restoredMemo),
+        ),
+      );
+    });
+
+    return restoredMemo;
+  }
+
   Future<LocalMemoRecord?> _activeMemoById(String memoId) async {
     final row = await syncService.db.getOptional(
       'SELECT id, type, title, content_markdown, tags, mood, status, revision, created_at, updated_at '
@@ -574,6 +623,18 @@ class PowerSyncMemoStore {
     return row == null ? null : LocalMemoMapper.fromRow(row);
   }
 
+  Future<LocalMemoRecord?> _findTrashedMemo(
+    LocalCoreWriteHandle handle,
+    String memoId,
+  ) async {
+    final row = await handle.getOptional(
+      'SELECT id, type, title, content_markdown, tags, mood, status, revision, created_at, updated_at '
+      'FROM memos WHERE id = ? AND status IN (?, ?)',
+      [memoId, 'user_trashed', 'ai_trashed'],
+    );
+    return row == null ? null : LocalMemoMapper.fromRow(row);
+  }
+
   Future<void> _insertMemo(
     LocalCoreWriteHandle handle,
     LocalMemoRecord memo,
@@ -620,6 +681,25 @@ class PowerSyncMemoStore {
         metadata.revision,
         memo.id,
         'active',
+      ],
+    );
+  }
+
+  Future<void> _restoreMemo(
+    LocalCoreWriteHandle handle,
+    LocalMemoRecord memo,
+    LocalCoreWriteMetadata metadata,
+  ) async {
+    await handle.execute(
+      'UPDATE memos SET status = ?, deleted_at = NULL, updated_at = ?, revision = ? '
+      'WHERE id = ? AND status IN (?, ?)',
+      [
+        'active',
+        metadata.timestamps.updatedAtIso,
+        metadata.revision,
+        memo.id,
+        'user_trashed',
+        'ai_trashed',
       ],
     );
   }

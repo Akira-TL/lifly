@@ -45,6 +45,12 @@ void main() {
     expect(cleared.mood, isNull);
     expect(afterClear.mood, isNull);
     expect(page.items.map((item) => item.id), contains(memo.id));
+
+    await repo.delete(memo.id);
+    expect((await repo.listPage()).items.map((item) => item.id), isNot(contains(memo.id)));
+    final restored = await repo.restore(memo.id);
+    expect(restored.status, 'active');
+    expect((await repo.listPage()).items.map((item) => item.id), contains(memo.id));
   });
 
   test('TaskRepository uses Local Core in local mode', () async {

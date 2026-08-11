@@ -24,6 +24,10 @@ abstract class LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   );
+  Future<LocalMemoRecord> restoreMemo(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
   Future<List<LocalMemoClassification>> getMemoClassifications(
     Map<String, Object?> input,
     LocalCoreContext context,

@@ -146,6 +146,14 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
+  Future<LocalMemoRecord> restoreMemo(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _memoStore.restoreMemo(input, context);
+  }
+
+  @override
   Future<List<LocalMemoClassification>> getMemoClassifications(
     Map<String, Object?> input,
     LocalCoreContext context,
