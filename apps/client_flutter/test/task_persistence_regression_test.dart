@@ -146,4 +146,44 @@ void main() {
       fifthService.dispose();
     },
   );
+
+  test('task status edits persist completedAt transitions', () async {
+    final harness = await PowerSyncPersistenceHarness.create(
+      'lifly_task_completed_at_',
+    );
+    addTearDown(harness.dispose);
+
+    final service = await harness.openService();
+    if (service == null) return;
+    final bridge = PowerSyncLocalCoreBridge(syncService: service);
+    final context = LocalCoreContext.flutterUser(
+      now: DateTime.utc(2026, 8, 11, 8),
+    );
+    final task = await bridge.createTask({'title': 'Status edit task'}, context);
+
+    final done = await bridge.updateTask({
+      'task_id': task.id,
+      'task_status': 'done',
+    }, context);
+    expect(done.completedAt, DateTime.utc(2026, 8, 11, 8));
+    final doneRow = await service.db.get(
+      'SELECT task_status, completed_at FROM tasks WHERE id = ?',
+      [task.id],
+    );
+    expect(doneRow['task_status'], 'done');
+    expect(doneRow['completed_at'], isNotNull);
+
+    final reopened = await bridge.updateTask({
+      'task_id': task.id,
+      'task_status': 'doing',
+    }, context);
+    expect(reopened.completedAt, isNull);
+    final reopenedRow = await service.db.get(
+      'SELECT task_status, completed_at FROM tasks WHERE id = ?',
+      [task.id],
+    );
+    expect(reopenedRow['task_status'], 'doing');
+    expect(reopenedRow['completed_at'], isNull);
+    service.dispose();
+  });
 }

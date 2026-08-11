@@ -4,6 +4,7 @@ import 'package:client_flutter/data/local_core/local_core_ids.dart';
 import 'package:client_flutter/data/local_core/local_core_models.dart';
 import 'package:client_flutter/data/local_core/local_home_overview_builder.dart';
 import 'package:client_flutter/data/local_core/memo/local_memo_classification_engine.dart';
+import 'package:client_flutter/data/local_core/task/local_task_mapper.dart';
 import 'package:client_flutter/data/local_core/task/local_task_reminder_strategy_engine.dart';
 
 part 'fake/fake_capture_store.dart';

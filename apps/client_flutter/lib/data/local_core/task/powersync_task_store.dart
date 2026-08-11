@@ -296,7 +296,12 @@ class PowerSyncTaskStore {
             : oldTask.remindAt,
         priority: updateInput.priority ?? oldTask.priority,
         taskStatus: updateInput.taskStatus ?? oldTask.taskStatus,
-        completedAt: oldTask.completedAt,
+        completedAt: resolveTaskCompletedAt(
+          currentTaskStatus: oldTask.taskStatus,
+          nextTaskStatus: updateInput.taskStatus,
+          currentCompletedAt: oldTask.completedAt,
+          now: metadata.timestamps.updatedAt,
+        ),
         status: oldTask.status,
         revision: metadata.revision,
         createdAt: oldTask.createdAt,

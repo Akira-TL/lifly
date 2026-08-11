@@ -118,6 +118,8 @@ mixin _FakeTaskStore on _FakeLocalCoreState {
     if (index < 0) throw StateError('Task not found: $taskId');
 
     final old = _tasks[index];
+    final nextTaskStatus = input['task_status'] as String?;
+    final now = context.effectiveNow;
     final updated = LocalTaskRecord(
       id: old.id,
       title: input['title'] as String? ?? old.title,
@@ -131,12 +133,17 @@ mixin _FakeTaskStore on _FakeLocalCoreState {
           ? DateTime.tryParse(input['remind_at'] as String? ?? '')
           : old.remindAt,
       priority: input['priority'] as String? ?? old.priority,
-      taskStatus: input['task_status'] as String? ?? old.taskStatus,
-      completedAt: old.completedAt,
+      taskStatus: nextTaskStatus ?? old.taskStatus,
+      completedAt: resolveTaskCompletedAt(
+        currentTaskStatus: old.taskStatus,
+        nextTaskStatus: nextTaskStatus,
+        currentCompletedAt: old.completedAt,
+        now: now,
+      ),
       status: old.status,
       revision: old.revision + 1,
       createdAt: old.createdAt,
-      updatedAt: context.effectiveNow,
+      updatedAt: now,
     );
     _tasks[index] = updated;
     if (updated.taskStatus == 'done' || updated.taskStatus == 'cancelled') {

@@ -120,6 +120,19 @@ class LocalTaskDeleteInput {
   }
 }
 
+DateTime? resolveTaskCompletedAt({
+  required String currentTaskStatus,
+  required String? nextTaskStatus,
+  required DateTime? currentCompletedAt,
+  required DateTime now,
+}) {
+  if (nextTaskStatus == null) return currentCompletedAt;
+  if (nextTaskStatus == 'done') {
+    return currentTaskStatus == 'done' ? currentCompletedAt : now.toUtc();
+  }
+  return null;
+}
+
 class LocalTaskMapper {
   const LocalTaskMapper._();
 

@@ -455,7 +455,7 @@ Future<void> _updateTask(
 ) async {
   await handle.execute(
     'UPDATE tasks SET title = ?, description = ?, due_at = ?, remind_at = ?, '
-    'priority = ?, task_status = ?, updated_at = ?, revision = ? '
+    'priority = ?, task_status = ?, completed_at = ?, updated_at = ?, revision = ? '
     'WHERE id = ? AND status = ?',
     [
       task.title,
@@ -464,6 +464,7 @@ Future<void> _updateTask(
       task.remindAt?.toIso8601String(),
       task.priority,
       task.taskStatus,
+      task.completedAt?.toIso8601String(),
       metadata.timestamps.updatedAtIso,
       metadata.revision,
       task.id,

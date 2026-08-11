@@ -74,6 +74,23 @@ void main() {
     );
   });
 
+  test('TaskRepository keeps completedAt aligned with status edits locally', () async {
+    final repo = TaskRepository(
+      api,
+      localCore: localCore,
+      dataMode: LiflyDataMode.local,
+    );
+    final task = await repo.create({'title': '状态切换任务'});
+
+    final done = await repo.update(task.id, {'task_status': 'done'});
+    expect(done.taskStatus, 'done');
+    expect(done.completedAt, isNotNull);
+
+    final reopened = await repo.update(task.id, {'task_status': 'doing'});
+    expect(reopened.taskStatus, 'doing');
+    expect(reopened.completedAt, isNull);
+  });
+
   test('TaskRepository restores through the trash endpoint in api mode', () async {
     final dio = Dio(BaseOptions(baseUrl: 'http://localhost/api/v1'));
     final requests = <String>[];
