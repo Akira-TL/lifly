@@ -314,6 +314,14 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
   }
 
   @override
+  Future<LocalLedgerTransactionRecord> restoreExpense(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) {
+    return _expenseStore.restoreExpense(input, context);
+  }
+
+  @override
   Future<LocalTaskRecord> createTask(
     Map<String, Object?> input,
     LocalCoreContext context,

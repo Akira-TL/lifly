@@ -555,6 +555,60 @@ class PowerSyncExpenseStore {
     return deletedTx;
   }
 
+  Future<LocalLedgerTransactionRecord> restoreExpense(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final transactionId =
+        input['transaction_id'] as String? ??
+        input['expense_id'] as String? ??
+        input['id'] as String?;
+    if (transactionId == null || transactionId.trim().isEmpty) {
+      throw ArgumentError('transaction_id is required');
+    }
+    late final LocalLedgerTransactionRecord restoredTx;
+
+    await LocalCoreWriteExecutor(syncService: syncService).run((handle) async {
+      final oldTx = await _findTrashedExpense(handle, transactionId);
+      if (oldTx == null) {
+        throw StateError('Expense not found in trash: $transactionId');
+      }
+      final metadata = policy.metadataForUpdate(
+        context,
+        currentRevision: oldTx.revision,
+        createdAt: oldTx.createdAt,
+      );
+      restoredTx = LocalLedgerTransactionRecord(
+        id: oldTx.id,
+        direction: oldTx.direction,
+        amount: oldTx.amount,
+        currency: oldTx.currency,
+        merchant: oldTx.merchant,
+        note: oldTx.note,
+        categoryId: oldTx.categoryId,
+        occurredAt: oldTx.occurredAt,
+        status: 'active',
+        revision: metadata.revision,
+        createdAt: oldTx.createdAt,
+        updatedAt: metadata.timestamps.updatedAt,
+      );
+      await _restoreExpense(handle, restoredTx, metadata);
+      await auditLogWriter.write(
+        handle,
+        LocalCoreAuditLogInput(
+          context: context,
+          action: 'expense.restore',
+          entityType: 'expense',
+          entityId: restoredTx.id,
+          beforeSnapshot: LocalExpenseMapper.snapshot(oldTx),
+          afterSnapshot: LocalExpenseMapper.snapshot(restoredTx),
+        ),
+      );
+    });
+
+    return restoredTx;
+  }
+
   Future<LocalExpenseSummary> summarizeExpenses(
     Map<String, Object?> input,
     LocalCoreContext context,
@@ -616,6 +670,18 @@ class PowerSyncExpenseStore {
     return row == null ? null : LocalExpenseMapper.fromRow(row);
   }
 
+  Future<LocalLedgerTransactionRecord?> _findTrashedExpense(
+    LocalCoreWriteHandle handle,
+    String transactionId,
+  ) async {
+    final row = await handle.getOptional(
+      'SELECT id, direction, amount, currency, merchant, note, category_id, occurred_at, status, revision, created_at, updated_at '
+      'FROM ledger_transactions WHERE id = ? AND status IN (?, ?)',
+      [transactionId, 'user_trashed', 'ai_trashed'],
+    );
+    return row == null ? null : LocalExpenseMapper.fromRow(row);
+  }
+
   Future<void> _insertExpense(
     LocalCoreWriteHandle handle,
     LocalLedgerTransactionRecord tx,
@@ -668,6 +734,25 @@ class PowerSyncExpenseStore {
         metadata.revision,
         tx.id,
         'active',
+      ],
+    );
+  }
+
+  Future<void> _restoreExpense(
+    LocalCoreWriteHandle handle,
+    LocalLedgerTransactionRecord tx,
+    LocalCoreWriteMetadata metadata,
+  ) async {
+    await handle.execute(
+      'UPDATE ledger_transactions SET status = ?, deleted_at = NULL, updated_at = ?, revision = ? '
+      'WHERE id = ? AND status IN (?, ?)',
+      [
+        'active',
+        metadata.timestamps.updatedAtIso,
+        metadata.revision,
+        tx.id,
+        'user_trashed',
+        'ai_trashed',
       ],
     );
   }

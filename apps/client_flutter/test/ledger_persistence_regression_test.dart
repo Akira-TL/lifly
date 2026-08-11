@@ -96,12 +96,45 @@ void main() {
       expect(deletedRow['status'], 'user_trashed');
       expect(deletedRow['revision'], 2);
 
-      final auditCount = await thirdService.db.get(
-        'SELECT count(*) AS count FROM audit_logs WHERE entity_type = ? AND entity_id = ?',
+      final restored = await thirdBridge.restoreExpense({
+        'transaction_id': expense.id,
+      }, context);
+      expect(restored.status, 'active');
+      expect(restored.revision, 3);
+      expect(restored.amount, 18.5);
+
+      final restoredRow = await thirdService.db.get(
+        'SELECT status, revision, deleted_at FROM ledger_transactions WHERE id = ?',
+        [expense.id],
+      );
+      expect(restoredRow['status'], 'active');
+      expect(restoredRow['revision'], 3);
+      expect(restoredRow['deleted_at'], isNull);
+
+      final summaryAfterRestore = await thirdBridge.summarizeExpenses({
+        'period': 'current_month',
+      }, context);
+      expect(summaryAfterRestore.totalExpense, 18.5);
+      expect(summaryAfterRestore.totalIncome, 30);
+      expect(summaryAfterRestore.count, 2);
+
+      final auditRows = await thirdService.db.getAll(
+        'SELECT action FROM audit_logs WHERE entity_type = ? AND entity_id = ? ORDER BY created_at',
         ['expense', expense.id],
       );
-      expect(auditCount['count'], 2);
+      expect(auditRows, hasLength(3));
+      expect(auditRows.last['action'], 'expense.restore');
       thirdService.dispose();
+
+      final fourthService = await harness.openService();
+      expect(fourthService, isNotNull);
+      final fourthBridge = PowerSyncLocalCoreBridge(syncService: fourthService!);
+      final visibleAfterRestore = await fourthBridge.searchExpenses({
+        'q': 'persistent merchant',
+        'limit': 20,
+      }, context);
+      expect(visibleAfterRestore.map((item) => item.id), contains(expense.id));
+      fourthService.dispose();
     },
   );
 }

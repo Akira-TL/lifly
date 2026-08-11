@@ -109,6 +109,10 @@ abstract class LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   );
+  Future<LocalLedgerTransactionRecord> restoreExpense(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
 
   Future<LocalTaskRecord> createTask(
     Map<String, Object?> input,

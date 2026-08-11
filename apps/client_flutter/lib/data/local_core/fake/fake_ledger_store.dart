@@ -383,6 +383,43 @@ mixin _FakeLedgerStore on _FakeLocalCoreState {
     return deleted;
   }
 
+  @override
+  Future<LocalLedgerTransactionRecord> restoreExpense(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final transactionId =
+        input['transaction_id'] as String? ??
+        input['expense_id'] as String? ??
+        input['id'] as String?;
+    final index = _expenses.indexWhere(
+      (tx) =>
+          tx.id == transactionId &&
+          const {'user_trashed', 'ai_trashed'}.contains(tx.status),
+    );
+    if (index < 0) {
+      throw StateError('Expense not found in trash: $transactionId');
+    }
+
+    final old = _expenses[index];
+    final restored = LocalLedgerTransactionRecord(
+      id: old.id,
+      direction: old.direction,
+      amount: old.amount,
+      currency: old.currency,
+      merchant: old.merchant,
+      note: old.note,
+      categoryId: old.categoryId,
+      occurredAt: old.occurredAt,
+      status: 'active',
+      revision: old.revision + 1,
+      createdAt: old.createdAt,
+      updatedAt: context.effectiveNow,
+    );
+    _expenses[index] = restored;
+    return restored;
+  }
+
   String _fakeBudgetPeriod(String period, DateTime now) {
     if (period == 'current_month') {
       final utc = now.toUtc();

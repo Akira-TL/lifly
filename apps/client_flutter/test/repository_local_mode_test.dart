@@ -309,6 +309,12 @@ void main() {
     expect(reloaded.note, 'edited from detail page');
     expect(summary['expense_total'], 18.75);
     expect(summary['transaction_count'], 1);
+
+    await repo.delete(tx.id);
+    expect((await repo.listPage()).items.map((item) => item.id), isNot(contains(tx.id)));
+    final restored = await repo.restore(tx.id);
+    expect(restored.amount, 18.75);
+    expect((await repo.listPage()).items.map((item) => item.id), contains(tx.id));
   });
 
   test('LedgerRepository manages budgets through Local Core', () async {

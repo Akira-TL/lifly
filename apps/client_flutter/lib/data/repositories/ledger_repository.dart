@@ -133,6 +133,18 @@ class LedgerRepository {
     await api.delete('/ledger/transactions/$id');
   }
 
+  Future<LedgerTransaction> restore(String id) async {
+    if (_useLocalCore) {
+      final record = await localCore!.restoreExpense({
+        'transaction_id': id,
+      }, LocalCoreContext.flutterUser());
+      return _transactionFromLocal(record);
+    }
+
+    await api.post('/trash/ledger_transaction/$id/restore', data: const {});
+    return get(id);
+  }
+
   Future<List<LedgerBudget>> listBudgets({
     String period = 'current_month',
     String status = 'active',

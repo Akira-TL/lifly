@@ -152,6 +152,36 @@ class _LedgerListPageState extends State<LedgerListPage> {
     }
   }
 
+  void _showDeleteUndo(String transactionId) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: const Text('账单已删除'),
+        action: SnackBarAction(
+          label: '撤销',
+          onPressed: () => _restoreTransaction(transactionId),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _restoreTransaction(String transactionId) async {
+    try {
+      await _repo.restore(transactionId);
+      await _loadFirstPage();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('账单已恢复')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('恢复账单失败：$error')));
+    }
+  }
+
   void _setDirection(String? direction) {
     if (_direction == direction) return;
     setState(() => _direction = direction);
@@ -189,7 +219,7 @@ class _LedgerListPageState extends State<LedgerListPage> {
                       transaction: _items[index],
                       onTap: () async {
                         final tx = _items[index];
-                        await Navigator.push<bool>(
+                        final deleted = await Navigator.push<bool>(
                           context,
                           MaterialPageRoute(
                             builder: (_) => LedgerDetailPage(
@@ -198,7 +228,11 @@ class _LedgerListPageState extends State<LedgerListPage> {
                             ),
                           ),
                         );
-                        if (context.mounted) await _loadFirstPage();
+                        if (!context.mounted) return;
+                        await _loadFirstPage();
+                        if (deleted == true && context.mounted) {
+                          _showDeleteUndo(tx.id);
+                        }
                       },
                     ),
                     if (index != _items.length - 1)
