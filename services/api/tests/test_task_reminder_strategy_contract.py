@@ -19,6 +19,10 @@ from app.modules.tasks.time_reasoning import (
     validate_ai_task_timing,
 )
 from app.modules.tasks.time_reasoning_cli import main as time_reasoning_cli_main
+from app.modules.tasks.time_reasoning_tools import (
+    TaskTimeToolSession,
+    task_time_tool_definitions,
+)
 
 
 def test_task_reminder_strategy_model_and_routes_exist() -> None:
@@ -293,12 +297,19 @@ def test_ai_time_contract_forbids_model_datetime_arithmetic() -> None:
         "super_urgent_lead_seconds",
     ]
     assert contract["tool_flow"] == [
-        "inspect",
-        "sum_exact_durations_when_present",
-        "semantic_proposal",
-        "validate",
-        "retry_on_validation_error",
+        "lifly_time_inspect",
+        "lifly_time_sum_durations",
+        "lifly_time_validate",
     ]
+    assert "不得自行进行日期、时区、时间差或单位换算" in contract["system_prompt"]
+    assert "lifly_time_validate" in contract["system_prompt"]
+    assert "有截止时间时两个 lead 都必须是正整数秒" in contract["system_prompt"]
+    assert "只有 is_overdue=true 才表示 DDL 已经过期" in contract["system_prompt"]
+    assert "session 完成前禁止输出自然语言" in contract["system_prompt"]
+    assert contract["completion_gate"] == (
+        "只有 time tool session 完成 valid=true 的 lifly_time_validate 后，才允许接受模型最终输出。"
+    )
+    assert "session.required_tool_name" in contract["host_policy"]
     assert contract["validation_required"] is True
 
 
@@ -359,6 +370,119 @@ def test_time_reasoning_cli_inspects_and_validates_without_model_math(
     assert validated["valid"] is True
     assert validated["stage"] == "super_urgent"
     assert validated["urgent_start_at_utc"] == "2026-08-11T23:30:00+00:00"
+
+
+def test_time_tool_session_forces_exact_duration_check_before_validation() -> None:
+    china = timezone(timedelta(hours=8))
+    task = Task(
+        id="task-tool-session",
+        user_id="local-dev",
+        title="08:30 赶高铁去外地开会",
+        description="到车站路程约40分钟，至少提前20分钟进站。",
+        due_at=datetime(2026, 8, 12, 8, 30, tzinfo=china),
+        priority="high",
+        task_status="todo",
+        status="active",
+    )
+    session = TaskTimeToolSession.for_task(
+        task,
+        now=datetime(2026, 8, 12, 7, 35, tzinfo=china),
+    )
+    assert session.is_complete is False
+    assert session.required_tool_name == "lifly_time_inspect"
+
+    before_inspect = session.execute(
+        "lifly_time_validate",
+        {
+            "important": True,
+            "urgent_lead_seconds": 3600,
+            "super_urgent_lead_seconds": 1200,
+        },
+    )
+    assert before_inspect == {
+        "valid": False,
+        "errors": ["必须先调用 lifly_time_inspect"],
+    }
+
+    inspected = session.execute("lifly_time_inspect", {})
+    assert inspected["valid"] is True
+    assert inspected["remaining_seconds"] == 3300
+    assert inspected["duration_candidates"] == ["40分钟", "20分钟"]
+    assert session.required_tool_name == "lifly_time_sum_durations"
+
+    premature = session.execute(
+        "lifly_time_validate",
+        {
+            "important": True,
+            "urgent_lead_seconds": 1800,
+            "super_urgent_lead_seconds": 1200,
+        },
+    )
+    assert premature == {
+        "valid": False,
+        "errors": ["检测到明确时长，必须先调用 lifly_time_sum_durations"],
+    }
+
+    invented = session.execute(
+        "lifly_time_sum_durations",
+        {"durations": ["3小时"]},
+    )
+    assert invented == {
+        "valid": False,
+        "errors": ["3小时 不在任务的精确时长候选中"],
+    }
+
+    summed = session.execute(
+        "lifly_time_sum_durations",
+        {"durations": ["40分钟", "20分钟"]},
+    )
+    assert summed["valid"] is True
+    assert summed["parts_seconds"] == [2400, 1200]
+    assert summed["minimum_urgent_lead_seconds"] == 3600
+    assert summed["hard_start_missed"] is True
+    assert session.required_tool_name == "lifly_time_validate"
+
+    underestimated = session.execute(
+        "lifly_time_validate",
+        {
+            "important": True,
+            "urgent_lead_seconds": 1800,
+            "super_urgent_lead_seconds": 1200,
+        },
+    )
+    assert underestimated["valid"] is False
+    assert underestimated["errors"] == [
+        "urgent_lead_seconds 小于精确时间约束 3600 秒"
+    ]
+    assert session.required_tool_name == "lifly_time_validate"
+    assert "lifly_time_validate" in session.continuation_prompt()
+
+    repaired = session.execute(
+        "lifly_time_validate",
+        {
+            "important": True,
+            "urgent_lead_seconds": 3600,
+            "super_urgent_lead_seconds": 1200,
+        },
+    )
+    assert repaired["valid"] is True
+    assert repaired["stage"] == "urgent"
+    assert repaired["minimum_urgent_lead_seconds"] == 3600
+    assert session.is_complete is True
+    assert session.required_tool_name is None
+
+
+def test_time_tool_definitions_are_provider_neutral_function_schemas() -> None:
+    definitions = task_time_tool_definitions()
+
+    assert [item["function"]["name"] for item in definitions] == [
+        "lifly_time_inspect",
+        "lifly_time_sum_durations",
+        "lifly_time_validate",
+    ]
+    for item in definitions:
+        assert item["type"] == "function"
+        assert item["function"]["parameters"]["type"] == "object"
 
 
 def test_exact_duration_evidence_blocks_ai_underestimation() -> None:

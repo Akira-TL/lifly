@@ -8,8 +8,16 @@ import re
 from app.db.models import Task
 
 MAX_AI_LEAD_SECONDS = 365 * 24 * 60 * 60
+_DURATION_UNIT_PATTERN = (
+    r"d|day|days|天|h|hr|hour|hours|小时|m|min|minute|minutes|分钟|分|"
+    r"s|sec|second|seconds|秒"
+)
 _DURATION_TOKEN = re.compile(
-    r"^\s*(-?\d+(?:\.\d+)?)\s*(d|day|days|天|h|hr|hour|hours|小时|m|min|minute|minutes|分钟|分|s|sec|second|seconds|秒)\s*$",
+    rf"^\s*(-?\d+(?:\.\d+)?)\s*({_DURATION_UNIT_PATTERN})\s*$",
+    re.IGNORECASE,
+)
+_DURATION_CANDIDATE = re.compile(
+    rf"(-?\d+(?:\.\d+)?)\s*({_DURATION_UNIT_PATTERN})",
     re.IGNORECASE,
 )
 _DURATION_UNIT_SECONDS = {
@@ -90,6 +98,10 @@ def build_time_facts(*, now: datetime, due_at: datetime | None) -> TaskTimeFacts
 
 def build_task_time_facts(task: Task, *, now: datetime) -> TaskTimeFacts:
     return build_time_facts(now=now, due_at=task.due_at)
+
+
+def extract_duration_tokens(text: str) -> tuple[str, ...]:
+    return tuple(match.group(0).strip() for match in _DURATION_CANDIDATE.finditer(text))
 
 
 def parse_duration_seconds(token: str) -> int:
@@ -212,17 +224,33 @@ def task_time_ai_contract() -> dict[str, object]:
             "super_urgent_lead_seconds",
         ],
         "tools": {
-            "inspect": "计算 now / DDL / remaining_seconds / overdue，禁止模型自行做日期算术。",
-            "sum_durations": "对任务文本中明确给出的多个耗时做精确整数秒加总。",
-            "validate": "校验 AI 提前量与精确最小时长，并计算 urgent_start / super_start / 当前阶段。",
+            "lifly_time_inspect": "读取绑定任务的精确 now / DDL / remaining / overdue 与原始时长候选。",
+            "lifly_time_sum_durations": "选择硬性前置耗时候选，由工具完成单位换算和求和。",
+            "lifly_time_validate": "用绑定的精确时间事实与硬性耗时校验 AI 建议并计算最终阶段。",
         },
         "tool_flow": [
-            "inspect",
-            "sum_exact_durations_when_present",
-            "semantic_proposal",
-            "validate",
-            "retry_on_validation_error",
+            "lifly_time_inspect",
+            "lifly_time_sum_durations",
+            "lifly_time_validate",
         ],
+        "system_prompt": (
+            "你是 Lifly 任务语义判断器。涉及精确时间时，不得自行进行日期、时区、时间差或单位换算。"
+            "第一步必须调用 lifly_time_inspect。若 duration_candidates 非空，必须调用 "
+            "lifly_time_sum_durations，并且 durations 只能从候选中选择真正影响最晚开始行动的硬性前置耗时；"
+            "如果候选都不属于硬性耗时则传空数组。你只负责判断 important、urgent_lead_seconds 和 "
+            "super_urgent_lead_seconds；有截止时间时两个 lead 都必须是正整数秒且 super 不得大于 urgent，"
+            "无截止时间时两个 lead 必须为 null。只有 is_overdue=true 才表示 DDL 已经过期；"
+            "hard_start_missed=true 只表示最安全开始时间已经错过。session 完成前禁止输出自然语言或复述工具结果，"
+            "只能继续发出必需的 tool call。最后必须调用 lifly_time_validate。若返回 valid=false，读取 errors "
+            "修正语义建议后再次调用 lifly_time_validate，禁止绕过校验或修改工具返回的精确事实。"
+        ),
+        "completion_gate": (
+            "只有 time tool session 完成 valid=true 的 lifly_time_validate 后，才允许接受模型最终输出。"
+        ),
+        "host_policy": (
+            "每一轮只向模型暴露 session.required_tool_name 对应的一个 tool schema；"
+            "session 未完成时忽略自然语言最终输出，并用 continuation_prompt 要求继续工具调用。"
+        ),
         "validation_required": True,
     }
 

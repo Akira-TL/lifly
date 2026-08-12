@@ -1,6 +1,8 @@
 import 'package:client_flutter/data/local_core/local_core_models.dart';
 
 const int _maxAiLeadSeconds = 365 * 24 * 60 * 60;
+const String _durationUnitPattern =
+    r'd|day|days|天|h|hr|hour|hours|小时|m|min|minute|minutes|分钟|分|s|sec|second|seconds|秒';
 const Map<String, int> _durationUnitSeconds = {
   'd': 86400,
   'day': 86400,
@@ -97,11 +99,15 @@ class LocalTaskTimeReasoning {
     );
   }
 
+  static List<String> extractDurationTokens(String text) {
+    return _durationPattern(anchored: false)
+        .allMatches(text)
+        .map((match) => match.group(0)!.trim())
+        .toList(growable: false);
+  }
+
   static int parseDurationSeconds(String token) {
-    final match = RegExp(
-      r'^\s*(-?\d+(?:\.\d+)?)\s*(d|day|days|天|h|hr|hour|hours|小时|m|min|minute|minutes|分钟|分|s|sec|second|seconds|秒)\s*$',
-      caseSensitive: false,
-    ).firstMatch(token);
+    final match = _durationPattern(anchored: true).firstMatch(token);
     if (match == null) {
       throw ArgumentError.value(token, 'token', '精确时长格式无效，应类似 40m、2小时、1.5h');
     }
@@ -233,17 +239,31 @@ class LocalTaskTimeReasoning {
         'super_urgent_lead_seconds',
       ],
       'tools': const {
-        'inspect': '计算 now / DDL / remaining_seconds / overdue，禁止模型自行做日期算术。',
-        'sum_durations': '对任务文本中明确给出的多个耗时做精确整数秒加总。',
-        'validate': '校验 AI 提前量与精确最小时长，并计算 urgent_start / super_start / 当前阶段。',
+        'lifly_time_inspect':
+            '读取绑定任务的精确 now / DDL / remaining / overdue 与原始时长候选。',
+        'lifly_time_sum_durations': '选择硬性前置耗时候选，由工具完成单位换算和求和。',
+        'lifly_time_validate': '用绑定的精确时间事实与硬性耗时校验 AI 建议并计算最终阶段。',
       },
       'tool_flow': const [
-        'inspect',
-        'sum_exact_durations_when_present',
-        'semantic_proposal',
-        'validate',
-        'retry_on_validation_error',
+        'lifly_time_inspect',
+        'lifly_time_sum_durations',
+        'lifly_time_validate',
       ],
+      'system_prompt':
+          '你是 Lifly 任务语义判断器。涉及精确时间时，不得自行进行日期、时区、时间差或单位换算。'
+          '第一步必须调用 lifly_time_inspect。若 duration_candidates 非空，必须调用 '
+          'lifly_time_sum_durations，并且 durations 只能从候选中选择真正影响最晚开始行动的硬性前置耗时；'
+          '如果候选都不属于硬性耗时则传空数组。你只负责判断 important、urgent_lead_seconds 和 '
+          'super_urgent_lead_seconds；有截止时间时两个 lead 都必须是正整数秒且 super 不得大于 urgent，'
+          '无截止时间时两个 lead 必须为 null。只有 is_overdue=true 才表示 DDL 已经过期；'
+          'hard_start_missed=true 只表示最安全开始时间已经错过。session 完成前禁止输出自然语言或复述工具结果，'
+          '只能继续发出必需的 tool call。最后必须调用 lifly_time_validate。若返回 valid=false，读取 errors '
+          '修正语义建议后再次调用 lifly_time_validate，禁止绕过校验或修改工具返回的精确事实。',
+      'completion_gate':
+          '只有 time tool session 完成 valid=true 的 lifly_time_validate 后，才允许接受模型最终输出。',
+      'host_policy':
+          '每一轮只向模型暴露 session.required_tool_name 对应的一个 tool schema；'
+          'session 未完成时忽略自然语言最终输出，并用 continuation_prompt 要求继续工具调用。',
       'validation_required': true,
     };
   }
@@ -259,4 +279,12 @@ class LocalTaskTimeReasoning {
   static bool _isValidLead(int? value) {
     return value != null && value > 0 && value <= _maxAiLeadSeconds;
   }
+}
+
+RegExp _durationPattern({required bool anchored}) {
+  final core = r'(-?\d+(?:\.\d+)?)\s*(' + _durationUnitPattern + ')';
+  return RegExp(
+    anchored ? r'^\s*' + core + r'\s*$' : core,
+    caseSensitive: false,
+  );
 }
