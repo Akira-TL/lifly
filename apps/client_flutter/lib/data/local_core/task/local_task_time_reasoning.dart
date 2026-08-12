@@ -1,6 +1,28 @@
 import 'package:client_flutter/data/local_core/local_core_models.dart';
 
 const int _maxAiLeadSeconds = 365 * 24 * 60 * 60;
+const Map<String, int> _durationUnitSeconds = {
+  'd': 86400,
+  'day': 86400,
+  'days': 86400,
+  '天': 86400,
+  'h': 3600,
+  'hr': 3600,
+  'hour': 3600,
+  'hours': 3600,
+  '小时': 3600,
+  'm': 60,
+  'min': 60,
+  'minute': 60,
+  'minutes': 60,
+  '分钟': 60,
+  '分': 60,
+  's': 1,
+  'sec': 1,
+  'second': 1,
+  'seconds': 1,
+  '秒': 1,
+};
 
 class LocalTaskTimeFacts {
   final DateTime nowUtc;
@@ -73,6 +95,34 @@ class LocalTaskTimeReasoning {
       remainingSeconds: remainingSeconds,
       isOverdue: remainingSeconds != null && remainingSeconds < 0,
     );
+  }
+
+  static int parseDurationSeconds(String token) {
+    final match = RegExp(
+      r'^\s*(-?\d+(?:\.\d+)?)\s*(d|day|days|天|h|hr|hour|hours|小时|m|min|minute|minutes|分钟|分|s|sec|second|seconds|秒)\s*$',
+      caseSensitive: false,
+    ).firstMatch(token);
+    if (match == null) {
+      throw ArgumentError.value(token, 'token', '精确时长格式无效，应类似 40m、2小时、1.5h');
+    }
+    final rawAmount = match.group(1)!;
+    if (rawAmount.startsWith('-')) {
+      throw ArgumentError.value(token, 'token', '精确时长必须是非负整数秒');
+    }
+    final amountParts = rawAmount.split('.');
+    final fractionDigits = amountParts.length == 2 ? amountParts[1].length : 0;
+    final scale = _pow10(fractionDigits);
+    final scaledAmount = int.parse(amountParts.join());
+    final unit = match.group(2)!.toLowerCase();
+    final scaledSeconds = scaledAmount * _durationUnitSeconds[unit]!;
+    if (scaledSeconds % scale != 0) {
+      throw ArgumentError.value(token, 'token', '精确时长换算后必须是完整秒');
+    }
+    final seconds = scaledSeconds ~/ scale;
+    if (seconds > _maxAiLeadSeconds) {
+      throw ArgumentError.value(token, 'token', '单个精确时长超过 31536000 秒');
+    }
+    return seconds;
   }
 
   static int sumDurationSeconds(Iterable<int> partsSeconds) {
@@ -196,6 +246,14 @@ class LocalTaskTimeReasoning {
       ],
       'validation_required': true,
     };
+  }
+
+  static int _pow10(int exponent) {
+    var result = 1;
+    for (var index = 0; index < exponent; index += 1) {
+      result *= 10;
+    }
+    return result;
   }
 
   static bool _isValidLead(int? value) {

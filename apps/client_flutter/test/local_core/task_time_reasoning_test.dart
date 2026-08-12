@@ -74,9 +74,14 @@ void main() {
       contains('super_urgent_lead_seconds 必须小于等于 urgent_lead_seconds'),
     );
 
+    expect(LocalTaskTimeReasoning.parseDurationSeconds('1d'), 86400);
+    expect(LocalTaskTimeReasoning.parseDurationSeconds('3h'), 10800);
+    expect(LocalTaskTimeReasoning.parseDurationSeconds('40分钟'), 2400);
+    expect(LocalTaskTimeReasoning.parseDurationSeconds('1.5h'), 5400);
+    expect(LocalTaskTimeReasoning.parseDurationSeconds('15秒'), 15);
     final exactMinimum = LocalTaskTimeReasoning.sumDurationSeconds([
-      40 * 60,
-      20 * 60,
+      LocalTaskTimeReasoning.parseDurationSeconds('40m'),
+      LocalTaskTimeReasoning.parseDurationSeconds('20m'),
     ]);
     final underestimated = LocalTaskTimeReasoning.validate(
       facts,

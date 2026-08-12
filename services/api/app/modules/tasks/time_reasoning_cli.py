@@ -8,6 +8,7 @@ from typing import Sequence
 from app.modules.tasks.time_reasoning import (
     AiTaskTimingProposal,
     build_time_facts,
+    parse_duration_seconds,
     sum_duration_seconds,
     task_time_ai_contract,
     validate_ai_task_timing,
@@ -34,7 +35,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_time_arguments(inspect_parser)
 
     sum_parser = subparsers.add_parser("sum-durations")
-    sum_parser.add_argument("--seconds", type=int, nargs="+", required=True)
+    sum_parser.add_argument("--duration", nargs="+", required=True)
 
     validate_parser = subparsers.add_parser("validate")
     _add_time_arguments(validate_parser)
@@ -50,9 +51,11 @@ def _execute(args: argparse.Namespace) -> int:
         _print_json(task_time_ai_contract())
         return 0
     if args.command == "sum-durations":
-        parts = list(args.seconds)
+        raw_parts = list(args.duration)
+        parts = [parse_duration_seconds(value) for value in raw_parts]
         _print_json(
             {
+                "parts": raw_parts,
                 "parts_seconds": parts,
                 "total_seconds": sum_duration_seconds(parts),
             }

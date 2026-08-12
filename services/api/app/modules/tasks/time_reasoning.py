@@ -2,10 +2,38 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
+import re
 
 from app.db.models import Task
 
 MAX_AI_LEAD_SECONDS = 365 * 24 * 60 * 60
+_DURATION_TOKEN = re.compile(
+    r"^\s*(-?\d+(?:\.\d+)?)\s*(d|day|days|天|h|hr|hour|hours|小时|m|min|minute|minutes|分钟|分|s|sec|second|seconds|秒)\s*$",
+    re.IGNORECASE,
+)
+_DURATION_UNIT_SECONDS = {
+    "d": 86400,
+    "day": 86400,
+    "days": 86400,
+    "天": 86400,
+    "h": 3600,
+    "hr": 3600,
+    "hour": 3600,
+    "hours": 3600,
+    "小时": 3600,
+    "m": 60,
+    "min": 60,
+    "minute": 60,
+    "minutes": 60,
+    "分钟": 60,
+    "分": 60,
+    "s": 1,
+    "sec": 1,
+    "second": 1,
+    "seconds": 1,
+    "秒": 1,
+}
 
 
 @dataclass(frozen=True)
@@ -62,6 +90,26 @@ def build_time_facts(*, now: datetime, due_at: datetime | None) -> TaskTimeFacts
 
 def build_task_time_facts(task: Task, *, now: datetime) -> TaskTimeFacts:
     return build_time_facts(now=now, due_at=task.due_at)
+
+
+def parse_duration_seconds(token: str) -> int:
+    match = _DURATION_TOKEN.fullmatch(token)
+    if match is None:
+        raise ValueError("精确时长格式无效，应类似 40m、2小时、1.5h")
+    try:
+        amount = Decimal(match.group(1))
+    except InvalidOperation as exc:
+        raise ValueError("精确时长数值无效") from exc
+    unit = match.group(2).lower()
+    seconds = amount * _DURATION_UNIT_SECONDS[unit]
+    if seconds != seconds.to_integral_value():
+        raise ValueError("精确时长换算后必须是完整秒")
+    value = int(seconds)
+    if value < 0:
+        raise ValueError("精确时长必须是非负整数秒")
+    if value > MAX_AI_LEAD_SECONDS:
+        raise ValueError("单个精确时长超过 31536000 秒")
+    return value
 
 
 def sum_duration_seconds(parts_seconds: list[int] | tuple[int, ...]) -> int:

@@ -13,6 +13,7 @@ from app.modules.tasks.reminder_strategy_engine import suggest_task_reminder_str
 from app.modules.tasks.time_reasoning import (
     AiTaskTimingProposal,
     build_task_time_facts,
+    parse_duration_seconds,
     sum_duration_seconds,
     task_time_ai_contract,
     validate_ai_task_timing,
@@ -320,14 +321,15 @@ def test_time_reasoning_cli_inspects_and_validates_without_model_math(
     assert inspected["is_overdue"] is False
 
     exit_code = time_reasoning_cli_main(
-        ["sum-durations", "--seconds", "2400", "1200"]
+        ["sum-durations", "--duration", "40m", "20m"]
     )
     summed = json.loads(capsys.readouterr().out)
     assert exit_code == 0
+    assert summed["parts_seconds"] == [2400, 1200]
     assert summed["total_seconds"] == 3600
 
     exit_code = time_reasoning_cli_main(
-        ["sum-durations", "--seconds", "-1"]
+        ["sum-durations", "--duration=-1m"]
     )
     rejected_sum = json.loads(capsys.readouterr().out)
     assert exit_code == 0
@@ -360,7 +362,16 @@ def test_time_reasoning_cli_inspects_and_validates_without_model_math(
 
 
 def test_exact_duration_evidence_blocks_ai_underestimation() -> None:
-    exact_minimum = sum_duration_seconds([40 * 60, 20 * 60])
+    assert parse_duration_seconds("1d") == 86400
+    assert parse_duration_seconds("3h") == 10800
+    assert parse_duration_seconds("40m") == 2400
+    assert parse_duration_seconds("40分钟") == 2400
+    assert parse_duration_seconds("1.5h") == 5400
+    assert parse_duration_seconds("15s") == 15
+    exact_minimum = sum_duration_seconds([
+        parse_duration_seconds("40m"),
+        parse_duration_seconds("20m"),
+    ])
     task = Task(
         id="task-exact-duration",
         user_id="local-dev",
