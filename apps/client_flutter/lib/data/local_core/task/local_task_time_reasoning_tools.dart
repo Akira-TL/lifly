@@ -16,8 +16,8 @@ class LocalTaskTimeToolSession {
   LocalTaskTimeToolSession._({
     required this.facts,
     required this.durationCandidates,
-    required bool durationCheckCompleted,
-  }) : _durationCheckCompleted = durationCheckCompleted;
+    required this._durationCheckCompleted,
+  });
 
   factory LocalTaskTimeToolSession.forTask(
     LocalTaskRecord task, {

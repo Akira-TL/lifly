@@ -282,9 +282,6 @@ class LocalTaskTimeReasoning {
 }
 
 RegExp _durationPattern({required bool anchored}) {
-  final core = r'(-?\d+(?:\.\d+)?)\s*(' + _durationUnitPattern + ')';
-  return RegExp(
-    anchored ? r'^\s*' + core + r'\s*$' : core,
-    caseSensitive: false,
-  );
+  final core = '(-?\\d+(?:\\.\\d+)?)\\s*($_durationUnitPattern)';
+  return RegExp(anchored ? '^\\s*$core\\s*\$' : core, caseSensitive: false);
 }
