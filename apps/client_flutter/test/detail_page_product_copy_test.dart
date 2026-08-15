@@ -73,7 +73,7 @@ void main() {
     expect(find.textContaining('附件引用需连接云端服务'), findsOneWidget);
   });
 
-  testWidgets('cloud memo external link validates the URL inline', (
+  testWidgets('cloud memo disables attachment actions without E2EE runtime', (
     tester,
   ) async {
     final memo = Memo(
@@ -98,15 +98,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('添加外链'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '保存'));
-    await tester.pump();
-    expect(find.text('请输入链接地址'), findsOneWidget);
-
-    await tester.enterText(_textField('URL'), 'https://example.com/article');
-    await tester.pump();
-    expect(find.text('请输入链接地址'), findsNothing);
+    final addLinkButton = tester.widget<TextButton>(
+      find.widgetWithText(TextButton, '添加外链'),
+    );
+    expect(addLinkButton.onPressed, isNull);
+    expect(find.textContaining('附件 E2EE 尚未解锁'), findsOneWidget);
+    expect(find.textContaining('不会回退到明文附件关系'), findsOneWidget);
   });
 
   testWidgets('memo detail hides implementation errors from users', (

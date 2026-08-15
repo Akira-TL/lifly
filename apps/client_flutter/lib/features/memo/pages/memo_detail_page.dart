@@ -26,6 +26,7 @@ class _MemoDetailPageState extends State<MemoDetailPage> {
   late final MemoRepository _repo;
   late final AssetRepository _assetRepo;
   late final LiflyDataMode _dataMode;
+  late final bool _assetE2eeAvailable;
   Memo? _memo;
   List<MemoAssetRef> _assets = const [];
   bool _isLoading = true;
@@ -38,7 +39,13 @@ class _MemoDetailPageState extends State<MemoDetailPage> {
     super.initState();
     final api = context.read<ApiClient>();
     _dataMode = context.read<LiflyDataMode>();
-    final e2ee = context.read<AccountE2eeRuntime>();
+    AccountE2eeRuntime? e2ee;
+    try {
+      e2ee = context.read<AccountE2eeRuntime>();
+    } on ProviderNotFoundException {
+      e2ee = null;
+    }
+    _assetE2eeAvailable = e2ee?.isUnlocked == true;
     _repo = MemoRepository(
       api,
       localCore: context.read<LocalCoreBridge>(),
@@ -58,7 +65,9 @@ class _MemoDetailPageState extends State<MemoDetailPage> {
     });
     try {
       final memo = await _repo.get(widget.memoId);
-      final assets = await _repo.listAssets(widget.memoId);
+      final assets = _assetE2eeAvailable
+          ? await _repo.listAssets(widget.memoId)
+          : const <MemoAssetRef>[];
       if (!mounted) return;
       setState(() {
         _memo = memo;
@@ -315,10 +324,19 @@ class _MemoDetailPageState extends State<MemoDetailPage> {
                   _MemoAssetsSection(
                     refs: _assets,
                     isAdding: _isAddingAsset,
-                    onAddExternalLink: _dataMode == LiflyDataMode.api
+                    unavailableMessage: _dataMode == LiflyDataMode.local
+                        ? '本地模式可继续编辑备忘；附件引用需连接云端服务后管理。'
+                        : !_assetE2eeAvailable
+                        ? '附件 E2EE 尚未解锁；不会回退到明文附件关系。'
+                        : null,
+                    onAddExternalLink:
+                        _dataMode == LiflyDataMode.api && _assetE2eeAvailable
                         ? _addExternalAsset
                         : null,
-                    onRemove: _dataMode == LiflyDataMode.api && !_isSaving
+                    onRemove:
+                        _dataMode == LiflyDataMode.api &&
+                            _assetE2eeAvailable &&
+                            !_isSaving
                         ? _unbindAsset
                         : null,
                   ),
@@ -361,12 +379,14 @@ String _memoStatusLabel(String status) {
 class _MemoAssetsSection extends StatelessWidget {
   final List<MemoAssetRef> refs;
   final bool isAdding;
+  final String? unavailableMessage;
   final VoidCallback? onAddExternalLink;
   final ValueChanged<MemoAssetRef>? onRemove;
 
   const _MemoAssetsSection({
     required this.refs,
     required this.isAdding,
+    required this.unavailableMessage,
     required this.onAddExternalLink,
     required this.onRemove,
   });
@@ -403,9 +423,7 @@ class _MemoAssetsSection extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              onAddExternalLink == null
-                  ? '本地模式可继续编辑备忘；附件引用需连接云端服务后管理。'
-                  : '还没有附件。可以添加外部链接，文件附件可从附件库统一管理。',
+              unavailableMessage ?? '还没有附件。可以添加外部链接，文件附件可从附件库统一管理。',
               style: theme.textTheme.bodyMedium,
             ),
           )
