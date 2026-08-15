@@ -9,6 +9,7 @@ import 'package:client_flutter/data/powersync/powersync_credentials_service.dart
 import 'package:client_flutter/data/powersync/sync_push_service.dart';
 import 'package:client_flutter/data/powersync/sync_service.dart';
 import 'package:client_flutter/features/import_export/widgets/import_export_settings_section.dart';
+import 'package:client_flutter/features/settings/widgets/account_device_settings_section.dart';
 import 'package:client_flutter/features/settings/widgets/theme_settings_section.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -218,6 +219,8 @@ class _SettingsPageState extends State<SettingsPage> {
         padding: const EdgeInsets.all(16),
         children: [
           const ThemeSettingsSection(),
+          const SizedBox(height: 12),
+          AccountDeviceSettingsSection(api: api),
           const SizedBox(height: 12),
           _ApiDiagnosticsCard(
             baseUrl: api.baseUrl,
