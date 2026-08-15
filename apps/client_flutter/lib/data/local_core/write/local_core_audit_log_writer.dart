@@ -1,14 +1,36 @@
-import 'dart:convert';
-
 import 'package:client_flutter/data/local_core/local_core_context.dart';
 import 'package:client_flutter/data/local_core/write/local_core_write_handle.dart';
 import 'package:client_flutter/data/local_core/write/local_core_write_policy.dart';
 
+abstract interface class AuditPayloadProtector {
+  Future<void> protect({
+    required String auditId,
+    required String createdAt,
+    required LocalCoreAuditLogInput input,
+  });
+}
+
+class DiscardSensitiveAuditPayloadProtector implements AuditPayloadProtector {
+  const DiscardSensitiveAuditPayloadProtector();
+
+  @override
+  Future<void> protect({
+    required String auditId,
+    required String createdAt,
+    required LocalCoreAuditLogInput input,
+  }) async {}
+}
+
 class LocalCoreAuditLogWriter {
   final LocalCoreWritePolicy policy;
+  final AuditPayloadProtector payloadProtector;
 
-  LocalCoreAuditLogWriter({LocalCoreWritePolicy? policy})
-    : policy = policy ?? LocalCoreWritePolicy();
+  LocalCoreAuditLogWriter({
+    LocalCoreWritePolicy? policy,
+    AuditPayloadProtector? payloadProtector,
+  }) : policy = policy ?? LocalCoreWritePolicy(),
+       payloadProtector =
+           payloadProtector ?? const DiscardSensitiveAuditPayloadProtector();
 
   Future<String> write(
     LocalCoreWriteHandle handle,
@@ -17,6 +39,11 @@ class LocalCoreAuditLogWriter {
     final id = policy.nextAuditLogId();
     final createdAt = policy.timestampsFor(input.context).createdAtIso;
 
+    await payloadProtector.protect(
+      auditId: id,
+      createdAt: createdAt,
+      input: input,
+    );
     await handle.execute(
       'INSERT INTO audit_logs('
       'id, user_id, actor_type, actor_id, action, entity_type, entity_id, '
@@ -30,10 +57,10 @@ class LocalCoreAuditLogWriter {
         input.action,
         input.entityType,
         input.entityId,
-        _encodeSnapshot(input.beforeSnapshot),
-        _encodeSnapshot(input.afterSnapshot),
+        null,
+        null,
         input.context.sourceChannelName,
-        input.context.sourceText,
+        null,
         input.context.toolName,
         input.context.requestId,
         createdAt,
@@ -41,11 +68,6 @@ class LocalCoreAuditLogWriter {
     );
 
     return id;
-  }
-
-  String? _encodeSnapshot(Map<String, Object?>? snapshot) {
-    if (snapshot == null) return null;
-    return jsonEncode(snapshot);
   }
 }
 
