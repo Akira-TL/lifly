@@ -69,6 +69,7 @@ PakeClientAdapter defaultPakeClientAdapter() {
 class JsonHelperOpaqueClientAdapter implements PakeClientAdapter {
   final String helperPath;
   final OpaqueClientHelperInvoker _invokeHelper;
+  final Map<String, String> _passwordByClientState = <String, String>{};
 
   JsonHelperOpaqueClientAdapter({
     required this.helperPath,
@@ -114,9 +115,11 @@ class JsonHelperOpaqueClientAdapter implements PakeClientAdapter {
       throw const PakeClientUnavailable('OPAQUE password must not be empty');
     }
     final result = await _invoke(operation, {'password': password});
+    final clientState = _requiredString(result, 'client_state');
+    _passwordByClientState[clientState] = password;
     return PakeClientStart(
       clientRequest: _requiredString(result, 'client_request'),
-      clientState: _requiredString(result, 'client_state'),
+      clientState: clientState,
     );
   }
 
@@ -125,9 +128,16 @@ class JsonHelperOpaqueClientAdapter implements PakeClientAdapter {
     required String clientState,
     required String serverResponse,
   }) async {
+    final password = _passwordByClientState.remove(clientState);
+    if (password == null) {
+      throw const PakeClientUnavailable(
+        'OPAQUE client state is missing or was already consumed',
+      );
+    }
     final result = await _invoke(operation, {
       'client_state': clientState,
       'server_response': serverResponse,
+      'password': password,
     });
     final exportKey = _requiredString(result, 'export_key');
     try {

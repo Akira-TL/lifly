@@ -69,6 +69,7 @@ void main() {
                 'client_state': 'login-state',
               };
             case 'client_login_finish':
+              expect(request['password'], 'password');
               return {
                 'client_message': 'login-finish',
                 'export_key': base64Url.encode([9, 8, 7]),
@@ -105,6 +106,43 @@ void main() {
           ),
         ),
       );
+    },
+  );
+
+  test(
+    'OPAQUE helper adapter consumes the local password after finish',
+    () async {
+      var finishCalls = 0;
+      final adapter = JsonHelperOpaqueClientAdapter(
+        helperPath: '/tmp/opaque-client-helper',
+        invokeHelper: (helperPath, request) async {
+          switch (request['operation']) {
+            case 'client_login_start':
+              return {'client_request': 'request', 'client_state': 'state'};
+            case 'client_login_finish':
+              finishCalls += 1;
+              return {
+                'client_message': 'finish',
+                'export_key': base64Url.encode([1, 2, 3]),
+              };
+          }
+          throw StateError('unexpected operation');
+        },
+      );
+
+      final start = await adapter.startLogin(password: 'secret');
+      await adapter.finishLogin(
+        clientState: start.clientState,
+        serverResponse: 'response',
+      );
+      await expectLater(
+        adapter.finishLogin(
+          clientState: start.clientState,
+          serverResponse: 'response',
+        ),
+        throwsA(isA<PakeClientUnavailable>()),
+      );
+      expect(finishCalls, 1);
     },
   );
 }

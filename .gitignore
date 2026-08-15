@@ -76,3 +76,5 @@ infra/powersync/
 testdata/
 # ─── Runtime gateway activation ──────────────────────────────────────────────
 infra/gateway/sites-enabled/lifly-https.conf
+
+tools/opaque-helper/target/
