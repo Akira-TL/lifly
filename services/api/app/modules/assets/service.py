@@ -4,7 +4,8 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.storage import generate_upload_url
+from app.core.config import settings
+from app.core.storage import generate_upload_url, get_storage
 from app.db.models import Asset, AuditLog
 from app.schemas.common import (
     AssetCreateUploadUrl,
@@ -15,6 +16,8 @@ from app.schemas.common import (
 DEFAULT_LOCAL_USER_ID = "local-dev"
 
 ASSET_CONTRACT_VERSION = "asset.v0.5.1"
+ASSET_E2EE_CONTRACT_VERSION = "asset.e2ee.v1"
+ENCRYPTED_ASSET_MAGIC = b"LFLYAS01"
 
 ASSET_KIND_INTERNAL = "internal"
 ASSET_KIND_EXTERNAL = "external"
@@ -33,6 +36,7 @@ ASSET_REGISTER_EXTERNAL_AUDIT_ACTION = "asset.register_external_url"
 ASSET_UPLOAD_COMPLETE_AUDIT_ACTION = "asset.upload_complete"
 ASSET_UPDATE_METADATA_AUDIT_ACTION = "asset.update_metadata"
 ASSET_TRASH_AUDIT_ACTION = "asset.trash"
+ASSET_PURGE_AUDIT_ACTION = "asset.purge"
 
 
 def asset_title(asset: Asset) -> str | None:
@@ -91,7 +95,7 @@ def asset_boundary_contract(asset: Asset) -> dict:
         "trash_boundary": {
             "api_delete_status": ASSET_STATUS_DELETED,
             "requires_no_memo_refs": True,
-            "physical_blob_delete": "not_in_v0.5.1",
+            "physical_blob_delete": "explicit_e2ee_purge",
         },
     }
 
@@ -133,14 +137,30 @@ def build_create_upload_url_payload(asset: Asset, upload_url: str) -> dict:
             "headers": {"content-type": asset.mime_type} if asset.mime_type else {},
             "storage_provider": asset.storage_provider,
             "storage_key": asset.storage_key,
-            "next_action": "upload_binary_then_mark_upload_complete",
+            "next_action": "encrypt_binary_then_upload_and_mark_complete",
             "status": asset.status,
             "sync_status": asset.sync_status,
             "requires_upload_complete": True,
+            "requires_client_encryption": True,
             **asset_boundary_contract(asset),
         },
         "metadata": metadata,
         "asset": asset_to_dict(asset),
+    }
+
+
+def build_encrypted_upload_intent_payload(asset: Asset, upload_url: str) -> dict:
+    return {
+        "contract_version": ASSET_E2EE_CONTRACT_VERSION,
+        "asset_id": asset.id,
+        "upload_url": upload_url,
+        "method": "PUT",
+        "headers": {"content-type": "application/octet-stream"},
+        "storage_provider": asset.storage_provider,
+        "storage_key": asset.storage_key,
+        "sync_status": asset.sync_status,
+        "requires_client_encryption": True,
+        "required_object_magic": ENCRYPTED_ASSET_MAGIC.decode("ascii"),
     }
 
 
@@ -180,20 +200,57 @@ async def write_asset_audit(
     source_text: str | None = None,
     request_id: str | None = None,
 ) -> None:
+    """Persist operational audit metadata only.
+
+    User-content snapshots and source text belong in the client E2EE audit
+    envelope. The cloud audit row intentionally cannot reconstruct them.
+    """
+
+    del before, after, source_text
     log = AuditLog(
         user_id=user_id,
         actor_type=actor_type,
         action=action,
         entity_type="asset",
         entity_id=asset.id,
-        before_snapshot=before,
-        after_snapshot=after,
+        before_snapshot=None,
+        after_snapshot=None,
         source_channel=source_channel,
         tool_name=tool_name,
-        source_text=source_text,
+        source_text=None,
         request_id=request_id,
     )
     db.add(log)
+
+
+async def create_encrypted_asset_upload_record(
+    db: AsyncSession,
+    *,
+    user_id: str,
+    asset_id: str | None = None,
+) -> tuple[Asset, str]:
+    resolved_asset_id = asset_id or str(uuid.uuid4())
+    storage_key = f"attachments/{user_id}/{resolved_asset_id}/payload.e2ee"
+    asset = Asset(
+        id=resolved_asset_id,
+        user_id=user_id,
+        kind=ASSET_KIND_INTERNAL,
+        asset_type="file",
+        filename=None,
+        mime_type="application/octet-stream",
+        size_bytes=None,
+        sha256=None,
+        storage_provider="minio",
+        storage_key=storage_key,
+        external_url=None,
+        external_provider=None,
+        sync_status=ASSET_SYNC_PENDING,
+        status=ASSET_STATUS_ACTIVE,
+        visibility="private",
+    )
+    db.add(asset)
+    await db.flush()
+    return asset, generate_upload_url(storage_key)
 
 
 async def create_internal_asset_upload_record(
@@ -207,37 +264,18 @@ async def create_internal_asset_upload_record(
     source_text: str | None = None,
     request_id: str | None = None,
 ) -> tuple[Asset, str]:
-    asset_id = str(uuid.uuid4())
-    storage_key = f"attachments/{user_id}/{asset_id}/{data.filename}"
+    """Legacy call seam retained for MCP callers, but no plaintext metadata persists."""
 
-    asset = Asset(
-        id=asset_id,
-        user_id=user_id,
-        kind=ASSET_KIND_INTERNAL,
-        asset_type=data.asset_type,
-        filename=data.filename,
-        mime_type=data.mime_type,
-        size_bytes=data.size_bytes,
-        storage_provider="minio",
-        storage_key=storage_key,
-        sync_status=ASSET_SYNC_PENDING,
-        status=ASSET_STATUS_ACTIVE,
-        visibility="private",
-    )
-    db.add(asset)
-    await db.flush()
-
-    upload_url = generate_upload_url(storage_key)
+    del data, source_text
+    asset, upload_url = await create_encrypted_asset_upload_record(db, user_id=user_id)
     await write_asset_audit(
         db,
         user_id=user_id,
         action=ASSET_CREATE_UPLOAD_AUDIT_ACTION,
         asset=asset,
-        after=asset_metadata(asset),
         actor_type=actor_type,
         source_channel=source_channel,
         tool_name=tool_name,
-        source_text=source_text or data.filename,
         request_id=request_id,
     )
     return asset, upload_url
@@ -254,30 +292,21 @@ async def register_external_asset_record(
     source_text: str | None = None,
     request_id: str | None = None,
 ) -> Asset:
-    asset = Asset(
-        user_id=user_id,
-        kind=ASSET_KIND_EXTERNAL,
-        asset_type=data.asset_type,
-        external_url=data.external_url,
-        external_provider=data.external_provider,
-        filename=data.title,
-        sync_status=ASSET_SYNC_SYNCED,
-        status=ASSET_STATUS_ACTIVE,
-        visibility="private",
+    del db, data, user_id, actor_type, source_channel, tool_name, source_text, request_id
+    raise ValueError(
+        "Plaintext external asset registration is disabled; sync the URL inside an encrypted asset entity"
     )
-    db.add(asset)
-    await db.flush()
 
-    await write_asset_audit(
-        db,
-        user_id=user_id,
-        action=ASSET_REGISTER_EXTERNAL_AUDIT_ACTION,
-        asset=asset,
-        after=asset_metadata(asset),
-        actor_type=actor_type,
-        source_channel=source_channel,
-        tool_name=tool_name,
-        source_text=source_text or data.external_url,
-        request_id=request_id,
-    )
-    return asset
+
+def encrypted_asset_object_has_valid_header(storage_key: str) -> bool:
+    response = get_storage().get_object(settings.minio_bucket, storage_key)
+    try:
+        prefix = response.read(len(ENCRYPTED_ASSET_MAGIC))
+    finally:
+        response.close()
+        response.release_conn()
+    return prefix == ENCRYPTED_ASSET_MAGIC
+
+
+def purge_encrypted_asset_object(storage_key: str) -> None:
+    get_storage().remove_object(settings.minio_bucket, storage_key)

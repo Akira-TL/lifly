@@ -11,6 +11,8 @@ from app.modules.assets import router as asset_router
 from app.modules.assets import service as asset_service
 from app.modules.assets.service import (
     ASSET_CONTRACT_VERSION,
+    ASSET_E2EE_CONTRACT_VERSION,
+    ENCRYPTED_ASSET_MAGIC,
     ASSET_CREATE_UPLOAD_AUDIT_ACTION,
     ASSET_REGISTER_EXTERNAL_AUDIT_ACTION,
     ASSET_STATUS_ACTIVE,
@@ -23,6 +25,8 @@ from app.modules.assets.service import (
     ASSET_UPLOAD_COMPLETE_AUDIT_ACTION,
     build_create_upload_url_payload,
     build_register_external_url_payload,
+    create_encrypted_asset_upload_record,
+    encrypted_asset_object_has_valid_header,
 )
 from app.modules.mcp import router as mcp_router
 from app.schemas.common import AssetCreateUploadUrl, AssetRegisterExternalUrl
@@ -141,27 +145,110 @@ def test_external_registration_payload_exposes_reference_boundaries() -> None:
     assert payload["external_registration"]["sync_boundary"]["external_reference"] == ASSET_SYNC_SYNCED
 
 
-def test_asset_rest_handlers_write_unified_audit_actions() -> None:
+def test_asset_rest_handlers_fail_closed_around_sensitive_metadata() -> None:
     service_source = inspect.getsource(asset_service)
+    create_source = inspect.getsource(asset_router.create_upload_url)
+    external_source = inspect.getsource(asset_router.register_external_url)
+    update_source = inspect.getsource(asset_router.update_asset)
+    complete_source = inspect.getsource(asset_router.e2ee_upload_complete)
 
-    assert "ASSET_CREATE_UPLOAD_AUDIT_ACTION" in service_source
-    assert "ASSET_REGISTER_EXTERNAL_AUDIT_ACTION" in service_source
     assert ASSET_CREATE_UPLOAD_AUDIT_ACTION in service_source
     assert ASSET_REGISTER_EXTERNAL_AUDIT_ACTION in service_source
-    assert "build_create_upload_url_payload" in inspect.getsource(asset_router.create_upload_url)
-    assert "build_register_external_url_payload" in inspect.getsource(asset_router.register_external_url)
+    assert "build_encrypted_upload_intent_payload" in create_source
+    assert "subject.account_id" in create_source
+    assert "HTTP_410_GONE" in external_source
+    assert "HTTP_410_GONE" in update_source
+    assert "encrypted_asset_object_has_valid_header" in complete_source
+    assert "ASSET_UPLOAD_COMPLETE_AUDIT_ACTION" in complete_source
+    assert "subject.account_id" in complete_source
 
-    for handler, action_name, action_value in [
-        (asset_router.upload_complete, "ASSET_UPLOAD_COMPLETE_AUDIT_ACTION", ASSET_UPLOAD_COMPLETE_AUDIT_ACTION),
-        (asset_router.update_asset, "ASSET_UPDATE_METADATA_AUDIT_ACTION", ASSET_UPDATE_METADATA_AUDIT_ACTION),
-        (asset_router.delete_asset, "ASSET_TRASH_AUDIT_ACTION", ASSET_TRASH_AUDIT_ACTION),
-    ]:
-        source = inspect.getsource(handler)
-        assert "write_asset_audit" in source
-        assert action_name in source
-        assert action_value
-        assert "before=before" in source
-        assert "after=after" in source
+    delete_source = inspect.getsource(asset_router.delete_asset)
+    assert "ASSET_TRASH_AUDIT_ACTION" in delete_source
+    assert "write_asset_audit" in delete_source
+
+
+@pytest.mark.anyio
+async def test_e2ee_upload_record_persists_only_operational_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeSession:
+        def __init__(self) -> None:
+            self.items: list[object] = []
+
+        def add(self, item: object) -> None:
+            self.items.append(item)
+
+        async def flush(self) -> None:
+            return None
+
+    monkeypatch.setattr(asset_service, "generate_upload_url", lambda key: f"https://upload.invalid/{key}")
+    session = FakeSession()
+
+    asset, upload_url = await create_encrypted_asset_upload_record(  # type: ignore[arg-type]
+        session,
+        user_id="account-1",
+    )
+
+    assert asset.user_id == "account-1"
+    assert asset.kind == "internal"
+    assert asset.asset_type == "file"
+    assert asset.filename is None
+    assert asset.mime_type == "application/octet-stream"
+    assert asset.external_url is None
+    assert asset.external_provider is None
+    assert asset.storage_key == f"attachments/account-1/{asset.id}/payload.e2ee"
+    assert upload_url.endswith("/payload.e2ee")
+    assert session.items == [asset]
+
+
+def test_encrypted_object_header_rejects_plaintext(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeResponse:
+        def __init__(self, payload: bytes) -> None:
+            self.payload = payload
+
+        def read(self, length: int) -> bytes:
+            return self.payload[:length]
+
+        def close(self) -> None:
+            return None
+
+        def release_conn(self) -> None:
+            return None
+
+    class FakeStorage:
+        def __init__(self, payload: bytes) -> None:
+            self.payload = payload
+
+        def get_object(self, bucket: str, key: str) -> FakeResponse:
+            return FakeResponse(self.payload)
+
+    monkeypatch.setattr(asset_service.settings, "minio_bucket", "test-bucket")
+    monkeypatch.setattr(asset_service, "get_storage", lambda: FakeStorage(ENCRYPTED_ASSET_MAGIC + b"cipher"))
+    assert encrypted_asset_object_has_valid_header("attachments/account-1/a/payload.e2ee") is True
+
+    monkeypatch.setattr(asset_service, "get_storage", lambda: FakeStorage(b"plaintext"))
+    assert encrypted_asset_object_has_valid_header("attachments/account-1/a/payload.e2ee") is False
+
+
+def test_e2ee_contract_never_exposes_sensitive_asset_metadata() -> None:
+    asset = _asset(
+        user_id="account-1",
+        filename=None,
+        mime_type="application/octet-stream",
+        external_url=None,
+        external_provider=None,
+        storage_key="attachments/account-1/asset_1/payload.e2ee",
+    )
+    payload = asset_service.build_encrypted_upload_intent_payload(
+        asset,
+        "https://upload.invalid/payload.e2ee",
+    )
+
+    assert payload["contract_version"] == ASSET_E2EE_CONTRACT_VERSION
+    assert payload["asset_id"] == "asset_1"
+    assert payload["headers"] == {"content-type": "application/octet-stream"}
+    serialized = str(payload)
+    assert "filename" not in serialized
+    assert "wrapped_asset_key" not in serialized
+    assert "external_url" not in serialized
 
 
 def test_mcp_asset_handlers_return_hardened_payload_with_undo_token() -> None:
