@@ -4,6 +4,7 @@ import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/repositories/asset_repository.dart';
 import 'package:client_flutter/data/repositories/memo_repository.dart';
 import 'package:client_flutter/domain/entities/memo.dart';
+import 'package:client_flutter/shared/errors/user_facing_error.dart';
 import 'package:client_flutter/shared/widgets/asset_card.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
 import 'package:flutter/material.dart';
@@ -59,9 +60,15 @@ class _MemoDetailPageState extends State<MemoDetailPage> {
         _memo = memo;
         _assets = memo.assets;
       });
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      setState(() => _error = '备忘详情加载失败：$error');
+      setState(
+        () => _error = userFacingFailure(
+          action: '加载备忘详情',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -90,11 +97,19 @@ class _MemoDetailPageState extends State<MemoDetailPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('备忘已更新')));
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('更新备忘失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingFailure(
+              action: '更新备忘',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -127,11 +142,19 @@ class _MemoDetailPageState extends State<MemoDetailPage> {
       await _repo.delete(memo.id);
       if (!mounted) return;
       Navigator.pop(context, true);
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('删除备忘失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingFailure(
+              action: '删除备忘',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -158,11 +181,19 @@ class _MemoDetailPageState extends State<MemoDetailPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('外链已添加到备忘')));
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('添加附件失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingFailure(
+              action: '添加附件',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isAddingAsset = false);
     }
@@ -196,11 +227,19 @@ class _MemoDetailPageState extends State<MemoDetailPage> {
       final refs = await _repo.listAssets(memo.id);
       if (!mounted) return;
       setState(() => _assets = refs);
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('移除附件失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingFailure(
+              action: '移除附件',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

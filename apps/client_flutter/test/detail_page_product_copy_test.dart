@@ -73,7 +73,9 @@ void main() {
     expect(find.textContaining('附件引用需连接云端服务'), findsOneWidget);
   });
 
-  testWidgets('cloud memo external link validates the URL inline', (tester) async {
+  testWidgets('cloud memo external link validates the URL inline', (
+    tester,
+  ) async {
     final memo = Memo(
       id: 'memo-cloud-1',
       type: 'memo',
@@ -105,6 +107,41 @@ void main() {
     await tester.enterText(_textField('URL'), 'https://example.com/article');
     await tester.pump();
     expect(find.text('请输入链接地址'), findsNothing);
+  });
+
+  testWidgets('memo detail hides implementation errors from users', (
+    tester,
+  ) async {
+    final memo = Memo(
+      id: 'memo-cloud-error-1',
+      type: 'memo',
+      title: '会失败的备忘',
+      contentMarkdown: '正文',
+      tags: const [],
+      status: 'active',
+      createdAt: DateTime.utc(2026, 8, 15, 8),
+      updatedAt: DateTime.utc(2026, 8, 15, 8),
+    );
+    final cloudApi = _MemoDetailApiClient(memo, failUpdates: true);
+
+    await tester.pumpWidget(
+      _buildApp(
+        localCore: localCore,
+        api: cloudApi,
+        dataMode: LiflyDataMode.api,
+        child: MemoDetailPage(memoId: memo.id, initialMemo: memo),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('编辑备忘'));
+    await tester.pumpAndSettle();
+    await tester.enterText(_textField('标题'), '更新后的标题');
+    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('更新备忘失败，请稍后重试'), findsOneWidget);
+    expect(find.textContaining('PowerSync internal transport'), findsNothing);
   });
 
   testWidgets('task detail localizes status and priority', (tester) async {
@@ -222,9 +259,11 @@ Widget _buildApp({
 }
 
 class _MemoDetailApiClient extends ApiClient {
-  _MemoDetailApiClient(this.memo) : super(baseUrl: 'http://localhost/api/v1');
+  _MemoDetailApiClient(this.memo, {this.failUpdates = false})
+    : super(baseUrl: 'http://localhost/api/v1');
 
   final Memo memo;
+  final bool failUpdates;
 
   @override
   Future<Map<String, dynamic>> get(
@@ -245,5 +284,16 @@ class _MemoDetailApiClient extends ApiClient {
         'assets': const [],
       },
     };
+  }
+
+  @override
+  Future<Map<String, dynamic>> put(
+    String path, {
+    Map<String, dynamic>? data,
+  }) async {
+    if (failUpdates) {
+      throw StateError('PowerSync internal transport leaked');
+    }
+    return get(path);
   }
 }

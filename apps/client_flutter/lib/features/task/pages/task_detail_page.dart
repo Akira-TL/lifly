@@ -4,6 +4,7 @@ import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/repositories/task_repository.dart';
 import 'package:client_flutter/domain/entities/task.dart';
 import 'package:client_flutter/features/task/widgets/task_date_time_field.dart';
+import 'package:client_flutter/shared/errors/user_facing_error.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -47,9 +48,15 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
       final task = await _repo.get(widget.taskId);
       if (!mounted) return;
       setState(() => _task = task);
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      setState(() => _error = '任务详情加载失败：$error');
+      setState(
+        () => _error = userFacingFailure(
+          action: '加载任务详情',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -77,12 +84,16 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
         'due_at': draft.dueAt?.toUtc().toIso8601String(),
         'remind_at': draft.remindAt?.toUtc().toIso8601String(),
       });
-      Object? reminderError;
+      String? reminderErrorMessage;
       if (reminderChanged) {
         try {
           await _repo.setManualReminder(task.id, draft.remindAt);
-        } catch (error) {
-          reminderError = error;
+        } catch (error, stackTrace) {
+          reminderErrorMessage = userFacingFailure(
+            action: '同步提醒',
+            error: error,
+            stackTrace: stackTrace,
+          );
         }
       }
       if (!mounted) return;
@@ -90,17 +101,25 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            reminderError == null
+            reminderErrorMessage == null
                 ? '任务已更新'
-                : '任务已更新，但提醒同步失败：$reminderError',
+                : '任务已更新，但$reminderErrorMessage',
           ),
         ),
       );
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('更新任务失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingFailure(
+              action: '更新任务',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -117,11 +136,19 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('任务已完成')));
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('完成任务失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingFailure(
+              action: '完成任务',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -154,11 +181,19 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
       await _repo.delete(task.id);
       if (!mounted) return;
       Navigator.pop(context, true);
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('删除任务失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingFailure(
+              action: '删除任务',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

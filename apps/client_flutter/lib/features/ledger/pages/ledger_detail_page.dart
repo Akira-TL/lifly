@@ -3,6 +3,7 @@ import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/repositories/ledger_repository.dart';
 import 'package:client_flutter/domain/entities/ledger_transaction.dart';
+import 'package:client_flutter/shared/errors/user_facing_error.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -50,9 +51,15 @@ class _LedgerDetailPageState extends State<LedgerDetailPage> {
       final transaction = await _repo.get(widget.transactionId);
       if (!mounted) return;
       setState(() => _transaction = transaction);
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      setState(() => _error = '账单详情加载失败：$error');
+      setState(
+        () => _error = userFacingFailure(
+          action: '加载账单详情',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -83,11 +90,19 @@ class _LedgerDetailPageState extends State<LedgerDetailPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('账单已更新')));
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('更新账单失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingFailure(
+              action: '更新账单',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -120,11 +135,19 @@ class _LedgerDetailPageState extends State<LedgerDetailPage> {
       await _repo.delete(transaction.id);
       if (!mounted) return;
       Navigator.pop(context, true);
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('删除账单失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingFailure(
+              action: '删除账单',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
