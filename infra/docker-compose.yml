@@ -43,6 +43,15 @@ services:
     volumes:
       - ./powersync:/config
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: lifly-ollama
+    profiles: ["ai"]
+    ports:
+      - "127.0.0.1:${LIFLY_COMMON_OLLAMA_PORT:-8205}:11434"
+    volumes:
+      - lifly_ollama:/root/.ollama
+
 volumes:
   # 沿用迁移前由 infra compose 创建的数据卷，避免端口规范化导致本地数据丢失。
   lifly_postgres:
@@ -51,3 +60,4 @@ volumes:
   lifly_minio:
     external: true
     name: infra_lifly_minio
+  lifly_ollama:

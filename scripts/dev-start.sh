@@ -13,15 +13,18 @@ source "$SCRIPT_DIR/lib/lifly-ports.sh"
 
 mkdir -p "$LOG_DIR"
 
+LIFLY_ENABLE_POWERSYNC="${LIFLY_ENABLE_POWERSYNC:-true}"
+LIFLY_ENABLE_OLLAMA="${LIFLY_ENABLE_OLLAMA:-true}"
+
 echo "=== 启动 Lifly Dev ==="
-echo "[1/3] 启动共享基础设施 (PostgreSQL/Redis/MinIO)..."
+echo "[1/4] 启动共享基础设施 (PostgreSQL/Redis/MinIO)..."
 docker compose -f "$PROJECT_ROOT/infra/docker-compose.yml" up -d postgres redis minio
 
 echo "  PostgreSQL: 127.0.0.1:$LIFLY_COMMON_POSTGRES_PORT"
 echo "  Redis:      127.0.0.1:$LIFLY_COMMON_REDIS_PORT"
 echo "  MinIO API:  http://127.0.0.1:$LIFLY_COMMON_MINIO_API_PORT"
 echo "  MinIO UI:   http://127.0.0.1:$LIFLY_COMMON_MINIO_CONSOLE_PORT"
-if [[ "${LIFLY_ENABLE_POWERSYNC:-false}" == "true" ]]; then
+if [[ "$LIFLY_ENABLE_POWERSYNC" == "true" ]]; then
   echo "  PowerSync:  启动共享实例 http://127.0.0.1:$LIFLY_COMMON_POWERSYNC_PORT"
   docker compose --profile powersync -f "$PROJECT_ROOT/infra/docker-compose.yml" up -d powersync
   for _ in $(seq 1 30); do
@@ -43,10 +46,29 @@ if [[ "${LIFLY_ENABLE_POWERSYNC:-false}" == "true" ]]; then
     exit 1
   fi
 else
-  echo "  PowerSync:  未启用（共享端口保留为 $LIFLY_COMMON_POWERSYNC_PORT）"
+  echo "  PowerSync:  已显式禁用（共享端口保留为 $LIFLY_COMMON_POWERSYNC_PORT）"
 fi
 
-echo "[2/3] 启动 FastAPI Dev (port $LIFLY_API_PORT)..."
+echo "[2/4] 启动 Ollama runtime..."
+if [[ "$LIFLY_ENABLE_OLLAMA" == "true" ]]; then
+  docker compose --profile ai -f "$PROJECT_ROOT/infra/docker-compose.yml" up -d ollama
+  for _ in $(seq 1 60); do
+    if curl -fsS --max-time 1 "http://127.0.0.1:$LIFLY_COMMON_OLLAMA_PORT/api/tags" >/dev/null 2>&1; then
+      echo "  Ollama:     已就绪 http://127.0.0.1:$LIFLY_COMMON_OLLAMA_PORT"
+      break
+    fi
+    sleep 1
+  done
+  if ! curl -fsS --max-time 1 "http://127.0.0.1:$LIFLY_COMMON_OLLAMA_PORT/api/tags" >/dev/null 2>&1; then
+    echo "Ollama 在 60 秒内未就绪" >&2
+    docker compose --profile ai -f "$PROJECT_ROOT/infra/docker-compose.yml" logs --tail 80 ollama >&2 || true
+    exit 1
+  fi
+else
+  echo "  Ollama:     已显式禁用（共享端口保留为 $LIFLY_COMMON_OLLAMA_PORT）"
+fi
+
+echo "[3/4] 启动 FastAPI Dev (port $LIFLY_API_PORT)..."
 if [[ -f "$API_PID_FILE" ]]; then
   previous_pid="$(cat "$API_PID_FILE")"
   previous_command="$(ps -p "$previous_pid" -o args= 2>/dev/null || true)"
@@ -72,6 +94,9 @@ if [[ ! -f "$API_PID_FILE" ]]; then
     REDIS_URL="redis://127.0.0.1:$LIFLY_COMMON_REDIS_PORT/0" \
     MINIO_ENDPOINT="http://127.0.0.1:$LIFLY_COMMON_MINIO_API_PORT" \
     POWERSYNC_URL="http://127.0.0.1:$LIFLY_COMMON_POWERSYNC_PORT" \
+    LIFLY_CLOUD_AI_PROVIDER="${LIFLY_CLOUD_AI_PROVIDER:-ollama}" \
+    LIFLY_CLOUD_AI_ENDPOINT="${LIFLY_CLOUD_AI_ENDPOINT:-http://127.0.0.1:$LIFLY_COMMON_OLLAMA_PORT}" \
+    LIFLY_CLOUD_AI_MODEL="${LIFLY_CLOUD_AI_MODEL:-}" \
     uv run fastapi dev app/main.py --port "$LIFLY_API_PORT" --host 127.0.0.1 \
     >"$API_LOG_FILE" 2>&1 < /dev/null &
   API_PID=$!
@@ -79,7 +104,7 @@ if [[ ! -f "$API_PID_FILE" ]]; then
   echo "  FastAPI PID: $API_PID"
 fi
 
-echo "[3/3] 等待 API 就绪..."
+echo "[4/4] 等待 API 就绪..."
 for _ in $(seq 1 60); do
   if curl -fsS --max-time 1 "http://127.0.0.1:$LIFLY_API_PORT/api/v1/health" >/dev/null 2>&1; then
     echo "=== Lifly Dev 已启动 ==="

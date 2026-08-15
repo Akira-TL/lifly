@@ -15,7 +15,7 @@ class AppConfig {
 
   static const String appVersion = String.fromEnvironment(
     'LIFLY_APP_VERSION',
-    defaultValue: '0.8.1',
+    defaultValue: '0.9.0',
   );
 
   static const bool visualFixtures = bool.fromEnvironment(

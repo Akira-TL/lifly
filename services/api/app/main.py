@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Lifly API",
-    version="0.1.0",
+    version="0.9.0",
     docs_url="/docs",
     lifespan=lifespan,
 )

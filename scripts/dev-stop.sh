@@ -33,6 +33,6 @@ else
 fi
 
 echo "[2/2] 停止共享 Docker 基础设施..."
-docker compose --profile powersync -f "$PROJECT_ROOT/infra/docker-compose.yml" down
+docker compose --profile powersync --profile ai -f "$PROJECT_ROOT/infra/docker-compose.yml" down
 
 echo "=== Lifly Dev 已停止 ==="
