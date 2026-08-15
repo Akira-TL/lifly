@@ -14,6 +14,7 @@ import 'package:client_flutter/features/home/widgets/home_task_focus_visuals.dar
 import 'package:client_flutter/features/search/pages/search_page.dart';
 import 'package:client_flutter/features/settings/settings_page.dart';
 import 'package:client_flutter/features/task/pages/task_list_page.dart';
+import 'package:client_flutter/shared/errors/user_facing_error.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -55,9 +56,15 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
       setState(() => _overview = overview);
       _scheduleUrgencyRefresh(overview);
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      setState(() => _error = '首页概览加载失败：$error');
+      setState(
+        () => _error = userFacingFailure(
+          action: '加载首页概览',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -110,11 +117,19 @@ class _HomePageState extends State<HomePage> {
           dataMode: context.read<LiflyDataMode>(),
         ).complete(item.entityId);
       }
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('完成任务失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingFailure(
+              action: '完成任务',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          ),
+        ),
+      );
       return;
     }
 

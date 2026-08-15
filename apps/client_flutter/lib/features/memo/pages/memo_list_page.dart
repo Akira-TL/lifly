@@ -4,6 +4,7 @@ import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/repositories/memo_repository.dart';
 import 'package:client_flutter/domain/entities/memo.dart';
 import 'package:client_flutter/features/memo/pages/memo_detail_page.dart';
+import 'package:client_flutter/shared/errors/user_facing_error.dart';
 import 'package:client_flutter/shared/widgets/adaptive_action_fab.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
 import 'package:client_flutter/shared/widgets/dense_list_row.dart';
@@ -91,9 +92,15 @@ class _MemoListPageState extends State<MemoListPage> {
           ..addAll(page.items);
         _total = page.total;
       });
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      setState(() => _error = '备忘录加载失败：$error');
+      setState(
+        () => _error = userFacingFailure(
+          action: '加载备忘',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -115,11 +122,19 @@ class _MemoListPageState extends State<MemoListPage> {
         _items.addAll(page.items);
         _total = page.total;
       });
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('加载更多备忘失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingFailure(
+              action: '加载更多备忘',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isLoadingMore = false);
     }
@@ -142,11 +157,19 @@ class _MemoListPageState extends State<MemoListPage> {
         'source': 'flutter',
       });
       await _loadFirstPage();
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('创建备忘失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingFailure(
+              action: '创建备忘',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isCreating = false);
     }
@@ -174,11 +197,19 @@ class _MemoListPageState extends State<MemoListPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('备忘已恢复')));
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('恢复备忘失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingFailure(
+              action: '恢复备忘',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          ),
+        ),
+      );
     }
   }
 
@@ -207,98 +238,101 @@ class _MemoListPageState extends State<MemoListPage> {
         if (!didPop && _isSearching) _closeSearch();
       },
       child: Scaffold(
-      appBar: AppBar(
-        title: _isSearching
-            ? TextField(
-                key: const Key('memo_inline_search'),
-                controller: _searchController,
-                autofocus: true,
-                textInputAction: TextInputAction.search,
-                decoration: const InputDecoration(
-                  hintText: '搜索备忘',
-                  border: InputBorder.none,
-                  isDense: true,
-                ),
-                onSubmitted: (_) => _loadFirstPage(),
-              )
-            : const Text('备忘录'),
-        actions: [
-          if (_isSearching) ...[
-            IconButton(
-              tooltip: '执行搜索',
-              onPressed: _loadFirstPage,
-              icon: const Icon(Icons.search),
+        appBar: AppBar(
+          title: _isSearching
+              ? TextField(
+                  key: const Key('memo_inline_search'),
+                  controller: _searchController,
+                  autofocus: true,
+                  textInputAction: TextInputAction.search,
+                  decoration: const InputDecoration(
+                    hintText: '搜索备忘',
+                    border: InputBorder.none,
+                    isDense: true,
+                  ),
+                  onSubmitted: (_) => _loadFirstPage(),
+                )
+              : const Text('备忘录'),
+          actions: [
+            if (_isSearching) ...[
+              IconButton(
+                tooltip: '执行搜索',
+                onPressed: _loadFirstPage,
+                icon: const Icon(Icons.search),
+              ),
+              IconButton(
+                tooltip: '退出搜索',
+                onPressed: _closeSearch,
+                icon: const Icon(Icons.close),
+              ),
+            ] else
+              IconButton(
+                tooltip: '搜索备忘',
+                onPressed: _openSearch,
+                icon: const Icon(Icons.search),
+              ),
+          ],
+        ),
+        body: Column(
+          children: [
+            _MemoFilterBar(
+              selectedType: _selectedType,
+              onTypeChanged: _setType,
             ),
-            IconButton(
-              tooltip: '退出搜索',
-              onPressed: _closeSearch,
-              icon: const Icon(Icons.close),
-            ),
-          ] else
-            IconButton(
-              tooltip: '搜索备忘',
-              onPressed: _openSearch,
-              icon: const Icon(Icons.search),
-            ),
-        ],
-      ),
-      body: Column(
-        children: [
-          _MemoFilterBar(selectedType: _selectedType, onTypeChanged: _setType),
-          Expanded(
-            child: AsyncContentScaffold(
-              isLoading: _isLoading,
-              error: _error,
-              isEmpty: _items.isEmpty,
-              onRefresh: _loadFirstPage,
-              emptyIcon: Icons.note_outlined,
-              emptyTitle: '还没有备忘录',
-              emptySubtitle: '点击右下角新建，把想法先记下来。',
-              child: ListView.separated(
-                controller: _scrollController,
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 6, 16, 96),
-                itemCount: _items.length + 1,
-                separatorBuilder: (context, index) => Divider(
-                  height: 1,
-                  color: Theme.of(context).colorScheme.outlineVariant,
-                ),
-                itemBuilder: (context, index) {
-                  if (index == _items.length) {
-                    return PaginationFooter(
-                      total: _total,
-                      current: _items.length,
-                      hasMore: _hasMore,
-                      isLoadingMore: _isLoadingMore,
-                      onLoadMore: _loadMore,
-                    );
-                  }
-                  return _MemoTile(
-                    memo: _items[index],
-                    onTap: () async {
-                      final memo = _items[index];
-                      final deleted = await Navigator.push<bool>(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => MemoDetailPage(
-                            memoId: memo.id,
-                            initialMemo: memo,
-                          ),
-                        ),
+            Expanded(
+              child: AsyncContentScaffold(
+                isLoading: _isLoading,
+                error: _error,
+                isEmpty: _items.isEmpty,
+                onRefresh: _loadFirstPage,
+                emptyIcon: Icons.note_outlined,
+                emptyTitle: '还没有备忘录',
+                emptySubtitle: '点击右下角新建，把想法先记下来。',
+                child: ListView.separated(
+                  controller: _scrollController,
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 96),
+                  itemCount: _items.length + 1,
+                  separatorBuilder: (context, index) => Divider(
+                    height: 1,
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                  itemBuilder: (context, index) {
+                    if (index == _items.length) {
+                      return PaginationFooter(
+                        total: _total,
+                        current: _items.length,
+                        hasMore: _hasMore,
+                        isLoadingMore: _isLoadingMore,
+                        onLoadMore: _loadMore,
                       );
-                      if (!context.mounted) return;
-                      await _loadFirstPage();
-                      if (deleted == true && context.mounted) {
-                        _showDeleteUndo(memo.id);
-                      }
-                    },
-                  );
-                },
+                    }
+                    return _MemoTile(
+                      memo: _items[index],
+                      onTap: () async {
+                        final memo = _items[index];
+                        final deleted = await Navigator.push<bool>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => MemoDetailPage(
+                              memoId: memo.id,
+                              initialMemo: memo,
+                            ),
+                          ),
+                        );
+                        if (!context.mounted) return;
+                        await _loadFirstPage();
+                        if (deleted == true && context.mounted) {
+                          _showDeleteUndo(memo.id);
+                        }
+                      },
+                    );
+                  },
+                ),
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
         floatingActionButton: AdaptiveActionFab(
           heroTag: 'memo-create-fab',
           tooltip: '新建备忘',
@@ -487,11 +521,7 @@ class _MemoEditorDialogState extends State<_MemoEditorDialog> {
                 .toList();
             Navigator.pop(
               context,
-              _MemoDraft(
-                title: title,
-                content: content,
-                tags: tags,
-              ),
+              _MemoDraft(title: title, content: content, tags: tags),
             );
           },
           child: const Text('保存'),

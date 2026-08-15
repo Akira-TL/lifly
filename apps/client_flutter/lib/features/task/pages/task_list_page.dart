@@ -5,6 +5,7 @@ import 'package:client_flutter/data/repositories/task_repository.dart';
 import 'package:client_flutter/domain/entities/task.dart';
 import 'package:client_flutter/features/task/pages/task_detail_page.dart';
 import 'package:client_flutter/features/task/widgets/task_date_time_field.dart';
+import 'package:client_flutter/shared/errors/user_facing_error.dart';
 import 'package:client_flutter/shared/widgets/adaptive_action_fab.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
 import 'package:client_flutter/shared/widgets/dense_list_row.dart';
@@ -88,9 +89,15 @@ class _TaskListPageState extends State<TaskListPage> {
           ..addAll(page.items);
         _total = page.total;
       });
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      setState(() => _error = '任务加载失败：$error');
+      setState(
+        () => _error = userFacingFailure(
+          action: '加载任务',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -111,11 +118,19 @@ class _TaskListPageState extends State<TaskListPage> {
         _items.addAll(page.items);
         _total = page.total;
       });
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('加载更多任务失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingFailure(
+              action: '加载更多任务',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isLoadingMore = false);
     }
@@ -138,24 +153,36 @@ class _TaskListPageState extends State<TaskListPage> {
         'remind_at': draft.remindAt?.toUtc().toIso8601String(),
         'source': 'flutter',
       });
-      Object? reminderError;
+      String? reminderErrorMessage;
       if (draft.remindAt != null) {
         try {
           await _repo.setManualReminder(created.id, draft.remindAt);
-        } catch (error) {
-          reminderError = error;
+        } catch (error, stackTrace) {
+          reminderErrorMessage = userFacingFailure(
+            action: '设置提醒',
+            error: error,
+            stackTrace: stackTrace,
+          );
         }
       }
       await _loadFirstPage();
-      if (!mounted || reminderError == null) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('任务已创建，但提醒设置失败：$reminderError')),
-      );
-    } catch (error) {
-      if (!mounted) return;
+      if (!mounted || reminderErrorMessage == null) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('创建任务失败：$error')));
+      ).showSnackBar(SnackBar(content: Text('任务已创建，但$reminderErrorMessage')));
+    } catch (error, stackTrace) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingFailure(
+              action: '创建任务',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isCreating = false);
     }
@@ -166,11 +193,19 @@ class _TaskListPageState extends State<TaskListPage> {
     try {
       await _repo.complete(task.id);
       await _loadFirstPage();
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('完成任务失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingFailure(
+              action: '完成任务',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          ),
+        ),
+      );
     }
   }
 
@@ -196,11 +231,19 @@ class _TaskListPageState extends State<TaskListPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('任务已恢复')));
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('恢复任务失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingFailure(
+              action: '恢复任务',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          ),
+        ),
+      );
     }
   }
 

@@ -8,7 +8,7 @@ String userFacingFailure({
   if (kDebugMode) {
     debugPrint('[LIFLY_UI][$action] $error');
     if (stackTrace != null) {
-      debugPrintStack(stackTrace: stackTrace);
+      debugPrintStack(stackTrace: stackTrace, maxFrames: 12);
     }
   }
   return '$action失败，请稍后重试';

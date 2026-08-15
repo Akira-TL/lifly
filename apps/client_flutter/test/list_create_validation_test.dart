@@ -10,6 +10,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 void main() {
+  testWidgets('memo list hides implementation errors from users', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildApp(
+        const MemoListPage(),
+        api: _FailingListApiClient(),
+        dataMode: LiflyDataMode.api,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('加载备忘失败，请稍后重试'), findsOneWidget);
+    expect(find.textContaining('Dio internal request leaked'), findsNothing);
+  });
+
   testWidgets(
     'memo create explains invalid input and accepts title-only memo',
     (tester) async {
@@ -72,14 +88,18 @@ void main() {
   });
 }
 
-Widget _buildApp(Widget child) {
+Widget _buildApp(
+  Widget child, {
+  ApiClient? api,
+  LiflyDataMode dataMode = LiflyDataMode.local,
+}) {
   return MultiProvider(
     providers: [
       Provider<ApiClient>.value(
-        value: ApiClient(baseUrl: 'http://localhost/api/v1'),
+        value: api ?? ApiClient(baseUrl: 'http://localhost/api/v1'),
       ),
       Provider<LocalCoreBridge>.value(value: FakeLocalCoreBridge()),
-      Provider<LiflyDataMode>.value(value: LiflyDataMode.local),
+      Provider<LiflyDataMode>.value(value: dataMode),
     ],
     child: MaterialApp(home: child),
   );
@@ -89,4 +109,16 @@ Finder _textField(String label) {
   return find.byWidgetPredicate(
     (widget) => widget is TextField && widget.decoration?.labelText == label,
   );
+}
+
+class _FailingListApiClient extends ApiClient {
+  _FailingListApiClient() : super(baseUrl: 'http://localhost/api/v1');
+
+  @override
+  Future<Map<String, dynamic>> get(
+    String path, {
+    Map<String, dynamic>? params,
+  }) async {
+    throw StateError('Dio internal request leaked');
+  }
 }
