@@ -1,13 +1,25 @@
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/domain/entities/asset.dart';
+import 'package:client_flutter/features/asset/data/asset_e2ee_sync_adapter.dart';
 import 'package:dio/dio.dart';
+import 'package:uuid/uuid.dart';
 
 class AssetRepository {
   final ApiClient api;
   final Dio _storageClient;
+  final AssetE2eeCoordinator? e2ee;
+  final DateTime Function() _now;
+  final Uuid _uuid;
 
-  AssetRepository(this.api, {Dio? storageClient})
-    : _storageClient = storageClient ?? Dio();
+  AssetRepository(
+    this.api, {
+    Dio? storageClient,
+    this.e2ee,
+    DateTime Function()? now,
+    Uuid? uuid,
+  }) : _storageClient = storageClient ?? Dio(),
+       _now = now ?? DateTime.now,
+       _uuid = uuid ?? const Uuid();
 
   Future<List<Asset>> list({
     int limit = 20,
@@ -15,33 +27,41 @@ class AssetRepository {
     String? kind,
     String? assetType,
   }) async {
+    final coordinator = e2ee;
+    if (coordinator != null) {
+      return coordinator.listLocal(
+        limit: limit,
+        offset: offset,
+        kind: kind,
+        assetType: assetType,
+      );
+    }
     final params = <String, dynamic>{'limit': limit, 'offset': offset};
     if (kind != null) params['kind'] = kind;
     if (assetType != null) params['asset_type'] = assetType;
-
     final res = await api.get('/assets', params: params);
     final items = res['data']['items'] as List;
-    return items.map((e) => Asset.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((item) => Asset.fromJson(item as Map<String, dynamic>))
+        .toList(growable: false);
   }
 
   Future<Asset> get(String id) async {
+    final coordinator = e2ee;
+    if (coordinator != null) {
+      final local = await coordinator.getLocal(id);
+      if (local != null) return local;
+    }
     final res = await api.get('/assets/$id');
     return Asset.fromJson(res['data'] as Map<String, dynamic>);
   }
 
-  Future<Map<String, dynamic>> createUploadUrl({
-    required String filename,
-    String? mimeType,
-    int? sizeBytes,
-    String assetType = 'file',
-  }) async {
-    final res = await api.post('/assets/create-upload-url', data: {
-      'filename': filename,
-      'mime_type': mimeType,
-      'size_bytes': sizeBytes,
-      'asset_type': assetType,
-    });
-    return res['data'] as Map<String, dynamic>;
+  Future<Map<String, dynamic>> createUploadUrl() async {
+    final res = await api.post(
+      '/assets/e2ee/create-upload-url',
+      data: const <String, dynamic>{},
+    );
+    return Map<String, dynamic>.from(res['data'] as Map);
   }
 
   Future<Asset> uploadBytes({
@@ -51,36 +71,49 @@ class AssetRepository {
     String assetType = 'file',
   }) async {
     if (bytes.isEmpty) throw ArgumentError('Upload file must not be empty');
-    final intent = await createUploadUrl(
-      filename: filename,
-      mimeType: mimeType,
-      sizeBytes: bytes.length,
-      assetType: assetType,
-    );
+    final coordinator = _requireE2ee();
+    final intent = await createUploadUrl();
     final assetId = intent['asset_id'] as String?;
     final uploadUrl = intent['upload_url'] as String?;
-    if (assetId == null || assetId.isEmpty || uploadUrl == null || uploadUrl.isEmpty) {
-      throw StateError('Asset upload intent is incomplete');
+    final storageKey = intent['storage_key'] as String?;
+    if (assetId == null ||
+        assetId.isEmpty ||
+        uploadUrl == null ||
+        uploadUrl.isEmpty ||
+        storageKey == null ||
+        storageKey.isEmpty) {
+      throw StateError('Encrypted asset upload intent is incomplete');
     }
-    final uploadIntent = intent['upload_intent'] as Map?;
-    final rawHeaders = uploadIntent?['headers'] as Map?;
-    final headers = <String, dynamic>{
-      for (final entry in rawHeaders?.entries ?? const <MapEntry<dynamic, dynamic>>[])
-        entry.key.toString(): entry.value,
-    };
-    if (mimeType != null && mimeType.isNotEmpty) {
-      headers.putIfAbsent('content-type', () => mimeType);
-    }
+
+    final prepared = await coordinator.encryptUpload(
+      assetId: assetId,
+      plaintext: bytes,
+    );
     await _storageClient.put<void>(
       uploadUrl,
-      data: bytes,
+      data: prepared.encrypted.ciphertext,
       options: Options(
-        headers: headers,
-        contentType: mimeType ?? 'application/octet-stream',
+        headers: const {'content-type': 'application/octet-stream'},
+        contentType: 'application/octet-stream',
         responseType: ResponseType.plain,
       ),
     );
-    return uploadComplete(assetId, sizeBytes: bytes.length);
+    await api.post(
+      '/assets/e2ee/$assetId/upload-complete',
+      data: {
+        'ciphertext_sha256': prepared.encrypted.ciphertextSha256,
+        'ciphertext_size_bytes': prepared.encrypted.ciphertextSizeBytes,
+      },
+    );
+    return coordinator.commitInternalAsset(
+      assetId: assetId,
+      filename: filename,
+      assetType: assetType,
+      mimeType: mimeType,
+      storageKey: storageKey,
+      prepared: prepared,
+      now: _now().toUtc(),
+    );
   }
 
   Future<Asset> registerExternalUrl({
@@ -90,36 +123,70 @@ class AssetRepository {
     String? title,
     String? previewUrl,
   }) async {
-    final res = await api.post('/assets/register-external-url', data: {
-      'external_url': externalUrl,
-      'external_provider': externalProvider,
-      'asset_type': assetType,
-      'title': title,
-      'preview_url': previewUrl,
-    });
-    final data = res['data'] as Map<String, dynamic>;
-    return Asset.fromJson((data['asset'] ?? data) as Map<String, dynamic>);
-  }
-
-  Future<Asset> uploadComplete(String assetId, {String? sha256, int? sizeBytes}) async {
-    final res = await api.post('/assets/$assetId/upload-complete', data: {
-      'sha256': sha256,
-      'size_bytes': sizeBytes,
-    }..removeWhere((_, v) => v == null));
-    return Asset.fromJson(res['data'] as Map<String, dynamic>);
+    final coordinator = _requireE2ee();
+    return coordinator.registerExternalAsset(
+      assetId: _uuid.v4(),
+      externalUrl: externalUrl,
+      externalProvider: externalProvider,
+      assetType: assetType,
+      title: title,
+      now: _now().toUtc(),
+    );
   }
 
   Future<Map<String, dynamic>> getDownloadUrl(String assetId) async {
     final res = await api.get('/assets/$assetId/download-url');
-    return res['data'] as Map<String, dynamic>;
+    return Map<String, dynamic>.from(res['data'] as Map);
+  }
+
+  Future<List<int>> downloadDecryptedBytes(String assetId) async {
+    final coordinator = _requireE2ee();
+    final intent = await getDownloadUrl(assetId);
+    final url = intent['url'] as String?;
+    if (url == null || url.isEmpty || intent['encrypted'] != true) {
+      throw StateError('Encrypted asset download intent is incomplete');
+    }
+    final response = await _storageClient.get<List<int>>(
+      url,
+      options: Options(responseType: ResponseType.bytes),
+    );
+    final ciphertext = response.data ?? const <int>[];
+    return coordinator.decryptDownloadedAsset(
+      assetId: assetId,
+      ciphertext: ciphertext,
+    );
   }
 
   Future<Asset> update(String id, Map<String, dynamic> data) async {
-    final res = await api.put('/assets/$id', data: data);
-    return Asset.fromJson(res['data'] as Map<String, dynamic>);
+    throw StateError(
+      'Asset metadata updates require the E2EE metadata editor; plaintext API updates are disabled',
+    );
   }
 
   Future<void> delete(String id) async {
-    await api.delete('/assets/$id');
+    final coordinator = _requireE2ee();
+    final local = await coordinator.getLocal(id);
+    await coordinator.trashAsset(id, now: _now().toUtc());
+    if (local?.isInternal ?? false) {
+      await api.delete('/assets/$id');
+    }
+  }
+
+  Future<void> purge(String id) async {
+    final coordinator = _requireE2ee();
+    final local = await coordinator.getLocal(id);
+    if (local?.isInternal ?? false) {
+      await api.delete('/assets/e2ee/$id/purge');
+    }
+  }
+
+  AssetE2eeCoordinator _requireE2ee() {
+    final coordinator = e2ee;
+    if (coordinator == null) {
+      throw StateError(
+        'Asset E2EE runtime is not configured; plaintext attachment fallback is disabled',
+      );
+    }
+    return coordinator;
   }
 }
