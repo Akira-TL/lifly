@@ -56,6 +56,34 @@ describe("LocalMcpServer", () => {
     }
   });
 
+  it("bootstraps desktop E2EE runtime over child stdin before tool calls", async () => {
+    const fixturePath = fileURLToPath(new URL("./fixtures/desktop-core-host.mjs", import.meta.url));
+    const server = new LocalMcpServer(
+      createDesktopLocalMcpRuntime({
+        bridgePath: execPath,
+        bridgeArgs: [fixturePath],
+        runtimeBootstrap: {
+          accountId: "account-runtime-1",
+          keyVersion: 3,
+          accountDataKeyBytes: new Uint8Array(32).fill(7),
+        },
+      }),
+    );
+
+    try {
+      const health = await server.handle({ method: "health" });
+      expect(health.ok).toBe(true);
+      if (health.ok) {
+        expect(health.result).toMatchObject({
+          status: "ok",
+          detail: "stdio fixture host account=account-runtime-1 key_version=3",
+        });
+      }
+    } finally {
+      await server.close();
+    }
+  });
+
   it("reports desktop bridge health by default", async () => {
     const server = new LocalMcpServer();
     const response = await server.handle({ method: "health" });

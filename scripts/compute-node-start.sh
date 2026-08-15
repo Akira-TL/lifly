@@ -9,7 +9,7 @@ LOG_FILE="$LOG_DIR/compute-node-worker.log"
 if [[ -t 0 ]]; then
   cat >&2 <<'EOF'
 Compute Node worker 需要从 stdin 接收一次性 JSON 凭据，不会从环境变量或文件读取设备私钥/access token。
-字段：device_id, private_key_base64, access_token，可选 api_base_url。
+字段：account_id, account_data_key_base64, 可选 account_data_key_version, device_id, private_key_base64, access_token, 可选 api_base_url。
 EOF
   exit 2
 fi
@@ -27,4 +27,5 @@ cd "$PROJECT_ROOT"
 pnpm --dir services/local-mcp build
 
 echo "启动 Lifly encrypted Compute Node worker；运行日志：$LOG_FILE"
-pnpm --dir services/local-mcp compute-node-worker 2>&1 | tee -a "$LOG_FILE"
+exec > >(tee -a "$LOG_FILE") 2>&1
+exec node "$PROJECT_ROOT/services/local-mcp/dist/services/local-mcp/src/relay-worker-main.js"

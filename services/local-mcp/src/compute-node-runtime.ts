@@ -8,6 +8,9 @@ import { EncryptedAiRelayWorker } from "./encrypted-relay-worker.js";
 import { createDesktopLocalMcpRuntime, type LocalMcpRuntime } from "./tool-handlers.js";
 
 export interface ComputeNodeRelayRuntimeOptions {
+  accountId: string;
+  accountDataKeyBytes: Uint8Array;
+  accountDataKeyVersion?: number;
   deviceId: string;
   deviceKey: Uint8Array;
   apiBaseUrl: string;
@@ -36,6 +39,11 @@ export function createComputeNodeRelayRuntime(
     bridgeArgs: options.bridgeArgs,
     transport: options.transport,
     requestTimeoutMs: options.requestTimeoutMs,
+    runtimeBootstrap: {
+      accountId: options.accountId,
+      keyVersion: options.accountDataKeyVersion ?? 1,
+      accountDataKeyBytes: options.accountDataKeyBytes,
+    },
   });
   const relay = new HttpAiRelayClient({
     apiBaseUrl: options.apiBaseUrl,

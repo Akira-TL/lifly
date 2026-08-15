@@ -7,10 +7,17 @@ import type {
   DesktopLocalCoreTransport,
 } from "../../../packages/local-core/src/index.js";
 
+export interface DesktopLocalCoreRuntimeBootstrap {
+  accountId: string;
+  keyVersion: number;
+  accountDataKeyBytes: Uint8Array;
+}
+
 export interface DesktopLocalCoreProcessTransportOptions {
   bridgePath: string;
   bridgeArgs?: string[];
   requestTimeoutMs?: number;
+  runtimeBootstrap?: DesktopLocalCoreRuntimeBootstrap;
 }
 
 interface PendingRequest {
@@ -31,6 +38,7 @@ export class DesktopLocalCoreProcessTransport implements DesktopLocalCoreTranspo
   private readonly bridgePath: string;
   private readonly bridgeArgs: string[];
   private readonly requestTimeoutMs: number;
+  private readonly runtimeBootstrap: DesktopLocalCoreRuntimeBootstrap | null;
   private child: ReturnType<typeof spawn> | null = null;
   private stdoutBuffer = "";
   private nextRequestId = 0;
@@ -40,6 +48,13 @@ export class DesktopLocalCoreProcessTransport implements DesktopLocalCoreTranspo
     this.bridgePath = options.bridgePath;
     this.bridgeArgs = options.bridgeArgs ?? [];
     this.requestTimeoutMs = options.requestTimeoutMs ?? 5_000;
+    this.runtimeBootstrap = options.runtimeBootstrap
+      ? {
+        accountId: options.runtimeBootstrap.accountId,
+        keyVersion: options.runtimeBootstrap.keyVersion,
+        accountDataKeyBytes: new Uint8Array(options.runtimeBootstrap.accountDataKeyBytes),
+      }
+      : null;
   }
 
   async invoke<M extends DesktopLocalCoreMethod>(
@@ -75,6 +90,7 @@ export class DesktopLocalCoreProcessTransport implements DesktopLocalCoreTranspo
   }
 
   async close(): Promise<void> {
+    this.runtimeBootstrap?.accountDataKeyBytes.fill(0);
     const child = this.child;
     this.child = null;
     if (!child) return;
@@ -96,6 +112,18 @@ export class DesktopLocalCoreProcessTransport implements DesktopLocalCoreTranspo
     if (!child.stdin || !child.stdout) {
       child.kill();
       throw new Error("Desktop Local Core host must expose stdin/stdout pipes");
+    }
+
+    if (this.runtimeBootstrap) {
+      child.stdin.write(`${JSON.stringify({
+        id: 0,
+        method: "_runtime_init",
+        input: {
+          account_id: this.runtimeBootstrap.accountId,
+          key_version: this.runtimeBootstrap.keyVersion,
+          account_data_key_base64: encodeBase64(this.runtimeBootstrap.accountDataKeyBytes),
+        },
+      })}\n`);
     }
 
     child.stdout.on("data", (chunk) => this.consumeStdout(chunk.toString()));
@@ -177,4 +205,10 @@ export class DesktopLocalCoreProcessTransport implements DesktopLocalCoreTranspo
   private asError(error: unknown): Error {
     return error instanceof Error ? error : new Error(String(error));
   }
+}
+
+function encodeBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
 }

@@ -27,7 +27,10 @@ import {
   type LiflyDeviceCapabilityReport,
   type LiflyMcpToolName,
 } from "../../../packages/protocol/src/index.js";
-import { DesktopLocalCoreProcessTransport } from "./desktop-core-transport.js";
+import {
+  DesktopLocalCoreProcessTransport,
+  type DesktopLocalCoreRuntimeBootstrap,
+} from "./desktop-core-transport.js";
 import type { EncryptedAiJobEngine } from "./encrypted-job-engine.js";
 import type { LocalMcpToolDefinition } from "./types.js";
 
@@ -45,6 +48,7 @@ export interface DesktopLocalMcpRuntimeOptions {
   bridgeArgs?: string[];
   transport?: DesktopLocalCoreTransport | null;
   requestTimeoutMs?: number;
+  runtimeBootstrap?: DesktopLocalCoreRuntimeBootstrap;
   jobs?: EncryptedAiJobEngine;
 }
 
@@ -56,6 +60,7 @@ export function createDesktopLocalMcpRuntime(options: DesktopLocalMcpRuntimeOpti
         bridgePath,
         bridgeArgs: options.bridgeArgs,
         requestTimeoutMs: options.requestTimeoutMs,
+        runtimeBootstrap: options.runtimeBootstrap,
       })
       : null);
   const core = new DesktopLocalCoreBridge({ bridgePath, transport });

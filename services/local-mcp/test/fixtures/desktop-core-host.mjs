@@ -2,6 +2,7 @@ import { createInterface } from "node:readline";
 
 const memos = [];
 let memoSeq = 0;
+let runtimeInit = null;
 
 const rl = createInterface({ input: process.stdin, terminal: false });
 
@@ -15,6 +16,22 @@ for await (const line of rl) {
 }
 
 async function handle(request) {
+  if (request.method === "_runtime_init") {
+    const key = Buffer.from(request.input.account_data_key_base64, "base64");
+    if (key.length !== 32) {
+      return {
+        ok: false,
+        error: { code: "INVALID_RUNTIME_KEY", message: "runtime key must be 32 bytes" },
+      };
+    }
+    runtimeInit = {
+      accountId: request.input.account_id,
+      keyVersion: request.input.key_version,
+    };
+    key.fill(0);
+    return { ok: true, result: { status: "initialized" } };
+  }
+
   if (request.method === "health") {
     return {
       ok: true,
@@ -23,7 +40,9 @@ async function handle(request) {
         mode: "desktop_bridge",
         version: "desktop-host.fixture",
         runtime: "desktop",
-        detail: "stdio fixture host",
+        detail: runtimeInit
+          ? `stdio fixture host account=${runtimeInit.accountId} key_version=${runtimeInit.keyVersion}`
+          : "stdio fixture host",
       },
     };
   }

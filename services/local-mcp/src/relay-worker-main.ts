@@ -4,6 +4,9 @@ import { createInterface } from "node:readline/promises";
 import { createComputeNodeRelayRuntime } from "./compute-node-runtime.js";
 
 interface BootstrapCredential {
+  account_id: string;
+  account_data_key_base64: string;
+  account_data_key_version?: number;
   device_id: string;
   private_key_base64: string;
   access_token: string;
@@ -17,12 +20,20 @@ async function main(): Promise<void> {
   }
 
   const credentials = await readBootstrapCredential();
+  const accountDataKey = decodeBase64(credentials.account_data_key_base64);
+  if (accountDataKey.length !== 32) {
+    accountDataKey.fill(0);
+    throw new Error("Compute Node Account Data Key must be 32 bytes");
+  }
   const privateKey = decodeBase64(credentials.private_key_base64);
   if (privateKey.length !== 32) {
     privateKey.fill(0);
     throw new Error("Compute Node X25519 private key must be 32 bytes");
   }
   const runtime = createComputeNodeRelayRuntime({
+    accountId: credentials.account_id,
+    accountDataKeyBytes: accountDataKey,
+    accountDataKeyVersion: credentials.account_data_key_version ?? 1,
     deviceId: credentials.device_id,
     deviceKey: privateKey,
     apiBaseUrl:
@@ -34,6 +45,7 @@ async function main(): Promise<void> {
     providerHelperPath: process.env.LIFLY_AI_PROVIDER_HELPER_PATH ?? null,
   });
   privateKey.fill(0);
+  accountDataKey.fill(0);
 
   stdout.write("Lifly encrypted Compute Node worker started\n");
   try {
@@ -41,7 +53,15 @@ async function main(): Promise<void> {
       const status = await runtime.worker.runOnce();
       if (status.status === "idle") {
         await delay(750);
+        continue;
       }
+      stdout.write(
+        `Lifly Compute Node job ${status.outcome.job_id}: ${status.outcome.status}`
+        + ` attempt=${status.outcome.attempt_count}`
+        + ` retryable=${String(status.outcome.retryable)}`
+        + ` failure_stage=${status.outcome.failure_stage ?? "none"}`
+        + ` error_class=${classifyOutcomeError(status.outcome.error)}\n`,
+      );
     }
   } finally {
     await runtime.localMcp.close?.();
@@ -58,6 +78,18 @@ async function readBootstrapCredential(): Promise<BootstrapCredential> {
         throw new Error("Compute Node bootstrap credential must be a JSON object");
       }
       const value = decoded as Record<string, unknown>;
+      const accountId = requiredString(value.account_id, "account_id");
+      const accountDataKey = requiredString(
+        value.account_data_key_base64,
+        "account_data_key_base64",
+      );
+      const accountDataKeyVersion = value.account_data_key_version;
+      if (
+        accountDataKeyVersion !== undefined
+        && (!Number.isInteger(accountDataKeyVersion) || Number(accountDataKeyVersion) < 1)
+      ) {
+        throw new Error("account_data_key_version must be a positive integer when provided");
+      }
       const deviceId = requiredString(value.device_id, "device_id");
       const privateKey = requiredString(
         value.private_key_base64,
@@ -69,6 +101,11 @@ async function readBootstrapCredential(): Promise<BootstrapCredential> {
         throw new Error("api_base_url must be a string when provided");
       }
       return {
+        account_id: accountId,
+        account_data_key_base64: accountDataKey,
+        ...(typeof accountDataKeyVersion === "number"
+          ? { account_data_key_version: accountDataKeyVersion }
+          : {}),
         device_id: deviceId,
         private_key_base64: privateKey,
         access_token: accessToken,
@@ -97,6 +134,32 @@ function decodeBase64(value: string): Uint8Array {
     result[index] = binary.charCodeAt(index);
   }
   return result;
+}
+
+function classifyOutcomeError(error: string | undefined): string {
+  if (!error) return "none";
+  const normalized = error.toLowerCase();
+  if (
+    normalized.includes("decrypt")
+    || normalized.includes("aes")
+    || normalized.includes("operationerror")
+    || normalized.includes("cipher")
+  ) {
+    return "crypto";
+  }
+  if (normalized.includes("public key") || normalized.includes("x25519")) {
+    return "public_key";
+  }
+  if (normalized.includes("provider") || normalized.includes("ollama")) {
+    return "provider";
+  }
+  if (normalized.includes("local core") || normalized.includes("desktop bridge")) {
+    return "local_core";
+  }
+  if (normalized.includes("relay") || normalized.includes("http")) {
+    return "relay";
+  }
+  return "unknown";
 }
 
 function delay(milliseconds: number): Promise<void> {
