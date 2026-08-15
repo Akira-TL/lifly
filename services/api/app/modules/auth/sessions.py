@@ -7,19 +7,41 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, Header, HTTPException
+from jose import jwt
 
 from app.core.config import settings
-from app.core.security import (
-    AuthenticatedSubject,
-    authenticated_subject_from_token,
-    create_access_token,
-)
+from app.core.security import AuthenticatedSubject, authenticated_subject_from_token
 
 _REFRESH_PREFIX = "lifly_refresh_"
 
 
 def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _create_session_access_token(
+    *,
+    account_id: str,
+    device_id: str | None,
+    session_id: str,
+    now: datetime,
+) -> tuple[str, datetime]:
+    """Mint a foundation-compatible access JWT with unique session identity."""
+
+    expires_at = now + timedelta(minutes=settings.jwt_expire_minutes)
+    subject = AuthenticatedSubject(account_id=account_id, device_id=device_id)
+    token = jwt.encode(
+        {
+            **subject.token_claims(),
+            "exp": expires_at,
+            "type": "access",
+            "sid": session_id,
+            "jti": str(uuid.uuid4()),
+        },
+        settings.jwt_secret,
+        algorithm=settings.jwt_algorithm,
+    )
+    return token, expires_at
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,10 +82,16 @@ class SessionRegistry:
 
     def issue(self, *, account_id: str, device_id: str | None = None) -> SessionTokens:
         now = datetime.now(timezone.utc)
-        access_token = create_access_token(account_id, device_id=device_id)
+        session_id = str(uuid.uuid4())
+        access_token, access_expires_at = _create_session_access_token(
+            account_id=account_id,
+            device_id=device_id,
+            session_id=session_id,
+            now=now,
+        )
         refresh_token = _REFRESH_PREFIX + secrets.token_urlsafe(48)
         record = _SessionRecord(
-            session_id=str(uuid.uuid4()),
+            session_id=session_id,
             account_id=account_id,
             device_id=device_id,
             refresh_hash=_token_hash(refresh_token),
@@ -80,7 +108,7 @@ class SessionRegistry:
             device_id=device_id,
             access_token=access_token,
             refresh_token=refresh_token,
-            access_expires_at=now + timedelta(minutes=settings.jwt_expire_minutes),
+            access_expires_at=access_expires_at,
             refresh_expires_at=record.refresh_expires_at,
         )
 
@@ -105,9 +133,11 @@ class SessionRegistry:
         record.refresh_hash = new_refresh_hash
         self._refresh_to_session[new_refresh_hash] = session_id
 
-        access_token = create_access_token(
-            record.account_id,
+        access_token, access_expires_at = _create_session_access_token(
+            account_id=record.account_id,
             device_id=record.device_id,
+            session_id=record.session_id,
+            now=now,
         )
         access_hash = _token_hash(access_token)
         record.access_hashes.add(access_hash)
@@ -117,7 +147,7 @@ class SessionRegistry:
             device_id=record.device_id,
             access_token=access_token,
             refresh_token=new_refresh,
-            access_expires_at=now + timedelta(minutes=settings.jwt_expire_minutes),
+            access_expires_at=access_expires_at,
             refresh_expires_at=record.refresh_expires_at,
         )
 
@@ -165,6 +195,8 @@ class SessionRegistry:
     def _revoke_record(self, record: _SessionRecord) -> None:
         record.revoked = True
         self._refresh_to_session.pop(record.refresh_hash, None)
+        for access_hash in record.access_hashes:
+            self._access_to_session.pop(access_hash, None)
 
     def _prune(self, now: datetime) -> None:
         expired = [

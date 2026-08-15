@@ -11,6 +11,7 @@ from app.modules.account.router import router as account_router
 from app.modules.auth.flows import AuthFlowStore, get_auth_flow_store
 from app.modules.auth.pake import PakeServerStart, get_pake_server_adapter
 from app.modules.auth.router import router as auth_router
+from app.core.security import decode_token
 from app.modules.auth.sessions import SessionRegistry, get_session_registry
 from app.modules.devices.contracts import DeviceCapabilityReport, DeviceTrustState
 from app.modules.devices.repository import DeviceNotFound, DeviceRecord, get_device_repository
@@ -346,3 +347,22 @@ def test_refresh_rotates_token_and_revoke_invalidates_account_profile() -> None:
         headers={"Authorization": f"Bearer {first_access}"},
     )
     assert denied_old_access.status_code == 401
+
+
+def test_parallel_sessions_get_unique_access_tokens_and_revoke_independently() -> None:
+    sessions = SessionRegistry()
+    first = sessions.issue(account_id="account-1", device_id="device-1")
+    second = sessions.issue(account_id="account-1", device_id="device-1")
+
+    assert first.access_token != second.access_token
+    assert sessions.is_access_active(first.access_token)
+    assert sessions.is_access_active(second.access_token)
+    first_payload = decode_token(first.access_token)
+    second_payload = decode_token(second.access_token)
+    assert first_payload is not None and second_payload is not None
+    assert first_payload["sid"] != second_payload["sid"]
+    assert first_payload["jti"] != second_payload["jti"]
+
+    assert sessions.revoke_access(first.access_token)
+    assert not sessions.is_access_active(first.access_token)
+    assert sessions.is_access_active(second.access_token)

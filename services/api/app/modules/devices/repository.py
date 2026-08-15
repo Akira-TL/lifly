@@ -136,7 +136,9 @@ class SqlAlchemyDeviceRepository:
         else:
             device.display_name = display_name
             device.platform = platform
-            device.public_key = public_key
+            if device.public_key != public_key:
+                device.public_key = public_key
+                device.key_version += 1
             device.trust_state = DeviceTrustState.TRUSTED.value
             device.capabilities = _encode_capability_report(capability_report)
             device.last_seen_at = now

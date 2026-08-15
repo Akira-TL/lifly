@@ -5,7 +5,9 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import pytest
 
+from app.db.models import Device
 from app.modules.auth.sessions import SessionRegistry, get_session_registry
 from app.modules.devices.contracts import (
     DeviceCapabilityReport,
@@ -14,9 +16,39 @@ from app.modules.devices.contracts import (
 from app.modules.devices.repository import (
     DeviceNotFound,
     DeviceRecord,
+    SqlAlchemyDeviceRepository,
     get_device_repository,
 )
 from app.modules.devices.router import router as device_router
+
+
+class _ScalarResult:
+    def __init__(self, item) -> None:
+        self.item = item
+
+    def scalar_one_or_none(self):
+        return self.item
+
+
+class _RepositorySession:
+    def __init__(self, device: Device) -> None:
+        self.device = device
+        self.commit_count = 0
+
+    async def execute(self, _query):
+        return _ScalarResult(self.device)
+
+    def add(self, _item) -> None:
+        pass
+
+    async def flush(self) -> None:
+        pass
+
+    async def commit(self) -> None:
+        self.commit_count += 1
+
+    async def refresh(self, _item) -> None:
+        pass
 
 
 class _FakeDeviceRepository:
@@ -237,3 +269,47 @@ def test_revoke_device_revokes_only_that_devices_sessions() -> None:
         headers={"Authorization": f"Bearer {phone_access}"},
     )
     assert phone_still_active.status_code == 200
+
+
+@pytest.mark.anyio
+async def test_trusted_reenrollment_increments_key_version_only_on_key_change() -> None:
+    now = datetime(2026, 8, 15, tzinfo=timezone.utc)
+    model = Device(
+        id="desktop-1",
+        account_id="account-1",
+        display_name="Desktop",
+        platform="linux",
+        public_key="old-public-key",
+        trust_state="trusted",
+        capabilities=[],
+        is_default_compute_node=False,
+        last_seen_at=now,
+        key_version=1,
+        protocol_version=1,
+    )
+    session = _RepositorySession(model)
+    repository = SqlAlchemyDeviceRepository(session)  # type: ignore[arg-type]
+
+    rotated = await repository.register_trusted(
+        account_id="account-1",
+        device_id="desktop-1",
+        display_name="Desktop",
+        platform="linux",
+        public_key="new-public-key",
+        capability_report=DeviceCapabilityReport(),
+        make_default_compute_node=False,
+    )
+    assert rotated.public_key == "new-public-key"
+    assert rotated.key_version == 2
+
+    unchanged = await repository.register_trusted(
+        account_id="account-1",
+        device_id="desktop-1",
+        display_name="Desktop",
+        platform="linux",
+        public_key="new-public-key",
+        capability_report=DeviceCapabilityReport(),
+        make_default_compute_node=False,
+    )
+    assert unchanged.key_version == 2
+    assert session.commit_count == 2
