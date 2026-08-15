@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.db.models import LedgerBudget, LedgerCategory, LedgerTransaction
+from app.modules.auth.sessions import get_active_account_id
 from app.modules.ledger.service import (
-    DEFAULT_LOCAL_USER_ID,
     create_ledger_transaction_record,
     ledger_budget_to_dict,
     ledger_budget_to_response,
@@ -82,7 +82,7 @@ def _ledger_insights_from_overview(overview: dict) -> list[dict]:
 async def build_ledger_overview(
     db: AsyncSession,
     period: str | None,
-    user_id: str = DEFAULT_LOCAL_USER_ID,
+    user_id: str,
 ) -> dict:
     period_key, start, end = _period_range(period)
     result = await db.execute(
@@ -123,11 +123,11 @@ async def build_ledger_overview(
     }
 
 
-async def _get_budget(db: AsyncSession, budget_id: str) -> LedgerBudget:
+async def _get_budget(db: AsyncSession, budget_id: str, user_id: str) -> LedgerBudget:
     budget = await db.scalar(
         select(LedgerBudget).where(
             LedgerBudget.id == budget_id,
-            LedgerBudget.user_id == DEFAULT_LOCAL_USER_ID,
+            LedgerBudget.user_id == user_id,
         )
     )
     if budget is None:
@@ -138,13 +138,14 @@ async def _get_budget(db: AsyncSession, budget_id: str) -> LedgerBudget:
 async def _validate_budget_category(
     db: AsyncSession,
     category_id: str | None,
+    user_id: str,
 ) -> LedgerCategory | None:
     if category_id is None:
         return None
     category = await db.scalar(
         select(LedgerCategory).where(
             LedgerCategory.id == category_id,
-            LedgerCategory.user_id == DEFAULT_LOCAL_USER_ID,
+            LedgerCategory.user_id == user_id,
             LedgerCategory.status == "active",
         )
     )
@@ -157,6 +158,7 @@ async def _validate_budget_category(
 
 async def _ensure_budget_identity_available(
     db: AsyncSession,
+    user_id: str,
     *,
     period_type: str,
     period_key: str,
@@ -164,7 +166,7 @@ async def _ensure_budget_identity_available(
     exclude_id: str | None = None,
 ) -> None:
     query = select(LedgerBudget).where(
-        LedgerBudget.user_id == DEFAULT_LOCAL_USER_ID,
+        LedgerBudget.user_id == user_id,
         LedgerBudget.status == "active",
         LedgerBudget.period_type == period_type,
         LedgerBudget.period_key == period_key,
@@ -183,13 +185,17 @@ async def _ensure_budget_identity_available(
         )
 
 
-async def _budget_response_data(db: AsyncSession, budget: LedgerBudget) -> dict:
+async def _budget_response_data(
+    db: AsyncSession,
+    budget: LedgerBudget,
+    user_id: str,
+) -> dict:
     category_name = None
     if budget.category_id is not None:
         category_name = await db.scalar(
             select(LedgerCategory.name).where(
                 LedgerCategory.id == budget.category_id,
-                LedgerCategory.user_id == DEFAULT_LOCAL_USER_ID,
+                LedgerCategory.user_id == user_id,
             )
         )
     return ledger_budget_to_response(
@@ -204,10 +210,11 @@ async def list_budgets(
     category_id: str | None = Query(default=None),
     status: str = Query(default="active", pattern=r"^(active|deleted|all)$"),
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
     period_key = _normalize_period(period)
     query = select(LedgerBudget).where(
-        LedgerBudget.user_id == DEFAULT_LOCAL_USER_ID,
+        LedgerBudget.user_id == user_id,
         LedgerBudget.period_type == "month",
         LedgerBudget.period_key == period_key,
     )
@@ -219,23 +226,27 @@ async def list_budgets(
         query.order_by(LedgerBudget.category_id.asc().nullsfirst(), LedgerBudget.updated_at.desc())
     )
     budgets = result.scalars().all()
-    return ApiResponse(data=[await _budget_response_data(db, item) for item in budgets])
+    return ApiResponse(
+        data=[await _budget_response_data(db, item, user_id) for item in budgets]
+    )
 
 
 @router.post("/budgets", response_model=ApiResponse)
 async def create_budget(
     data: LedgerBudgetCreate,
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
-    category = await _validate_budget_category(db, data.category_id)
+    category = await _validate_budget_category(db, data.category_id, user_id)
     await _ensure_budget_identity_available(
         db,
+        user_id,
         period_type=data.period_type,
         period_key=data.period_key,
         category_id=data.category_id,
     )
     budget = LedgerBudget(
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         period_type=data.period_type,
         period_key=data.period_key,
         category_id=data.category_id,
@@ -248,7 +259,7 @@ async def create_budget(
     await db.flush()
     await write_ledger_audit(
         db,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         action="budget.create",
         entity_type="ledger_budget",
         entity_id=budget.id,
@@ -259,12 +270,17 @@ async def create_budget(
     )
     await db.commit()
     await db.refresh(budget)
-    return ApiResponse(data=await _budget_response_data(db, budget))
+    return ApiResponse(data=await _budget_response_data(db, budget, user_id))
 
 
 @router.get("/budgets/{budget_id}", response_model=ApiResponse)
-async def get_budget(budget_id: str, db: AsyncSession = Depends(get_db)):
-    return ApiResponse(data=await _budget_response_data(db, await _get_budget(db, budget_id)))
+async def get_budget(
+    budget_id: str,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
+    budget = await _get_budget(db, budget_id, user_id)
+    return ApiResponse(data=await _budget_response_data(db, budget, user_id))
 
 
 @router.put("/budgets/{budget_id}", response_model=ApiResponse)
@@ -272,17 +288,19 @@ async def update_budget(
     budget_id: str,
     data: LedgerBudgetUpdate,
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
-    budget = await _get_budget(db, budget_id)
+    budget = await _get_budget(db, budget_id, user_id)
     before = ledger_budget_to_dict(budget)
     updates = data.model_dump(exclude_unset=True)
     target_period_key = updates.get("period_key", budget.period_key)
     target_category_id = updates.get("category_id", budget.category_id)
     target_status = updates.get("status", budget.status)
-    category = await _validate_budget_category(db, target_category_id)
+    category = await _validate_budget_category(db, target_category_id, user_id)
     if target_status == "active":
         await _ensure_budget_identity_available(
             db,
+            user_id,
             period_type=budget.period_type,
             period_key=target_period_key,
             category_id=target_category_id,
@@ -300,7 +318,7 @@ async def update_budget(
         audit_action = "budget.update"
     await write_ledger_audit(
         db,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         action=audit_action,
         entity_type="ledger_budget",
         entity_id=budget.id,
@@ -312,21 +330,25 @@ async def update_budget(
     )
     await db.commit()
     await db.refresh(budget)
-    return ApiResponse(data=await _budget_response_data(db, budget))
+    return ApiResponse(data=await _budget_response_data(db, budget, user_id))
 
 
 @router.delete("/budgets/{budget_id}", response_model=ApiResponse)
-async def delete_budget(budget_id: str, db: AsyncSession = Depends(get_db)):
-    budget = await _get_budget(db, budget_id)
+async def delete_budget(
+    budget_id: str,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
+    budget = await _get_budget(db, budget_id, user_id)
     if budget.status == "deleted":
-        return ApiResponse(data=await _budget_response_data(db, budget))
+        return ApiResponse(data=await _budget_response_data(db, budget, user_id))
     before = ledger_budget_to_dict(budget)
     budget.status = "deleted"
     budget.revision += 1
     await db.flush()
     await write_ledger_audit(
         db,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         action="budget.delete",
         entity_type="ledger_budget",
         entity_id=budget.id,
@@ -335,15 +357,19 @@ async def delete_budget(budget_id: str, db: AsyncSession = Depends(get_db)):
     )
     await db.commit()
     await db.refresh(budget)
-    return ApiResponse(data=await _budget_response_data(db, budget))
+    return ApiResponse(data=await _budget_response_data(db, budget, user_id))
 
 
 @router.post("/transactions", response_model=ApiResponse)
-async def create_transaction(data: LedgerTransactionCreate, db: AsyncSession = Depends(get_db)):
+async def create_transaction(
+    data: LedgerTransactionCreate,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
     tx = await create_ledger_transaction_record(
         db,
         data,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         actor_type="user",
         source_channel="api",
     )
@@ -361,9 +387,10 @@ async def list_transactions(
     start_date: str | None = Query(default=None),
     end_date: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
     query = select(LedgerTransaction).where(
-        LedgerTransaction.user_id == DEFAULT_LOCAL_USER_ID,
+        LedgerTransaction.user_id == user_id,
         LedgerTransaction.status == "active",
     )
     if direction:
@@ -393,11 +420,15 @@ async def list_transactions(
 
 
 @router.get("/transactions/{tx_id}", response_model=ApiResponse)
-async def get_transaction(tx_id: str, db: AsyncSession = Depends(get_db)):
+async def get_transaction(
+    tx_id: str,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
     result = await db.execute(
         select(LedgerTransaction).where(
             LedgerTransaction.id == tx_id,
-            LedgerTransaction.user_id == DEFAULT_LOCAL_USER_ID,
+            LedgerTransaction.user_id == user_id,
         )
     )
     tx = result.scalar_one_or_none()
@@ -407,11 +438,16 @@ async def get_transaction(tx_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/transactions/{tx_id}", response_model=ApiResponse)
-async def update_transaction(tx_id: str, data: LedgerTransactionUpdate, db: AsyncSession = Depends(get_db)):
+async def update_transaction(
+    tx_id: str,
+    data: LedgerTransactionUpdate,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
     result = await db.execute(
         select(LedgerTransaction).where(
             LedgerTransaction.id == tx_id,
-            LedgerTransaction.user_id == DEFAULT_LOCAL_USER_ID,
+            LedgerTransaction.user_id == user_id,
         )
     )
     tx = result.scalar_one_or_none()
@@ -426,7 +462,7 @@ async def update_transaction(tx_id: str, data: LedgerTransactionUpdate, db: Asyn
 
     await write_ledger_audit(
         db,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         action="update",
         entity_id=tx_id,
         before=json_serialize(before),
@@ -440,11 +476,15 @@ async def update_transaction(tx_id: str, data: LedgerTransactionUpdate, db: Asyn
 
 
 @router.delete("/transactions/{tx_id}", response_model=ApiResponse)
-async def delete_transaction(tx_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_transaction(
+    tx_id: str,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
     result = await db.execute(
         select(LedgerTransaction).where(
             LedgerTransaction.id == tx_id,
-            LedgerTransaction.user_id == DEFAULT_LOCAL_USER_ID,
+            LedgerTransaction.user_id == user_id,
         )
     )
     tx = result.scalar_one_or_none()
@@ -458,7 +498,7 @@ async def delete_transaction(tx_id: str, db: AsyncSession = Depends(get_db)):
 
     await write_ledger_audit(
         db,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         action="trash",
         entity_id=tx_id,
         before=json_serialize(before),
@@ -476,9 +516,10 @@ async def get_summary(
     start_date: str | None = Query(default=None),
     end_date: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
     query = select(LedgerTransaction).where(
-        LedgerTransaction.user_id == DEFAULT_LOCAL_USER_ID,
+        LedgerTransaction.user_id == user_id,
         LedgerTransaction.status == "active",
     )
     if start_date:
@@ -504,8 +545,9 @@ async def get_summary(
 async def get_ledger_overview(
     period: str | None = Query(default="current_month"),
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
-    return ApiResponse(data=await build_ledger_overview(db, period))
+    return ApiResponse(data=await build_ledger_overview(db, period, user_id))
 
 
 @router.get("/categories/summary", response_model=ApiResponse)
@@ -513,6 +555,7 @@ async def get_category_summary(
     period: str | None = Query(default="current_month"),
     direction: str = Query(default="expense"),
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
     period_key, start, end = _period_range(period)
     result = await db.execute(
@@ -525,7 +568,7 @@ async def get_category_summary(
         .select_from(LedgerTransaction)
         .join(LedgerCategory, LedgerCategory.id == LedgerTransaction.category_id, isouter=True)
         .where(
-            LedgerTransaction.user_id == DEFAULT_LOCAL_USER_ID,
+            LedgerTransaction.user_id == user_id,
             LedgerTransaction.status == "active",
             LedgerTransaction.direction == direction,
             LedgerTransaction.occurred_at >= start,
@@ -551,17 +594,21 @@ async def get_category_summary(
 async def get_ledger_insights(
     period: str | None = Query(default="current_month"),
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
-    overview = await build_ledger_overview(db, period)
+    overview = await build_ledger_overview(db, period, user_id)
     return ApiResponse(data=_ledger_insights_from_overview(overview))
 
 
 # ─── Categories ─────────────────────────────────────────────────────────────
 
 @router.get("/categories", response_model=ApiResponse)
-async def list_categories(db: AsyncSession = Depends(get_db)):
+async def list_categories(
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
     result = await db.execute(
-        select(LedgerCategory).where(LedgerCategory.user_id == DEFAULT_LOCAL_USER_ID, LedgerCategory.status == "active")
+        select(LedgerCategory).where(LedgerCategory.user_id == user_id, LedgerCategory.status == "active")
         .order_by(LedgerCategory.sort_order)
     )
     cats = result.scalars().all()

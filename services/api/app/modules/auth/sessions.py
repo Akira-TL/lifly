@@ -239,3 +239,11 @@ def get_active_subject(
     if subject is None or not sessions.is_access_active(token, subject=subject):
         raise HTTPException(status_code=401, detail="Invalid or revoked token")
     return subject
+
+
+def get_active_account_id(
+    subject: AuthenticatedSubject = Depends(get_active_subject),
+) -> str:
+    """Return the immutable Account identity for public business routes."""
+
+    return subject.account_id

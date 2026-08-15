@@ -20,12 +20,12 @@ from app.db.models import (
     Task,
     TaskReminderStrategy,
 )
+from app.modules.auth.sessions import get_active_account_id
 from app.modules.search.home_attention import build_attention_items
 from app.schemas.common import ApiResponse, TagMetadataUpsert
 
 router = APIRouter()
 
-DEFAULT_LOCAL_USER_ID = "local-dev"
 HOME_OVERVIEW_SCHEMA_VERSION = "home_overview.v1"
 
 
@@ -363,7 +363,7 @@ def _finance_insights(
     return []
 
 
-async def build_home_overview(db: AsyncSession, user_id: str = DEFAULT_LOCAL_USER_ID) -> dict[str, object]:
+async def build_home_overview(db: AsyncSession, user_id: str) -> dict[str, object]:
     now = datetime.now(timezone.utc)
     month_start, month_end = _month_range()
     period_key = now.strftime("%Y-%m")
@@ -440,13 +440,14 @@ async def search_all(
     entity_type: str | None = Query(default=None),
     limit: int = Query(default=10, ge=1, le=50),
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
     results: list[dict] = []
 
     # 搜索备忘
     if not entity_type or entity_type == "memo":
         memo_query = select(Memo).where(
-            Memo.user_id == DEFAULT_LOCAL_USER_ID,
+            Memo.user_id == user_id,
             Memo.status == "active",
             Memo.title.ilike(f"%{q}%") | Memo.content_markdown.ilike(f"%{q}%"),
         ).order_by(Memo.created_at.desc()).limit(limit)
@@ -463,7 +464,7 @@ async def search_all(
     # 搜索账单
     if not entity_type or entity_type == "ledger":
         tx_query = select(LedgerTransaction).where(
-            LedgerTransaction.user_id == DEFAULT_LOCAL_USER_ID,
+            LedgerTransaction.user_id == user_id,
             LedgerTransaction.status == "active",
             LedgerTransaction.merchant.ilike(f"%{q}%") | LedgerTransaction.note.ilike(f"%{q}%"),
         ).order_by(LedgerTransaction.occurred_at.desc()).limit(limit)
@@ -480,7 +481,7 @@ async def search_all(
     # 搜索任务
     if not entity_type or entity_type == "task":
         task_query = select(Task).where(
-            Task.user_id == DEFAULT_LOCAL_USER_ID,
+            Task.user_id == user_id,
             Task.status == "active",
             Task.title.ilike(f"%{q}%") | Task.description.ilike(f"%{q}%"),
         ).order_by(Task.created_at.desc()).limit(limit)
@@ -519,11 +520,12 @@ async def list_tag_metadata(
     kind: str = Query(default="memo"),
     status: str = Query(default="active"),
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
     result = await db.execute(
         select(TagMetadata)
         .where(
-            TagMetadata.user_id == DEFAULT_LOCAL_USER_ID,
+            TagMetadata.user_id == user_id,
             TagMetadata.kind == kind,
             TagMetadata.status == status,
         )
@@ -536,10 +538,11 @@ async def list_tag_metadata(
 async def upsert_tag_metadata(
     data: TagMetadataUpsert = Body(),
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
     result = await db.execute(
         select(TagMetadata).where(
-            TagMetadata.user_id == DEFAULT_LOCAL_USER_ID,
+            TagMetadata.user_id == user_id,
             TagMetadata.name == data.name.strip(),
             TagMetadata.kind == data.kind,
         )
@@ -547,7 +550,7 @@ async def upsert_tag_metadata(
     item = result.scalar_one_or_none()
     if item is None:
         item = TagMetadata(
-            user_id=DEFAULT_LOCAL_USER_ID,
+            user_id=user_id,
             name=data.name.strip(),
             kind=data.kind,
         )
@@ -566,10 +569,11 @@ async def delete_tag_metadata(
     tag_name: str,
     kind: str = Query(default="memo"),
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
     result = await db.execute(
         select(TagMetadata).where(
-            TagMetadata.user_id == DEFAULT_LOCAL_USER_ID,
+            TagMetadata.user_id == user_id,
             TagMetadata.name == tag_name,
             TagMetadata.kind == kind,
         )
@@ -587,6 +591,7 @@ async def delete_tag_metadata(
 async def tag_summary(
     kind: str = Query(default="memo"),
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
     result = await db.execute(
         select(
@@ -607,7 +612,7 @@ async def tag_summary(
             isouter=True,
         )
         .where(
-            MemoClassification.user_id == DEFAULT_LOCAL_USER_ID,
+            MemoClassification.user_id == user_id,
             MemoClassification.status != "rejected",
         )
         .group_by(
@@ -634,13 +639,19 @@ async def tag_summary(
 # ─── 首页统计 ─────────────────────────────────────────────────────────────────
 
 @router.get("/home/overview", response_model=ApiResponse)
-async def home_overview(db: AsyncSession = Depends(get_db)):
-    return ApiResponse(data=await build_home_overview(db))
+async def home_overview(
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
+    return ApiResponse(data=await build_home_overview(db, user_id))
 
 
 @router.get("/dashboard", response_model=ApiResponse)
-async def dashboard(db: AsyncSession = Depends(get_db)):
-    overview = await build_home_overview(db)
+async def dashboard(
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
+    overview = await build_home_overview(db, user_id)
     today_metrics = overview["today_metrics"]
     finance_overview = overview["finance_overview"]
     daily_trend = overview["daily_trend"]

@@ -171,6 +171,7 @@ async def test_confirm_existing_strategy_applies_manual_time_override(
             "source": "user",
         },
         "confirmed",
+        task.user_id,
     )
 
     assert result is strategy

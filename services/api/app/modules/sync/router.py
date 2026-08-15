@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.security import AuthenticatedSubject, get_authenticated_subject
+from app.core.security import AuthenticatedSubject
+from app.modules.auth.sessions import get_active_subject
 from app.modules.crypto.contracts import PasswordKeyEnvelope
 from app.modules.sync.encrypted_service import (
     apply_encrypted_sync_push,
@@ -24,7 +25,7 @@ router = APIRouter()
 
 @router.get("/credentials", response_model=ApiResponse)
 async def get_credentials(
-    subject: AuthenticatedSubject = Depends(get_authenticated_subject),
+    subject: AuthenticatedSubject = Depends(get_active_subject),
 ) -> ApiResponse:
     try:
         credentials: PowerSyncCredentialsResponse = issue_powersync_credentials(subject)
@@ -40,7 +41,7 @@ async def get_credentials(
 async def push_encrypted_changes(
     request: EncryptedSyncPushRequest,
     db: AsyncSession = Depends(get_db),
-    subject: AuthenticatedSubject = Depends(get_authenticated_subject),
+    subject: AuthenticatedSubject = Depends(get_active_subject),
 ) -> ApiResponse:
     try:
         result = await apply_encrypted_sync_push(db, subject, request)
@@ -62,7 +63,7 @@ async def push_encrypted_changes(
 async def put_password_key_envelope(
     envelope: PasswordKeyEnvelope,
     db: AsyncSession = Depends(get_db),
-    subject: AuthenticatedSubject = Depends(get_authenticated_subject),
+    subject: AuthenticatedSubject = Depends(get_active_subject),
 ) -> ApiResponse:
     try:
         stored = await store_password_key_envelope(db, subject, envelope)
@@ -79,7 +80,7 @@ async def put_password_key_envelope(
 async def read_password_key_envelope(
     key_version: int | None = None,
     db: AsyncSession = Depends(get_db),
-    subject: AuthenticatedSubject = Depends(get_authenticated_subject),
+    subject: AuthenticatedSubject = Depends(get_active_subject),
 ) -> ApiResponse:
     envelope = await get_password_key_envelope(
         db,
@@ -97,7 +98,7 @@ async def read_password_key_envelope(
 @router.post("/push", response_model=ApiResponse, deprecated=True)
 async def reject_legacy_plaintext_push(
     request: SyncPushRequest,
-    subject: AuthenticatedSubject = Depends(get_authenticated_subject),
+    subject: AuthenticatedSubject = Depends(get_active_subject),
 ) -> ApiResponse:
     del request, subject
     raise HTTPException(

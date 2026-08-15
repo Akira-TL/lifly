@@ -5,11 +5,45 @@ import uuid
 from datetime import datetime, timezone
 
 import httpx
+from mcp.server.auth.middleware.auth_context import get_access_token
+from mcp.server.auth.provider import AccessToken
+from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
 from mcp.types import Tool, TextContent
 
 from app.core.config import settings
-from app.core.security import create_access_token
+from app.core.security import authenticated_subject_from_token
+from app.modules.auth.sessions import get_session_registry
+
+class LiflyMcpTokenVerifier:
+    async def verify_token(self, token: str) -> AccessToken | None:
+        subject = authenticated_subject_from_token(
+            token,
+            allowed_types=frozenset({"access"}),
+        )
+        if subject is None:
+            return None
+        if not get_session_registry().is_access_active(token, subject=subject):
+            return None
+        claims: dict[str, str] = {"account_id": subject.account_id}
+        if subject.device_id is not None:
+            claims["device_id"] = subject.device_id
+        return AccessToken(
+            token=token,
+            client_id=subject.device_id or subject.account_id,
+            scopes=["lifly:mcp"],
+            subject=subject.account_id,
+            claims=claims,
+        )
+
+
+def _mcp_auth_settings() -> AuthSettings:
+    base = f"http://127.0.0.1:{settings.api_port}"
+    return AuthSettings(
+        issuer_url=settings.mcp_issuer_url or f"{base}/api/v1/auth",
+        resource_server_url=settings.mcp_resource_server_url or base,
+    )
+
 
 cloud_mcp = FastMCP(
     "lifly-cloud",
@@ -17,6 +51,8 @@ cloud_mcp = FastMCP(
     stateless_http=True,
     json_response=True,
     streamable_http_path="/mcp",
+    auth=_mcp_auth_settings(),
+    token_verifier=LiflyMcpTokenVerifier(),
 )
 
 
@@ -249,10 +285,14 @@ async def asset_register_external_url(
 # ─── Internal Call ───────────────────────────────────────────────────────────
 
 async def _call_internal(path: str, body: dict) -> dict:
+    access = get_access_token()
+    if access is None or not access.token:
+        raise RuntimeError("Authenticated MCP access token is unavailable")
     async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
         resp = await client.post(
             f"http://127.0.0.1:{settings.api_port}{path}",
             json=body,
+            headers={"Authorization": f"Bearer {access.token}"},
         )
         resp.raise_for_status()
         return resp.json()

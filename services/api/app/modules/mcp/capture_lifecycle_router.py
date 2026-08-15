@@ -29,7 +29,7 @@ from app.modules.mcp.capture_session_service import (
     update_capture_session_actions,
 )
 from app.modules.mcp.parse_engine import CandidateAction, parse_mixed_input
-from app.modules.memos.service import DEFAULT_LOCAL_USER_ID
+from app.modules.auth.sessions import get_active_account_id
 
 router = APIRouter(prefix="/capture")
 SOURCE_CHANNEL = "cloud_mcp"
@@ -57,18 +57,18 @@ def attach_capture_assets(
     return enriched
 
 
-async def _session_detail(db: AsyncSession, capture_id: str) -> dict:
+async def _session_detail(db: AsyncSession, capture_id: str, user_id: str) -> dict:
     session = await get_capture_session(
         db,
         capture_id=capture_id,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
     )
     if session is None:
         raise HTTPException(status_code=404, detail="Capture session not found")
     turns = await list_capture_turns(
         db,
         capture_id=capture_id,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
     )
     return {
         **capture_session_summary_data(session, turn_count=len(turns)),
@@ -82,10 +82,11 @@ async def capture_session_list(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
     sessions, total = await list_capture_sessions(
         db,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         status=status,
         limit=limit,
         offset=offset,
@@ -95,7 +96,7 @@ async def capture_session_list(
         turns = await list_capture_turns(
             db,
             capture_id=session.capture_id,
-            user_id=DEFAULT_LOCAL_USER_ID,
+            user_id=user_id,
         )
         items.append(capture_session_summary_data(session, turn_count=len(turns)))
     return {
@@ -110,8 +111,9 @@ async def capture_session_list(
 async def capture_session_get(
     capture_id: str,
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
-    return await _session_detail(db, capture_id)
+    return await _session_detail(db, capture_id, user_id)
 
 
 @router.post("/sessions/{capture_id}/turns")
@@ -119,11 +121,12 @@ async def capture_session_append_turn(
     capture_id: str,
     data: CaptureAppendTurnRequest,
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
     session = await get_active_capture_session(
         db,
         capture_id=capture_id,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
     )
     if session is None:
         raise HTTPException(status_code=404, detail="Capture session not found, dismissed, or expired")
@@ -131,7 +134,7 @@ async def capture_session_append_turn(
     asset_context = await resolve_capture_asset_contexts(
         db,
         asset_ids=data.asset_ids,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
     )
     serialized_context = [
         item.model_dump(mode="json") for item in asset_context.contexts
@@ -139,12 +142,12 @@ async def capture_session_append_turn(
     next_index = await next_capture_turn_index(
         db,
         capture_id=capture_id,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
     )
     await persist_capture_turn(
         db,
         capture_id=capture_id,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         turn_index=next_index,
         role="user",
         text=data.text,
@@ -163,7 +166,7 @@ async def capture_session_append_turn(
     await persist_capture_turn(
         db,
         capture_id=capture_id,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         turn_index=next_index + 1,
         role="assistant",
         text=None,
@@ -180,7 +183,7 @@ async def capture_session_append_turn(
         requires_confirmation=parsed.requires_confirmation,
     )
     await db.commit()
-    return await _session_detail(db, capture_id)
+    return await _session_detail(db, capture_id, user_id)
 
 
 @router.post("/sessions/{capture_id}/turns/{turn_id}/revise")
@@ -189,11 +192,12 @@ async def capture_session_revise_action(
     turn_id: str,
     data: CaptureReviseActionRequest,
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
     session = await get_active_capture_session(
         db,
         capture_id=capture_id,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
     )
     if session is None:
         raise HTTPException(status_code=404, detail="Capture session not found, dismissed, or expired")
@@ -201,7 +205,7 @@ async def capture_session_revise_action(
         db,
         capture_id=capture_id,
         turn_id=turn_id,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
     )
     if source_turn is None or source_turn.role != "assistant":
         raise HTTPException(status_code=404, detail="Capture action turn not found")
@@ -225,12 +229,12 @@ async def capture_session_revise_action(
     next_index = await next_capture_turn_index(
         db,
         capture_id=capture_id,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
     )
     revised_turn = await persist_capture_turn(
         db,
         capture_id=capture_id,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         turn_index=next_index,
         role="assistant",
         text=data.note,
@@ -261,11 +265,12 @@ async def capture_session_dismiss(
     capture_id: str,
     data: CaptureDismissRequest,
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
     session = await get_capture_session(
         db,
         capture_id=capture_id,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
     )
     if session is None:
         raise HTTPException(status_code=404, detail="Capture session not found")
@@ -273,12 +278,12 @@ async def capture_session_dismiss(
         next_index = await next_capture_turn_index(
             db,
             capture_id=capture_id,
-            user_id=DEFAULT_LOCAL_USER_ID,
+            user_id=user_id,
         )
         await persist_capture_turn(
             db,
             capture_id=capture_id,
-            user_id=DEFAULT_LOCAL_USER_ID,
+            user_id=user_id,
             turn_index=next_index,
             role="system",
             text=data.reason or "dismiss",
@@ -287,4 +292,4 @@ async def capture_session_dismiss(
         )
         await dismiss_capture_session(db, session=session)
         await db.commit()
-    return await _session_detail(db, capture_id)
+    return await _session_detail(db, capture_id, user_id)

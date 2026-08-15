@@ -65,6 +65,7 @@ async def test_capture_parse_persists_session_metadata(
             asset_ids=["asset-1"],
         ),
         db,  # type: ignore[arg-type]
+        "account-1",
     )
 
     assert response["capture_id"]
@@ -78,7 +79,7 @@ async def test_capture_parse_persists_session_metadata(
     action_turn = db.added[2]
     assert isinstance(session, McpCaptureSession)
     assert session.capture_id == response["capture_id"]
-    assert session.user_id == mcp_router.DEFAULT_LOCAL_USER_ID
+    assert session.user_id == "account-1"
     assert session.original_text.startswith("记一下今天状态不错")
     assert session.timezone == "Asia/Shanghai"
     assert session.locale == "zh-CN"

@@ -23,8 +23,8 @@ from app.modules.tasks.reminder_strategy_engine import (
     ensure_reminder_for_strategy,
     ensure_task_reminder_strategy,
 )
+from app.modules.auth.sessions import get_active_account_id
 from app.modules.tasks.service import (
-    DEFAULT_LOCAL_USER_ID,
     complete_task_record,
     create_task_record,
     task_to_response,
@@ -85,9 +85,9 @@ def _reminder_http_error(error: Exception) -> HTTPException:
     return HTTPException(status_code=409, detail=str(error))
 
 
-async def _load_task(db: AsyncSession, task_id: str) -> Task:
+async def _load_task(db: AsyncSession, task_id: str, user_id: str) -> Task:
     result = await db.execute(
-        select(Task).where(Task.id == task_id, Task.user_id == DEFAULT_LOCAL_USER_ID)
+        select(Task).where(Task.id == task_id, Task.user_id == user_id)
     )
     task = result.scalar_one_or_none()
     if not task:
@@ -98,10 +98,11 @@ async def _load_task(db: AsyncSession, task_id: str) -> Task:
 async def _load_strategy(
     db: AsyncSession,
     task_id: str,
+    user_id: str,
     strategy_id: str | None = None,
 ) -> TaskReminderStrategy | None:
     query = select(TaskReminderStrategy).where(
-        TaskReminderStrategy.user_id == DEFAULT_LOCAL_USER_ID,
+        TaskReminderStrategy.user_id == user_id,
         TaskReminderStrategy.task_id == task_id,
         TaskReminderStrategy.strategy_status != "dismissed",
     )
@@ -117,16 +118,17 @@ async def _upsert_strategy(
     task_id: str,
     data: dict,
     status: str,
+    user_id: str,
 ) -> TaskReminderStrategy:
-    await _load_task(db, task_id)
+    await _load_task(db, task_id, user_id)
     strategy_id = data.get("strategy_id") or data.get("id")
     if strategy_id:
-        strategy = await _load_strategy(db, task_id, str(strategy_id))
+        strategy = await _load_strategy(db, task_id, user_id, str(strategy_id))
     else:
-        strategy = await _load_strategy(db, task_id)
+        strategy = await _load_strategy(db, task_id, user_id)
     if strategy is None:
         strategy = TaskReminderStrategy(
-            user_id=DEFAULT_LOCAL_USER_ID,
+            user_id=user_id,
             task_id=task_id,
             warning_level=str(data.get("warning_level") or "normal"),
             warning_reason=data.get("warning_reason"),
@@ -152,7 +154,7 @@ async def _upsert_strategy(
     if status == "confirmed":
         strategy.confirmed_at = datetime.now(timezone.utc)
         if strategy.ai_suggested_remind_at:
-            task = await _load_task(db, task_id)
+            task = await _load_task(db, task_id, user_id)
             task.remind_at = strategy.ai_suggested_remind_at
             task.revision += 1
             await ensure_reminder_for_strategy(db, task=task, strategy=strategy)
@@ -161,7 +163,7 @@ async def _upsert_strategy(
         await cancel_active_reminders_for_task(
             db,
             task_id=task_id,
-            user_id=DEFAULT_LOCAL_USER_ID,
+            user_id=user_id,
             source_channel="strategy",
         )
     await db.commit()
@@ -187,11 +189,15 @@ def _task_matches_group(task: Task, group: str, now: datetime) -> bool:
 
 
 @router.post("", response_model=ApiResponse)
-async def create_task(data: TaskCreate, db: AsyncSession = Depends(get_db)):
+async def create_task(
+    data: TaskCreate,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
     task = await create_task_record(
         db,
         data,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         actor_type="user",
         source_channel="api",
     )
@@ -210,8 +216,9 @@ async def list_tasks(
     today: bool = Query(default=False),
     group: str = Query(default="all"),
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
-    query = select(Task).where(Task.user_id == DEFAULT_LOCAL_USER_ID, Task.status == "active")
+    query = select(Task).where(Task.user_id == user_id, Task.status == "active")
 
     if task_status:
         query = query.where(Task.task_status == task_status)
@@ -231,7 +238,7 @@ async def list_tasks(
     if group == "urgent":
         now = datetime.now(timezone.utc)
         critical_strategy_ids = select(TaskReminderStrategy.task_id).where(
-            TaskReminderStrategy.user_id == DEFAULT_LOCAL_USER_ID,
+            TaskReminderStrategy.user_id == user_id,
             TaskReminderStrategy.strategy_status != "dismissed",
             TaskReminderStrategy.warning_level == "critical",
         )
@@ -242,7 +249,7 @@ async def list_tasks(
     elif group == "warning":
         now = datetime.now(timezone.utc)
         warning_strategy_ids = select(TaskReminderStrategy.task_id).where(
-            TaskReminderStrategy.user_id == DEFAULT_LOCAL_USER_ID,
+            TaskReminderStrategy.user_id == user_id,
             TaskReminderStrategy.strategy_status != "dismissed",
             TaskReminderStrategy.warning_level == "warning",
         )
@@ -284,9 +291,10 @@ async def list_task_reminders(
     due_before: datetime | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
     query = select(Reminder).where(
-        Reminder.user_id == DEFAULT_LOCAL_USER_ID,
+        Reminder.user_id == user_id,
         Reminder.target_type == "task",
     )
     if reminder_status:
@@ -303,10 +311,11 @@ async def list_task_reminders(
 async def claim_task_reminders(
     data: ReminderClaimRequest,
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
     reminders = await claim_due_reminders(
         db,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         limit=data.limit,
         now=data.now,
         lease_seconds=data.lease_seconds,
@@ -320,12 +329,13 @@ async def deliver_task_reminder(
     reminder_id: str,
     data: ReminderDeliverySuccessRequest,
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
     try:
         reminder = await mark_reminder_delivered(
             db,
             reminder_id=reminder_id,
-            user_id=DEFAULT_LOCAL_USER_ID,
+            user_id=user_id,
             dispatch_token=data.dispatch_token,
             external_id=data.external_id,
         )
@@ -340,12 +350,13 @@ async def fail_task_reminder(
     reminder_id: str,
     data: ReminderDeliveryFailureRequest,
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
     try:
         reminder = await mark_reminder_failed(
             db,
             reminder_id=reminder_id,
-            user_id=DEFAULT_LOCAL_USER_ID,
+            user_id=user_id,
             dispatch_token=data.dispatch_token,
             error=data.error,
             retry_after_seconds=data.retry_after_seconds,
@@ -361,12 +372,13 @@ async def retry_task_reminder(
     reminder_id: str,
     data: ReminderRetryRequest = Body(default_factory=ReminderRetryRequest),
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
     try:
         reminder = await retry_reminder(
             db,
             reminder_id=reminder_id,
-            user_id=DEFAULT_LOCAL_USER_ID,
+            user_id=user_id,
             reset_attempts=data.reset_attempts,
         )
     except (ReminderNotFoundError, ReminderStateError) as error:
@@ -379,12 +391,13 @@ async def retry_task_reminder(
 async def cancel_task_reminder(
     reminder_id: str,
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
     try:
         reminder = await cancel_reminder(
             db,
             reminder_id=reminder_id,
-            user_id=DEFAULT_LOCAL_USER_ID,
+            user_id=user_id,
         )
     except (ReminderNotFoundError, ReminderStateError) as error:
         raise _reminder_http_error(error) from error
@@ -393,9 +406,13 @@ async def cancel_task_reminder(
 
 
 @router.get("/{task_id}/reminder-strategy", response_model=ApiResponse)
-async def get_task_reminder_strategy(task_id: str, db: AsyncSession = Depends(get_db)):
-    await _load_task(db, task_id)
-    strategy = await _load_strategy(db, task_id)
+async def get_task_reminder_strategy(
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
+    await _load_task(db, task_id, user_id)
+    strategy = await _load_strategy(db, task_id, user_id)
     return ApiResponse(data=None if strategy is None else _strategy_data(strategy))
 
 
@@ -404,8 +421,9 @@ async def generate_task_reminder_strategy(
     task_id: str,
     data: TaskReminderStrategyGenerateRequest = Body(default_factory=TaskReminderStrategyGenerateRequest),
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
-    task = await _load_task(db, task_id)
+    task = await _load_task(db, task_id, user_id)
     strategy = await ensure_task_reminder_strategy(
         db,
         task,
@@ -423,8 +441,9 @@ async def confirm_task_reminder_strategy(
     task_id: str,
     data: dict = Body(default_factory=dict),
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
-    strategy = await _upsert_strategy(db, task_id, data, "confirmed")
+    strategy = await _upsert_strategy(db, task_id, data, "confirmed", user_id)
     return ApiResponse(data=_strategy_data(strategy))
 
 
@@ -433,21 +452,31 @@ async def dismiss_task_reminder_strategy(
     task_id: str,
     data: dict = Body(default_factory=dict),
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
-    strategy = await _upsert_strategy(db, task_id, data, "dismissed")
+    strategy = await _upsert_strategy(db, task_id, data, "dismissed", user_id)
     return ApiResponse(data=_strategy_data(strategy))
 
 
 @router.get("/{task_id}", response_model=ApiResponse)
-async def get_task(task_id: str, db: AsyncSession = Depends(get_db)):
-    task = await _load_task(db, task_id)
+async def get_task(
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
+    task = await _load_task(db, task_id, user_id)
     return ApiResponse(data=task_to_response(task).model_dump())
 
 
 @router.put("/{task_id}", response_model=ApiResponse)
-async def update_task(task_id: str, data: TaskUpdate, db: AsyncSession = Depends(get_db)):
+async def update_task(
+    task_id: str,
+    data: TaskUpdate,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
     result = await db.execute(
-        select(Task).where(Task.id == task_id, Task.user_id == DEFAULT_LOCAL_USER_ID)
+        select(Task).where(Task.id == task_id, Task.user_id == user_id)
     )
     task = result.scalar_one_or_none()
     if not task:
@@ -468,13 +497,13 @@ async def update_task(task_id: str, data: TaskUpdate, db: AsyncSession = Depends
         await cancel_active_reminders_for_task(
             db,
             task_id=task.id,
-            user_id=DEFAULT_LOCAL_USER_ID,
+            user_id=user_id,
             source_channel="task-update",
         )
 
     await write_task_audit(
         db,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         action="update",
         entity_id=task_id,
         before=json_serialize(before),
@@ -486,11 +515,15 @@ async def update_task(task_id: str, data: TaskUpdate, db: AsyncSession = Depends
 
 
 @router.post("/{task_id}/complete", response_model=ApiResponse)
-async def complete_task(task_id: str, db: AsyncSession = Depends(get_db)):
+async def complete_task(
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
     task = await complete_task_record(
         db,
         task_id=task_id,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         actor_type="user",
         source_channel="api",
     )
@@ -503,9 +536,13 @@ async def complete_task(task_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.delete("/{task_id}", response_model=ApiResponse)
-async def delete_task(task_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_task(
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
     result = await db.execute(
-        select(Task).where(Task.id == task_id, Task.user_id == DEFAULT_LOCAL_USER_ID)
+        select(Task).where(Task.id == task_id, Task.user_id == user_id)
     )
     task = result.scalar_one_or_none()
     if not task:
@@ -518,13 +555,13 @@ async def delete_task(task_id: str, db: AsyncSession = Depends(get_db)):
     await cancel_active_reminders_for_task(
         db,
         task_id=task.id,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         source_channel="task-delete",
     )
 
     await write_task_audit(
         db,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         action="trash",
         entity_id=task_id,
         before=json_serialize(before),

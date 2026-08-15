@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 60 * 24  # 24h
     jwt_refresh_expire_days: int = 30
 
+    # MCP resource-server identity. Public deployments should override these
+    # with the externally reachable HTTPS issuer/resource URLs.
+    mcp_issuer_url: str = ""
+    mcp_resource_server_url: str = ""
+
     # Device / encrypted AI relay routing
     device_online_ttl_seconds: int = 90
     ai_job_default_ttl_seconds: int = 300

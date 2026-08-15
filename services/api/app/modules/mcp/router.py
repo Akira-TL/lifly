@@ -21,8 +21,8 @@ from app.modules.ledger.service import (
     create_ledger_transaction_record,
     ledger_transaction_to_dict,
 )
+from app.modules.auth.sessions import get_active_account_id
 from app.modules.memos.service import (
-    DEFAULT_LOCAL_USER_ID,
     create_memo_record,
 )
 from app.modules.mcp.capture_asset_context import (
@@ -160,13 +160,14 @@ def _task_dict(task: Task) -> dict:
 async def _persist_create_undo_entries(
     db: AsyncSession,
     *,
+    user_id: str,
     undo_token: str,
     created_entities: list[dict],
 ) -> None:
     await persist_undo_entries(
         db,
         undo_token=undo_token,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         entries=[{**entity, "action": "create"} for entity in created_entities],
     )
 
@@ -176,11 +177,12 @@ async def _persist_create_undo_entries(
 async def capture_parse(
     data: CaptureParseRequest,
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
     asset_context = await resolve_capture_asset_contexts(
         db,
         asset_ids=data.asset_ids,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
     )
     result = parse_mixed_input(
         build_capture_parse_text(data.text, asset_context),
@@ -194,13 +196,13 @@ async def capture_parse(
         original_text=data.text,
         timezone_str=data.timezone,
         locale=data.locale,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         source_channel=CLOUD_MCP_SOURCE_CHANNEL,
     )
     await persist_capture_turn(
         db,
         capture_id=result.capture_id,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         turn_index=0,
         role="user",
         text=data.text,
@@ -212,7 +214,7 @@ async def capture_parse(
     action_turn = await persist_capture_turn(
         db,
         capture_id=result.capture_id,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         turn_index=1,
         role="assistant",
         asset_ids=data.asset_ids,
@@ -243,7 +245,11 @@ async def capture_parse(
 
 # ─── capture_commit ───────────────────────────────────────────────────────────
 @router.post("/capture/commit")
-async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
+async def capture_commit(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
     body = await _read_json_body(request)
     try:
         data = CaptureCommitRequest.model_validate(body)
@@ -256,7 +262,7 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
     db_session = await get_active_capture_session(
         db,
         capture_id=capture_id,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
     )
     memory_session = CAPTURE_STORE.get(capture_id)
     if not db_session and not memory_session:
@@ -269,13 +275,13 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
                 db,
                 capture_id=capture_id,
                 turn_id=data.turn_id,
-                user_id=DEFAULT_LOCAL_USER_ID,
+                user_id=user_id,
             )
             if data.turn_id
             else await latest_action_turn(
                 db,
                 capture_id=capture_id,
-                user_id=DEFAULT_LOCAL_USER_ID,
+                user_id=user_id,
             )
         )
         if action_turn is None or action_turn.role != "assistant":
@@ -300,7 +306,7 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
         capture_id=capture_id,
         actions=session_actions,
         selected_indexes=selected_indexes,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         actor_type=MCP_AI_ACTOR_TYPE,
         source_channel=CLOUD_MCP_SOURCE_CHANNEL,
         entity_source=MCP_ENTITY_SOURCE,
@@ -312,6 +318,7 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
     if commit_result.created_entities:
         await _persist_create_undo_entries(
             db,
+            user_id=user_id,
             undo_token=undo_token,
             created_entities=commit_result.created_entities,
         )
@@ -344,7 +351,11 @@ async def capture_commit(request: Request, db: AsyncSession = Depends(get_db)):
 
 # ─── capture_undo ────────────────────────────────────────────────────────────
 @router.post("/capture/undo")
-async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
+async def capture_undo(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
     body = await request.json()
     try:
         data = CaptureUndoRequest.model_validate(body)
@@ -356,13 +367,13 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
     entries = await consume_undo_entries(
         db,
         undo_token=undo_token,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
     )
     if not entries:
         used_entries = await list_undo_entries(
             db,
             undo_token=undo_token,
-            user_id=DEFAULT_LOCAL_USER_ID,
+            user_id=user_id,
             statuses=["used"],
         )
         if used_entries:
@@ -391,7 +402,7 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
         result = await db.execute(
             select(model_class).where(
                 getattr(model_class, "id") == entry.entity_id,
-                getattr(model_class, "user_id") == DEFAULT_LOCAL_USER_ID,
+                getattr(model_class, "user_id") == user_id,
             )
         )
         entity = result.scalar_one_or_none()
@@ -419,7 +430,7 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
 
         await _write_audit(
             db,
-            DEFAULT_LOCAL_USER_ID,
+            user_id,
             "undo_delete",
             entry.entity_type,
             entry.entity_id,
@@ -433,7 +444,7 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
     committed_turn = await get_turn_by_undo_token(
         db,
         undo_token=undo_token,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
     )
     capture_id = committed_turn.capture_id if committed_turn else None
     if committed_turn:
@@ -457,12 +468,12 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
         turn_index = await next_capture_turn_index(
             db,
             capture_id=capture_id,
-            user_id=DEFAULT_LOCAL_USER_ID,
+            user_id=user_id,
         )
         await persist_capture_turn(
             db,
             capture_id=capture_id,
-            user_id=DEFAULT_LOCAL_USER_ID,
+            user_id=user_id,
             turn_index=turn_index,
             role="system",
             text="undo",
@@ -482,7 +493,11 @@ async def capture_undo(request: Request, db: AsyncSession = Depends(get_db)):
 
 # ─── Direct CRUD Tools ────────────────────────────────────────────────────────
 @router.post("/memo/create")
-async def mcp_memo_create(request: Request, db: AsyncSession = Depends(get_db)):
+async def mcp_memo_create(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
     body = await request.json()
     try:
         data = MemoCreate.model_validate({
@@ -495,7 +510,7 @@ async def mcp_memo_create(request: Request, db: AsyncSession = Depends(get_db)):
     memo = await create_memo_record(
         db,
         data,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         actor_type=MCP_AI_ACTOR_TYPE,
         source_channel=CLOUD_MCP_SOURCE_CHANNEL,
         tool_name="memo_create",
@@ -506,6 +521,7 @@ async def mcp_memo_create(request: Request, db: AsyncSession = Depends(get_db)):
     undo_token = str(uuid.uuid4())
     await _persist_create_undo_entries(
         db,
+        user_id=user_id,
         undo_token=undo_token,
         created_entities=[{"type": "memo", "id": memo.id}],
     )
@@ -523,7 +539,11 @@ async def mcp_memo_create(request: Request, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/memo/search")
-async def mcp_memo_search(request: Request, db: AsyncSession = Depends(get_db)):
+async def mcp_memo_search(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
     body = await _read_json_body(request)
     try:
         data = McpSearchRequest.model_validate(body)
@@ -531,7 +551,7 @@ async def mcp_memo_search(request: Request, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
     query = select(Memo).where(
-        Memo.user_id == DEFAULT_LOCAL_USER_ID,
+        Memo.user_id == user_id,
         Memo.status == "active",
     )
     if data.q:
@@ -544,7 +564,11 @@ async def mcp_memo_search(request: Request, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/expense/create")
-async def mcp_expense_create(request: Request, db: AsyncSession = Depends(get_db)):
+async def mcp_expense_create(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
     body = await request.json()
     try:
         data = LedgerTransactionCreate.model_validate({
@@ -558,7 +582,7 @@ async def mcp_expense_create(request: Request, db: AsyncSession = Depends(get_db
     tx = await create_ledger_transaction_record(
         db,
         data,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         actor_type=MCP_AI_ACTOR_TYPE,
         source_channel=CLOUD_MCP_SOURCE_CHANNEL,
         tool_name="expense_create",
@@ -569,6 +593,7 @@ async def mcp_expense_create(request: Request, db: AsyncSession = Depends(get_db
     undo_token = str(uuid.uuid4())
     await _persist_create_undo_entries(
         db,
+        user_id=user_id,
         undo_token=undo_token,
         created_entities=[{"type": "ledger_transaction", "id": tx.id}],
     )
@@ -580,7 +605,11 @@ async def mcp_expense_create(request: Request, db: AsyncSession = Depends(get_db
 
 
 @router.post("/expense/search")
-async def mcp_expense_search(request: Request, db: AsyncSession = Depends(get_db)):
+async def mcp_expense_search(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
     body = await _read_json_body(request)
     try:
         data = McpSearchRequest.model_validate(body)
@@ -588,7 +617,7 @@ async def mcp_expense_search(request: Request, db: AsyncSession = Depends(get_db
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
     query = select(LedgerTransaction).where(
-        LedgerTransaction.user_id == DEFAULT_LOCAL_USER_ID,
+        LedgerTransaction.user_id == user_id,
         LedgerTransaction.status == "active",
     )
     if data.q:
@@ -601,7 +630,11 @@ async def mcp_expense_search(request: Request, db: AsyncSession = Depends(get_db
 
 
 @router.post("/expense/summary")
-async def mcp_expense_summary(request: Request, db: AsyncSession = Depends(get_db)):
+async def mcp_expense_summary(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
     body = await _read_json_body(request)
     try:
         data = McpExpenseSummaryRequest.model_validate(body)
@@ -616,7 +649,7 @@ async def mcp_expense_summary(request: Request, db: AsyncSession = Depends(get_d
             func.sum(LedgerTransaction.amount).label("total_expense"),
             func.count().label("count"),
         ).where(
-            LedgerTransaction.user_id == DEFAULT_LOCAL_USER_ID,
+            LedgerTransaction.user_id == user_id,
             LedgerTransaction.direction == "expense",
             LedgerTransaction.status == "active",
             LedgerTransaction.occurred_at >= month_start,
@@ -630,7 +663,11 @@ async def mcp_expense_summary(request: Request, db: AsyncSession = Depends(get_d
 
 
 @router.post("/task/create")
-async def mcp_task_create(request: Request, db: AsyncSession = Depends(get_db)):
+async def mcp_task_create(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
     body = await request.json()
     try:
         data = TaskCreate.model_validate({
@@ -643,7 +680,7 @@ async def mcp_task_create(request: Request, db: AsyncSession = Depends(get_db)):
     task = await create_task_record(
         db,
         data,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         actor_type=MCP_AI_ACTOR_TYPE,
         source_channel=CLOUD_MCP_SOURCE_CHANNEL,
         tool_name="task_create",
@@ -654,6 +691,7 @@ async def mcp_task_create(request: Request, db: AsyncSession = Depends(get_db)):
     undo_token = str(uuid.uuid4())
     await _persist_create_undo_entries(
         db,
+        user_id=user_id,
         undo_token=undo_token,
         created_entities=[{"type": "task", "id": task.id}],
     )
@@ -665,7 +703,11 @@ async def mcp_task_create(request: Request, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/task/list")
-async def mcp_task_list(request: Request, db: AsyncSession = Depends(get_db)):
+async def mcp_task_list(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
     body = await _read_json_body(request)
     try:
         data = McpTaskListRequest.model_validate(body)
@@ -673,7 +715,7 @@ async def mcp_task_list(request: Request, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
     query = select(Task).where(
-        Task.user_id == DEFAULT_LOCAL_USER_ID,
+        Task.user_id == user_id,
         Task.status == "active",
     )
     if data.task_status:
@@ -684,7 +726,11 @@ async def mcp_task_list(request: Request, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/task/complete")
-async def mcp_task_complete(request: Request, db: AsyncSession = Depends(get_db)):
+async def mcp_task_complete(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
     body = await _read_json_body(request)
     try:
         data = McpTaskCompleteRequest.model_validate(body)
@@ -694,7 +740,7 @@ async def mcp_task_complete(request: Request, db: AsyncSession = Depends(get_db)
     task = await complete_task_record(
         db,
         task_id=data.task_id,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         actor_type=MCP_AI_ACTOR_TYPE,
         source_channel=CLOUD_MCP_SOURCE_CHANNEL,
         tool_name="task_complete",
@@ -710,7 +756,11 @@ async def mcp_task_complete(request: Request, db: AsyncSession = Depends(get_db)
 
 
 @router.post("/asset/create-upload-url")
-async def mcp_asset_create_upload_url(request: Request, db: AsyncSession = Depends(get_db)):
+async def mcp_asset_create_upload_url(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
     body = await request.json()
     try:
         data = AssetCreateUploadUrl.model_validate(body)
@@ -720,7 +770,7 @@ async def mcp_asset_create_upload_url(request: Request, db: AsyncSession = Depen
     asset, upload_url = await create_internal_asset_upload_record(
         db,
         data,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         actor_type=MCP_AI_ACTOR_TYPE,
         source_channel=CLOUD_MCP_SOURCE_CHANNEL,
         tool_name="asset_create_upload_url",
@@ -730,6 +780,7 @@ async def mcp_asset_create_upload_url(request: Request, db: AsyncSession = Depen
     undo_token = str(uuid.uuid4())
     await _persist_create_undo_entries(
         db,
+        user_id=user_id,
         undo_token=undo_token,
         created_entities=[{"type": "asset", "id": asset.id}],
     )
@@ -743,7 +794,11 @@ async def mcp_asset_create_upload_url(request: Request, db: AsyncSession = Depen
 
 
 @router.post("/asset/register-external-url")
-async def mcp_asset_register_external_url(request: Request, db: AsyncSession = Depends(get_db)):
+async def mcp_asset_register_external_url(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
     body = await request.json()
     try:
         data = AssetRegisterExternalUrl.model_validate(body)
@@ -753,7 +808,7 @@ async def mcp_asset_register_external_url(request: Request, db: AsyncSession = D
     asset = await register_external_asset_record(
         db,
         data,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         actor_type=MCP_AI_ACTOR_TYPE,
         source_channel=CLOUD_MCP_SOURCE_CHANNEL,
         tool_name="asset_register_external_url",
@@ -763,6 +818,7 @@ async def mcp_asset_register_external_url(request: Request, db: AsyncSession = D
     undo_token = str(uuid.uuid4())
     await _persist_create_undo_entries(
         db,
+        user_id=user_id,
         undo_token=undo_token,
         created_entities=[{"type": "asset", "id": asset.id}],
     )

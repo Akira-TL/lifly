@@ -13,8 +13,8 @@ from app.modules.memos.classification_engine import (
     ensure_tag_metadata,
     generate_memo_classifications,
 )
+from app.modules.auth.sessions import get_active_account_id
 from app.modules.memos.service import (
-    DEFAULT_LOCAL_USER_ID,
     create_memo_record,
     memo_to_response,
     write_memo_audit,
@@ -79,9 +79,9 @@ def _tag_metadata_data(item: TagMetadata) -> dict:
     }
 
 
-async def _load_memo(db: AsyncSession, memo_id: str) -> Memo:
+async def _load_memo(db: AsyncSession, memo_id: str, user_id: str) -> Memo:
     result = await db.execute(
-        select(Memo).where(Memo.id == memo_id, Memo.user_id == DEFAULT_LOCAL_USER_ID)
+        select(Memo).where(Memo.id == memo_id, Memo.user_id == user_id)
     )
     memo = result.scalar_one_or_none()
     if not memo:
@@ -92,11 +92,12 @@ async def _load_memo(db: AsyncSession, memo_id: str) -> Memo:
 async def _load_classification(
     db: AsyncSession,
     classification_id: str,
+    user_id: str,
     memo_id: str | None = None,
 ) -> MemoClassification:
     query = select(MemoClassification).where(
         MemoClassification.id == classification_id,
-        MemoClassification.user_id == DEFAULT_LOCAL_USER_ID,
+        MemoClassification.user_id == user_id,
     )
     if memo_id:
         query = query.where(MemoClassification.memo_id == memo_id)
@@ -112,19 +113,20 @@ async def _upsert_classification(
     memo_id: str,
     data: dict,
     status: str,
+    user_id: str,
 ) -> MemoClassification:
-    await _load_memo(db, memo_id)
+    await _load_memo(db, memo_id, user_id)
     classification_id = data.get("classification_id") or data.get("id")
     if classification_id:
-        item = await _load_classification(db, str(classification_id), memo_id)
-        await ensure_tag_metadata(db, user_id=DEFAULT_LOCAL_USER_ID, tag=item.tag)
+        item = await _load_classification(db, str(classification_id), user_id, memo_id)
+        await ensure_tag_metadata(db, user_id=user_id, tag=item.tag)
     else:
         tag = str(data.get("tag") or "").strip()
         if not tag:
             raise HTTPException(status_code=400, detail="tag is required")
-        await ensure_tag_metadata(db, user_id=DEFAULT_LOCAL_USER_ID, tag=tag)
+        await ensure_tag_metadata(db, user_id=user_id, tag=tag)
         item = MemoClassification(
-            user_id=DEFAULT_LOCAL_USER_ID,
+            user_id=user_id,
             memo_id=memo_id,
             tag=tag,
             source=str(data.get("source") or "user"),
@@ -140,11 +142,11 @@ async def _upsert_classification(
     return item
 
 
-async def _load_active_asset(db: AsyncSession, asset_id: str) -> Asset:
+async def _load_active_asset(db: AsyncSession, asset_id: str, user_id: str) -> Asset:
     result = await db.execute(
         select(Asset).where(
             Asset.id == asset_id,
-            Asset.user_id == DEFAULT_LOCAL_USER_ID,
+            Asset.user_id == user_id,
             Asset.status == "active",
         )
     )
@@ -154,13 +156,13 @@ async def _load_active_asset(db: AsyncSession, asset_id: str) -> Asset:
     return asset
 
 
-async def _list_memo_asset_refs(db: AsyncSession, memo_id: str) -> list[dict]:
+async def _list_memo_asset_refs(db: AsyncSession, memo_id: str, user_id: str) -> list[dict]:
     result = await db.execute(
         select(MemoAssetRef, Asset)
         .join(Asset, MemoAssetRef.asset_id == Asset.id)
         .where(
             MemoAssetRef.memo_id == memo_id,
-            Asset.user_id == DEFAULT_LOCAL_USER_ID,
+            Asset.user_id == user_id,
             Asset.status == "active",
         )
         .order_by(MemoAssetRef.created_at.asc())
@@ -169,11 +171,15 @@ async def _list_memo_asset_refs(db: AsyncSession, memo_id: str) -> list[dict]:
 
 
 @router.post("", response_model=ApiResponse)
-async def create_memo(data: MemoCreate, db: AsyncSession = Depends(get_db)):
+async def create_memo(
+    data: MemoCreate,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
     memo = await create_memo_record(
         db,
         data,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         actor_type="user",
         source_channel="api",
     )
@@ -192,8 +198,9 @@ async def list_memos(
     tag: str | None = Query(default=None),
     classification_status: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
-    query = select(Memo).where(Memo.user_id == DEFAULT_LOCAL_USER_ID, Memo.status == status)
+    query = select(Memo).where(Memo.user_id == user_id, Memo.status == status)
     if type:
         query = query.where(Memo.type == type)
     if q:
@@ -202,7 +209,7 @@ async def list_memos(
         )
     if tag or classification_status:
         classification_query = select(MemoClassification.memo_id).where(
-            MemoClassification.user_id == DEFAULT_LOCAL_USER_ID,
+            MemoClassification.user_id == user_id,
             MemoClassification.status != "rejected",
         )
         if tag:
@@ -231,12 +238,16 @@ async def list_memos(
 
 
 @router.get("/{memo_id}/classifications", response_model=ApiResponse)
-async def list_memo_classifications(memo_id: str, db: AsyncSession = Depends(get_db)):
-    await _load_memo(db, memo_id)
+async def list_memo_classifications(
+    memo_id: str,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
+    await _load_memo(db, memo_id, user_id)
     result = await db.execute(
         select(MemoClassification)
         .where(
-            MemoClassification.user_id == DEFAULT_LOCAL_USER_ID,
+            MemoClassification.user_id == user_id,
             MemoClassification.memo_id == memo_id,
         )
         .order_by(MemoClassification.updated_at.desc())
@@ -249,8 +260,9 @@ async def generate_memo_classification_suggestions(
     memo_id: str,
     data: MemoClassificationGenerateRequest = Body(default_factory=MemoClassificationGenerateRequest),
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
-    memo = await _load_memo(db, memo_id)
+    memo = await _load_memo(db, memo_id, user_id)
     items = await generate_memo_classifications(
         db,
         memo,
@@ -262,28 +274,46 @@ async def generate_memo_classification_suggestions(
 
 
 @router.post("/{memo_id}/classifications/confirm", response_model=ApiResponse)
-async def confirm_memo_classification(memo_id: str, data: dict = Body(default_factory=dict), db: AsyncSession = Depends(get_db)):
-    item = await _upsert_classification(db, memo_id, data, "confirmed")
+async def confirm_memo_classification(
+    memo_id: str,
+    data: dict = Body(default_factory=dict),
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
+    item = await _upsert_classification(db, memo_id, data, "confirmed", user_id)
     return ApiResponse(data=_classification_data(item))
 
 
 @router.post("/{memo_id}/classifications/reject", response_model=ApiResponse)
-async def reject_memo_classification(memo_id: str, data: dict = Body(default_factory=dict), db: AsyncSession = Depends(get_db)):
-    item = await _upsert_classification(db, memo_id, data, "rejected")
+async def reject_memo_classification(
+    memo_id: str,
+    data: dict = Body(default_factory=dict),
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
+    item = await _upsert_classification(db, memo_id, data, "rejected", user_id)
     return ApiResponse(data=_classification_data(item))
 
 
 @router.get("/{memo_id}", response_model=ApiResponse)
-async def get_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
-    memo = await _load_memo(db, memo_id)
-    assets = await _list_memo_asset_refs(db, memo_id)
+async def get_memo(
+    memo_id: str,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
+    memo = await _load_memo(db, memo_id, user_id)
+    assets = await _list_memo_asset_refs(db, memo_id, user_id)
     return ApiResponse(data=_memo_data(memo, assets=assets))
 
 
 @router.get("/{memo_id}/assets", response_model=ApiResponse)
-async def list_memo_assets(memo_id: str, db: AsyncSession = Depends(get_db)):
-    await _load_memo(db, memo_id)
-    assets = await _list_memo_asset_refs(db, memo_id)
+async def list_memo_assets(
+    memo_id: str,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
+    await _load_memo(db, memo_id, user_id)
+    assets = await _list_memo_asset_refs(db, memo_id, user_id)
     return ApiResponse(data={"memo_id": memo_id, "assets": assets})
 
 
@@ -292,10 +322,14 @@ async def bind_memo_asset(
     memo_id: str,
     data: MemoAssetBindRequest,
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
-    memo = await _load_memo(db, memo_id)
-    asset = await _load_active_asset(db, data.asset_id)
-    before = _memo_data(memo, assets=await _list_memo_asset_refs(db, memo_id))
+    memo = await _load_memo(db, memo_id, user_id)
+    asset = await _load_active_asset(db, data.asset_id, user_id)
+    before = _memo_data(
+        memo,
+        assets=await _list_memo_asset_refs(db, memo_id, user_id),
+    )
 
     existing_result = await db.execute(
         select(MemoAssetRef).where(
@@ -317,10 +351,10 @@ async def bind_memo_asset(
         db.add(ref)
     await db.flush()
 
-    after_assets = await _list_memo_asset_refs(db, memo_id)
+    after_assets = await _list_memo_asset_refs(db, memo_id, user_id)
     await write_memo_audit(
         db,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         actor_type="user",
         action="bind_asset",
         entity_id=memo_id,
@@ -335,7 +369,7 @@ async def bind_memo_asset(
         data={
             "memo_id": memo_id,
             "asset_ref": _asset_ref_data(ref, asset),
-            "assets": await _list_memo_asset_refs(db, memo_id),
+            "assets": await _list_memo_asset_refs(db, memo_id, user_id),
         }
     )
 
@@ -345,9 +379,13 @@ async def unbind_memo_asset(
     memo_id: str,
     asset_id: str,
     db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
 ):
-    memo = await _load_memo(db, memo_id)
-    before = _memo_data(memo, assets=await _list_memo_asset_refs(db, memo_id))
+    memo = await _load_memo(db, memo_id, user_id)
+    before = _memo_data(
+        memo,
+        assets=await _list_memo_asset_refs(db, memo_id, user_id),
+    )
 
     result = await db.execute(
         select(MemoAssetRef).where(
@@ -361,10 +399,10 @@ async def unbind_memo_asset(
 
     await db.delete(ref)
     await db.flush()
-    after_assets = await _list_memo_asset_refs(db, memo_id)
+    after_assets = await _list_memo_asset_refs(db, memo_id, user_id)
     await write_memo_audit(
         db,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         actor_type="user",
         action="unbind_asset",
         entity_id=memo_id,
@@ -378,8 +416,13 @@ async def unbind_memo_asset(
 
 
 @router.put("/{memo_id}", response_model=ApiResponse)
-async def update_memo(memo_id: str, data: MemoUpdate, db: AsyncSession = Depends(get_db)):
-    memo = await _load_memo(db, memo_id)
+async def update_memo(
+    memo_id: str,
+    data: MemoUpdate,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
+    memo = await _load_memo(db, memo_id, user_id)
 
     before = memo_to_response(memo).model_dump()
     update_data = data.model_dump(exclude_unset=True)
@@ -389,7 +432,7 @@ async def update_memo(memo_id: str, data: MemoUpdate, db: AsyncSession = Depends
 
     await write_memo_audit(
         db,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         actor_type="user",
         action="update",
         entity_id=memo_id,
@@ -403,8 +446,12 @@ async def update_memo(memo_id: str, data: MemoUpdate, db: AsyncSession = Depends
 
 
 @router.delete("/{memo_id}", response_model=ApiResponse)
-async def delete_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
-    memo = await _load_memo(db, memo_id)
+async def delete_memo(
+    memo_id: str,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_active_account_id),
+):
+    memo = await _load_memo(db, memo_id, user_id)
 
     before = memo_to_response(memo).model_dump()
     memo.status = "user_trashed"
@@ -413,7 +460,7 @@ async def delete_memo(memo_id: str, db: AsyncSession = Depends(get_db)):
 
     await write_memo_audit(
         db,
-        user_id=DEFAULT_LOCAL_USER_ID,
+        user_id=user_id,
         actor_type="user",
         action="trash",
         entity_id=memo_id,
