@@ -7,6 +7,7 @@ import 'package:client_flutter/data/auth/secure_session_store.dart';
 import 'package:client_flutter/data/device/device_contracts.dart';
 import 'package:client_flutter/data/device/device_identity_store.dart';
 import 'package:client_flutter/data/device/device_repository.dart';
+import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/features/ai_capture/data/compute_node_plan_client.dart';
 import 'package:client_flutter/features/ai_capture/data/external_ai_action_committer.dart';
 import 'package:client_flutter/features/ai_capture/data/lifly_cloud_ai_provider.dart';
@@ -125,6 +126,7 @@ class DefaultAiCaptureExecutionRuntime implements AiCaptureExecutionRuntime {
     ApiClient api, {
     AuthSessionStore? sessions,
     ComputeNodePlanClient? compute,
+    LocalCoreBridge? localCore,
   }) {
     final resolvedSessions =
         sessions ?? SecureAuthSessionStore(FlutterSecureSecretStore());
@@ -140,7 +142,12 @@ class DefaultAiCaptureExecutionRuntime implements AiCaptureExecutionRuntime {
       sessions: resolvedSessions,
       devices: DeviceRepository(ApiClientDeviceTransport(api)),
       cloud: LiflyCloudAiProvider(transport: ApiCloudAiTransport(api)),
-      committer: ExternalAiActionCommitter(ApiExternalAiActionTransport(api)),
+      committer: localCore == null
+          ? null
+          : LocalCoreExternalAiActionCommitter(
+              bridge: localCore,
+              sessions: resolvedSessions,
+            ),
       compute: resolvedCompute,
       api: api,
     );
@@ -151,7 +158,7 @@ class DefaultAiCaptureExecutionRuntime implements AiCaptureExecutionRuntime {
     required DeviceRepository devices,
     required LiflyCloudAiProvider cloud,
     required ComputeNodePlanClient compute,
-    ExternalAiActionCommitter? committer,
+    ExternalAiActionCommitterContract? committer,
   }) : this._(
          sessions: sessions,
          devices: devices,
@@ -174,7 +181,7 @@ class DefaultAiCaptureExecutionRuntime implements AiCaptureExecutionRuntime {
   final AuthSessionStore _sessions;
   final DeviceRepository _devices;
   final LiflyCloudAiProvider _cloud;
-  final ExternalAiActionCommitter? _committer;
+  final ExternalAiActionCommitterContract? _committer;
   final ComputeNodePlanClient _compute;
 
   @override

@@ -1,21 +1,7 @@
 import 'package:client_flutter/data/ai/ai_provider.dart';
-import 'package:client_flutter/data/api/api_client.dart';
-
-abstract interface class ExternalAiActionTransport {
-  Future<Map<String, dynamic>> post(String path, {Map<String, dynamic>? data});
-}
-
-class ApiExternalAiActionTransport implements ExternalAiActionTransport {
-  const ApiExternalAiActionTransport(this.api);
-
-  final ApiClient api;
-
-  @override
-  Future<Map<String, dynamic>> post(
-    String path, {
-    Map<String, dynamic>? data,
-  }) => api.post(path, data: data);
-}
+import 'package:client_flutter/data/auth/secure_session_store.dart';
+import 'package:client_flutter/data/local_core/local_core_bridge.dart';
+import 'package:client_flutter/data/local_core/local_core_context.dart';
 
 class ExternalAiActionCommitResult {
   const ExternalAiActionCommitResult({
@@ -35,93 +21,89 @@ class ExternalAiActionUndoResult {
   final int undone;
 }
 
-class ExternalAiActionCommitter {
-  const ExternalAiActionCommitter(this.transport);
+abstract interface class ExternalAiActionCommitterContract {
+  Future<ExternalAiActionCommitResult> commit(AiCandidateAction action);
 
-  final ExternalAiActionTransport transport;
+  Future<ExternalAiActionUndoResult> undo(String undoToken);
+}
 
+class LocalCoreExternalAiActionCommitter
+    implements ExternalAiActionCommitterContract {
+  const LocalCoreExternalAiActionCommitter({
+    required this.bridge,
+    required this.sessions,
+  });
+
+  final LocalCoreBridge bridge;
+  final AuthSessionStore sessions;
+
+  @override
   Future<ExternalAiActionCommitResult> commit(AiCandidateAction action) async {
-    final path = switch (action.type) {
-      'memo_create' => '/mcp/memo/create',
-      'task_create' => '/mcp/task/create',
-      'expense_create' => '/mcp/expense/create',
-      'asset_register_external_url' => '/mcp/asset/register-external-url',
-      _ => throw StateError('Unsupported external AI action: ${action.type}'),
-    };
-    final response = await transport.post(
-      path,
-      data: {
-        ...action.payloadJson,
-        if (action.rawText != null && action.rawText!.isNotEmpty)
-          'source_text': action.rawText,
-      },
+    final context = await _context();
+    final parsed = await bridge.captureParse({
+      'text': _seedText(action),
+      'timezone': 'Asia/Shanghai',
+      'locale': 'zh-CN',
+      'asset_ids': const <String>[],
+    }, context);
+    final actionTurn = parsed.turns.reversed.firstWhere(
+      (turn) => turn.role == 'assistant' && turn.actions.isNotEmpty,
+      orElse: () => throw StateError(
+        'Local Core could not create a candidate commit seam',
+      ),
     );
-    final undoToken = response['undo_token'];
-    if (undoToken is! String || undoToken.isEmpty) {
-      throw const FormatException(
-        'External AI commit did not return undo token',
-      );
+    final revised = await bridge.reviseCaptureAction({
+      'capture_id': parsed.captureId,
+      'turn_id': actionTurn.id,
+      'action_index': 0,
+      'action_type': action.type,
+      'payload': action.payloadJson,
+      'confidence': action.confidence,
+      'note': 'external_ai_candidate',
+    }, context);
+    final committed = await bridge.captureCommit({
+      'capture_id': parsed.captureId,
+      'turn_id': revised.id,
+      'selected_action_indexes': const [0],
+    }, context);
+    if (!committed.committed || committed.createdEntities.isEmpty) {
+      throw StateError('Local Core did not commit the external AI candidate');
     }
-    final entity = _entityRef(action.type, response);
+    final entity = committed.createdEntities.first;
     return ExternalAiActionCommitResult(
-      entityType: entity.$1,
-      entityId: entity.$2,
-      undoToken: undoToken,
+      entityType: entity.type,
+      entityId: entity.id,
+      undoToken: committed.undoToken,
     );
   }
 
+  @override
   Future<ExternalAiActionUndoResult> undo(String undoToken) async {
     if (undoToken.isEmpty) {
       throw const FormatException('Undo token is required');
     }
-    final response = await transport.post(
-      '/mcp/capture/undo',
-      data: {'undo_token': undoToken},
-    );
-    final undone = response['undone'];
-    if (undone is! int || undone < 0) {
-      throw const FormatException('Invalid external AI undo response');
+    final result = await bridge.captureUndo({
+      'undo_token': undoToken,
+    }, await _context());
+    return ExternalAiActionUndoResult(undone: result.undone);
+  }
+
+  Future<LocalCoreContext> _context() async {
+    final session = await sessions.read();
+    if (session == null) {
+      throw StateError(
+        'Account session is required for local AI candidate commit',
+      );
     }
-    return ExternalAiActionUndoResult(undone: undone);
+    return LocalCoreContext.flutterUser(userId: session.account.accountId);
   }
 
-  (String, String) _entityRef(
-    String actionType,
-    Map<String, dynamic> response,
-  ) {
-    switch (actionType) {
-      case 'memo_create':
-        return ('memo', _requiredString(response, 'memo_id'));
-      case 'task_create':
-        return ('task', _nestedId(response, 'task'));
-      case 'expense_create':
-        return ('ledger_transaction', _nestedId(response, 'transaction'));
-      case 'asset_register_external_url':
-        final id = response['asset_id'] ?? response['id'];
-        if (id is String && id.isNotEmpty) return ('asset', id);
-        final data = response['asset'];
-        if (data is Map) {
-          final nested = data['id'];
-          if (nested is String && nested.isNotEmpty) return ('asset', nested);
-        }
-        throw const FormatException('External asset commit did not return id');
-      default:
-        throw StateError('Unsupported external AI action: $actionType');
-    }
-  }
-}
-
-String _nestedId(Map<String, dynamic> response, String key) {
-  final value = response[key];
-  if (value is Map) {
-    final id = value['id'];
-    if (id is String && id.isNotEmpty) return id;
-  }
-  throw FormatException('External AI commit did not return $key id');
-}
-
-String _requiredString(Map<String, dynamic> json, String key) {
-  final value = json[key];
-  if (value is String && value.isNotEmpty) return value;
-  throw FormatException('Expected non-empty string for $key');
+  String _seedText(AiCandidateAction action) => switch (action) {
+    MemoCreateCandidateAction(:final contentMarkdown) => '记一下 $contentMarkdown',
+    TaskCreateCandidateAction(:final title) => '提醒我 $title',
+    ExpenseCreateCandidateAction(:final amount, :final merchant) =>
+      '在${merchant.isEmpty ? '商户' : merchant}花了 $amount',
+    AssetRegisterExternalUrlCandidateAction(:final externalUrl) =>
+      '保存链接 $externalUrl',
+  };
 }

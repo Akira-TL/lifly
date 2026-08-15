@@ -1,6 +1,7 @@
 import 'package:client_flutter/data/ai/ai_provider.dart';
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/device/device_contracts.dart';
+import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/features/ai_capture/data/ai_capture_execution_runtime.dart';
 import 'package:client_flutter/features/ai_capture/data/ai_capture_service.dart';
 import 'package:client_flutter/features/ai_capture/data/external_ai_action_committer.dart';
@@ -53,11 +54,12 @@ class _AiCapturePageState extends State<AiCapturePage> {
     if (_initialized) return;
     _initialized = true;
     final api = context.read<ApiClient?>();
+    final localCore = context.read<LocalCoreBridge?>();
     _executionRuntime =
         widget.executionRuntime ??
         (api == null
             ? const UnavailableAiCaptureExecutionRuntime()
-            : DefaultAiCaptureExecutionRuntime(api));
+            : DefaultAiCaptureExecutionRuntime(api, localCore: localCore));
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadInitial());
   }
 
