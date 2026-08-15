@@ -1,4 +1,4 @@
-package com.lifly.client_flutter
+package com.lifly.app
 
 import io.flutter.embedding.android.FlutterActivity
 
