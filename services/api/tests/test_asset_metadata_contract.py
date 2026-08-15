@@ -228,6 +228,18 @@ def test_encrypted_object_header_rejects_plaintext(monkeypatch: pytest.MonkeyPat
     assert encrypted_asset_object_has_valid_header("attachments/account-1/a/payload.e2ee") is False
 
 
+def test_explicit_purge_requires_trash_and_removes_ciphertext_object() -> None:
+    boundary = asset_service.asset_boundary_contract(_asset())
+    purge_source = inspect.getsource(asset_router.purge_asset)
+
+    assert boundary["trash_boundary"]["physical_blob_delete"] == "explicit_e2ee_purge"
+    assert 'asset.status == "active"' in purge_source
+    assert "_memo_ref_count" in purge_source
+    assert "purge_encrypted_asset_object" in purge_source
+    assert "await db.delete(asset)" in purge_source
+    assert '"status": "purged"' in purge_source
+
+
 def test_e2ee_contract_never_exposes_sensitive_asset_metadata() -> None:
     asset = _asset(
         user_id="account-1",
