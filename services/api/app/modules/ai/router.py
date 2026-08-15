@@ -4,7 +4,8 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.core.security import AuthenticatedSubject, get_authenticated_subject
+from app.core.security import AuthenticatedSubject
+from app.modules.auth.sessions import get_active_subject
 from app.modules.ai.cloud import (
     CloudAiConsentError,
     CloudAiInferenceGateway,
@@ -76,7 +77,7 @@ def get_cloud_ai_gateway() -> CloudAiInferenceGateway:
 @router.post("/cloud/plan", response_model=CloudAiInferenceResponse)
 async def cloud_plan(
     request: CloudAiInferenceRequest,
-    subject: AuthenticatedSubject = Depends(get_authenticated_subject),
+    subject: AuthenticatedSubject = Depends(get_active_subject),
     gateway: CloudAiInferenceGateway = Depends(get_cloud_ai_gateway),
 ) -> CloudAiInferenceResponse:
     # Authentication gates the cloud entry point. Account identity is not added

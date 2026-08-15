@@ -62,14 +62,16 @@ async def import_upload(
     file: UploadFile,
     provider: str = Query(default="auto", pattern=r"^(auto|generic|alipay|wechat)$"),
     db: AsyncSession = Depends(get_db),
+    subject: AuthenticatedSubject = Depends(get_active_subject),
 ):
+    user_id = subject.account_id
     content = await file.read()
 
     parser = PARSERS.get(provider)
     if not parser:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
 
-    parse_result = parser(content, "local-dev")
+    parse_result = parser(content, user_id)
     detected_provider = parse_result.provider or provider
     file_hash = compute_file_hash(content)
 
@@ -77,7 +79,7 @@ async def import_upload(
     existing = await db.scalar(
         select(func.count()).select_from(
             select(ImportBatch).where(
-                ImportBatch.user_id == "local-dev",
+                ImportBatch.user_id == user_id,
                 ImportBatch.file_hash == file_hash,
                 ImportBatch.status.in_(["committed"]),
             ).subquery()
@@ -87,7 +89,7 @@ async def import_upload(
         raise HTTPException(status_code=409, detail="该文件已导入过（相同文件哈希），请勿重复导入")
 
     batch = ImportBatch(
-        user_id="local-dev",
+        user_id=user_id,
         source_provider=detected_provider,
         filename=file.filename,
         file_hash=file_hash,
@@ -142,11 +144,13 @@ async def import_preview(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
+    subject: AuthenticatedSubject = Depends(get_active_subject),
 ):
+    user_id = subject.account_id
     batch = await db.scalar(
         select(ImportBatch).where(
             ImportBatch.id == batch_id,
-            ImportBatch.user_id == "local-dev",
+            ImportBatch.user_id == user_id,
         ).limit(1)
     )
     if not batch:
@@ -330,11 +334,16 @@ async def _should_mark_import_duplicate(
 
 
 @router.post("/import/{batch_id}/commit", response_model=ApiResponse)
-async def import_commit(batch_id: str, db: AsyncSession = Depends(get_db)):
+async def import_commit(
+    batch_id: str,
+    db: AsyncSession = Depends(get_db),
+    subject: AuthenticatedSubject = Depends(get_active_subject),
+):
+    user_id = subject.account_id
     batch = await db.scalar(
         select(ImportBatch).where(
             ImportBatch.id == batch_id,
-            ImportBatch.user_id == "local-dev",
+            ImportBatch.user_id == user_id,
         ).limit(1)
     )
     if not batch:
@@ -384,7 +393,7 @@ async def import_commit(batch_id: str, db: AsyncSession = Depends(get_db)):
 
         if await _should_mark_import_duplicate(
             db,
-            user_id="local-dev",
+            user_id=user_id,
             parsed=parsed,
             amount=amount,
             occurred_at=occurred_at,
@@ -395,7 +404,7 @@ async def import_commit(batch_id: str, db: AsyncSession = Depends(get_db)):
             continue
 
         tx = LedgerTransaction(
-            user_id="local-dev",
+            user_id=user_id,
             direction=direction,
             amount=amount,
             currency=parsed.get("currency") or "CNY",
@@ -415,7 +424,7 @@ async def import_commit(batch_id: str, db: AsyncSession = Depends(get_db)):
 
         await _write_audit(
             db,
-            "local-dev",
+            user_id,
             IMPORT_COMMIT_AUDIT_ACTION,
             "ledger_transaction",
             tx.id,
@@ -429,7 +438,7 @@ async def import_commit(batch_id: str, db: AsyncSession = Depends(get_db)):
 
     await _write_audit(
         db,
-        "local-dev",
+        user_id,
         IMPORT_BATCH_COMMIT_AUDIT_ACTION,
         "import_batch",
         batch_id,
@@ -461,11 +470,16 @@ async def import_commit(batch_id: str, db: AsyncSession = Depends(get_db)):
 # ─── Import: Rollback ─────────────────────────────────────────────────────────
 
 @router.post("/import/{batch_id}/rollback", response_model=ApiResponse)
-async def import_rollback(batch_id: str, db: AsyncSession = Depends(get_db)):
+async def import_rollback(
+    batch_id: str,
+    db: AsyncSession = Depends(get_db),
+    subject: AuthenticatedSubject = Depends(get_active_subject),
+):
+    user_id = subject.account_id
     batch = await db.scalar(
         select(ImportBatch).where(
             ImportBatch.id == batch_id,
-            ImportBatch.user_id == "local-dev",
+            ImportBatch.user_id == user_id,
         ).limit(1)
     )
     if not batch:
@@ -503,7 +517,7 @@ async def import_rollback(batch_id: str, db: AsyncSession = Depends(get_db)):
         tx = await db.scalar(
             select(LedgerTransaction).where(
                 LedgerTransaction.id == row.transaction_id,
-                LedgerTransaction.user_id == "local-dev",
+                LedgerTransaction.user_id == user_id,
                 LedgerTransaction.import_batch_id == batch_id,
             ).limit(1)
         )
@@ -525,7 +539,7 @@ async def import_rollback(batch_id: str, db: AsyncSession = Depends(get_db)):
 
         await _write_audit(
             db,
-            "local-dev",
+            user_id,
             IMPORT_ROLLBACK_AUDIT_ACTION,
             "ledger_transaction",
             tx.id,
@@ -547,7 +561,7 @@ async def import_rollback(batch_id: str, db: AsyncSession = Depends(get_db)):
 
     await _write_audit(
         db,
-        "local-dev",
+        user_id,
         IMPORT_BATCH_ROLLBACK_AUDIT_ACTION,
         "import_batch",
         batch_id,
@@ -573,8 +587,10 @@ async def list_batches(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
+    subject: AuthenticatedSubject = Depends(get_active_subject),
 ):
-    query = select(ImportBatch).where(ImportBatch.user_id == "local-dev")
+    user_id = subject.account_id
+    query = select(ImportBatch).where(ImportBatch.user_id == user_id)
     if status:
         query = query.where(ImportBatch.status == status)
     query = query.order_by(ImportBatch.created_at.desc()).limit(limit).offset(offset)
@@ -607,11 +623,16 @@ async def list_batches(
 # ─── Import: Get batch detail ─────────────────────────────────────────────────
 
 @router.get("/import/{batch_id}", response_model=ApiResponse)
-async def get_batch(batch_id: str, db: AsyncSession = Depends(get_db)):
+async def get_batch(
+    batch_id: str,
+    db: AsyncSession = Depends(get_db),
+    subject: AuthenticatedSubject = Depends(get_active_subject),
+):
+    user_id = subject.account_id
     batch = await db.scalar(
         select(ImportBatch).where(
             ImportBatch.id == batch_id,
-            ImportBatch.user_id == "local-dev",
+            ImportBatch.user_id == user_id,
         ).limit(1)
     )
     if not batch:

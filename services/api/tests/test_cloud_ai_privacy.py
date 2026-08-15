@@ -6,7 +6,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.core.security import AuthenticatedSubject, get_authenticated_subject
+from app.core.security import AuthenticatedSubject
+from app.modules.auth.sessions import get_active_subject
 from app.modules.ai.cloud import (
     CloudAiConsentError,
     CloudAiDisclosureScope,
@@ -203,7 +204,7 @@ def test_cloud_ai_route_is_authenticated_and_returns_candidate_actions_only() ->
     gateway = CloudAiInferenceGateway(provider)
     app = FastAPI()
     app.include_router(ai_router, prefix="/ai")
-    app.dependency_overrides[get_authenticated_subject] = lambda: AuthenticatedSubject(
+    app.dependency_overrides[get_active_subject] = lambda: AuthenticatedSubject(
         account_id="account-1"
     )
     app.dependency_overrides[get_cloud_ai_gateway] = lambda: gateway
@@ -225,7 +226,7 @@ def test_cloud_ai_route_does_not_echo_provider_error_payload() -> None:
     gateway = CloudAiInferenceGateway(provider)
     app = FastAPI()
     app.include_router(ai_router, prefix="/ai")
-    app.dependency_overrides[get_authenticated_subject] = lambda: AuthenticatedSubject(
+    app.dependency_overrides[get_active_subject] = lambda: AuthenticatedSubject(
         account_id="account-1"
     )
     app.dependency_overrides[get_cloud_ai_gateway] = lambda: gateway
