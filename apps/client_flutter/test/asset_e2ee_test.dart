@@ -92,6 +92,42 @@ void main() {
     );
   });
 
+  test(
+    'asset key can be re-wrapped to a newer ADK without re-encrypting content',
+    () async {
+      final cipher = AssetE2eeCipher(chunkSize: 32);
+      final nextAdk = AccountDataKey.fromBytes(
+        keyVersion: 8,
+        bytes: List<int>.generate(32, (index) => 100 + index),
+      );
+      final plaintext = List<int>.generate(80, (index) => index * 2);
+      final encrypted = await cipher.encrypt(
+        assetId: 'asset-rotate',
+        plaintext: plaintext,
+        adk: adk,
+      );
+
+      final rewrapped = await cipher.rewrapAssetKey(
+        assetId: 'asset-rotate',
+        wrappedAssetKey: encrypted.wrappedAssetKey,
+        oldAdk: adk,
+        newAdk: nextAdk,
+      );
+
+      expect(rewrapped.adkKeyVersion, 8);
+      expect(rewrapped.ciphertext, isNot(encrypted.wrappedAssetKey.ciphertext));
+      expect(
+        await cipher.decrypt(
+          assetId: 'asset-rotate',
+          ciphertext: encrypted.ciphertext,
+          wrappedAssetKey: rewrapped,
+          adk: nextAdk,
+        ),
+        plaintext,
+      );
+    },
+  );
+
   test('wrapped asset key is bound to asset id', () async {
     final cipher = AssetE2eeCipher(chunkSize: 32);
     final encrypted = await cipher.encrypt(

@@ -1,9 +1,24 @@
 import 'dart:convert';
 
+import 'package:client_flutter/data/crypto/account_data_key.dart';
 import 'package:client_flutter/data/crypto/encrypted_envelope.dart';
 import 'package:client_flutter/data/powersync/encrypted_sync_store.dart';
 import 'package:client_flutter/domain/entities/asset.dart';
 import 'package:client_flutter/features/asset/data/asset_e2ee_cipher.dart';
+
+class AssetKeyRotationResult {
+  final int encryptedEntitiesRotated;
+  final int encryptedEntitiesSkipped;
+  final int assetKeysRewrapped;
+  final int keyVersion;
+
+  const AssetKeyRotationResult({
+    required this.encryptedEntitiesRotated,
+    required this.encryptedEntitiesSkipped,
+    required this.assetKeysRewrapped,
+    required this.keyVersion,
+  });
+}
 
 class PreparedAssetUpload {
   final EncryptedAssetPayload encrypted;
@@ -53,6 +68,11 @@ abstract interface class AssetE2eeCoordinator {
   });
 
   Future<void> trashAsset(String assetId, {required DateTime now});
+
+  Future<AssetKeyRotationResult> rotateAccountDataKey(
+    AccountDataKey nextKey, {
+    required DateTime now,
+  });
 
   Future<void> syncMemoAssetRef({
     required String refId,
@@ -264,6 +284,63 @@ class PowerSyncAssetE2eeCoordinator implements AssetE2eeCoordinator {
     );
     await store.db.execute('DELETE FROM assets WHERE id = ?', [assetId]);
     await _recordProjectionState(envelope);
+  }
+
+  @override
+  Future<AssetKeyRotationResult> rotateAccountDataKey(
+    AccountDataKey nextKey, {
+    required DateTime now,
+  }) async {
+    final rotation = await store.rotateKey(nextKey);
+    final rows = await store.db.getAll(
+      'SELECT id, user_id, entity_type, revision, lifecycle_status, updated_at, '
+      'key_version, encryption_version, schema_version, nonce, ciphertext '
+      "FROM encrypted_entities WHERE user_id = ? AND entity_type = 'asset' "
+      "AND lifecycle_status = 'active'",
+      [accountId],
+    );
+    var rewrapped = 0;
+    for (final row in rows) {
+      final envelope = _envelopeFromRow(row);
+      final payload = await store.cipher.decryptEntity(envelope, key: nextKey);
+      final wrappedRaw = payload['wrapped_asset_key'];
+      if (wrappedRaw is! Map) continue;
+      final wrapped = WrappedAssetKey.fromJson(
+        Map<String, Object?>.from(wrappedRaw),
+      );
+      if (wrapped.adkKeyVersion == nextKey.keyVersion) continue;
+      final oldAdk = store.keyRing.keyForVersion(wrapped.adkKeyVersion);
+      if (oldAdk == null) {
+        throw StateError(
+          'Missing old ADK version ${wrapped.adkKeyVersion} while re-wrapping ${envelope.id}',
+        );
+      }
+      final nextWrapped = await assetCipher.rewrapAssetKey(
+        assetId: envelope.id,
+        wrappedAssetKey: wrapped,
+        oldAdk: oldAdk,
+        newAdk: nextKey,
+      );
+      final nextPayload = Map<String, Object?>.from(payload)
+        ..['wrapped_asset_key'] = nextWrapped.toJson()
+        ..['updated_at'] = now.toUtc().toIso8601String();
+      final nextEnvelope = await _putEntity(
+        id: envelope.id,
+        entityType: 'asset',
+        revision: envelope.revision + 1,
+        now: now,
+        payload: nextPayload,
+      );
+      await _materializeAsset(envelope.id, nextPayload);
+      await _recordProjectionState(nextEnvelope);
+      rewrapped += 1;
+    }
+    return AssetKeyRotationResult(
+      encryptedEntitiesRotated: rotation.rotated,
+      encryptedEntitiesSkipped: rotation.skipped,
+      assetKeysRewrapped: rewrapped,
+      keyVersion: rotation.keyVersion,
+    );
   }
 
   @override

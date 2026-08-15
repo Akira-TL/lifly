@@ -261,6 +261,19 @@ class _FakeAssetE2eeCoordinator implements AssetE2eeCoordinator {
   }) async => const [];
 
   @override
+  Future<AssetKeyRotationResult> rotateAccountDataKey(
+    AccountDataKey nextKey, {
+    required DateTime now,
+  }) async {
+    return AssetKeyRotationResult(
+      encryptedEntitiesRotated: 0,
+      encryptedEntitiesSkipped: 0,
+      assetKeysRewrapped: 0,
+      keyVersion: nextKey.keyVersion,
+    );
+  }
+
+  @override
   Future<void> syncMemoAssetRef({
     required String refId,
     required String memoId,

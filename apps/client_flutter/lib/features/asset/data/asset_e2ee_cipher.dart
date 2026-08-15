@@ -148,6 +148,24 @@ class AssetE2eeCipher {
     );
   }
 
+  Future<WrappedAssetKey> rewrapAssetKey({
+    required String assetId,
+    required WrappedAssetKey wrappedAssetKey,
+    required AccountDataKey oldAdk,
+    required AccountDataKey newAdk,
+  }) async {
+    final assetKey = await _unwrapAssetKey(
+      assetId: assetId,
+      wrappedAssetKey: wrappedAssetKey,
+      adk: oldAdk,
+    );
+    return _wrapAssetKey(
+      assetId: assetId,
+      assetSecretKey: assetKey,
+      adk: newAdk,
+    );
+  }
+
   Future<List<int>> decrypt({
     required String assetId,
     required List<int> ciphertext,
