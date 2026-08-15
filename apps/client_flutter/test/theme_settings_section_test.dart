@@ -8,6 +8,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+class _FailingThemePreferenceStore implements ThemePreferenceStore {
+  @override
+  Future<ThemePreference?> load() async => null;
+
+  @override
+  Future<void> save(ThemePreference preference) async {
+    throw StateError('preferences backend leaked');
+  }
+}
+
 class _MemoryThemePreferenceStore implements ThemePreferenceStore {
   ThemePreference? value;
 
@@ -21,6 +31,38 @@ class _MemoryThemePreferenceStore implements ThemePreferenceStore {
 }
 
 void main() {
+  testWidgets('theme switch hides persistence implementation errors', (
+    WidgetTester tester,
+  ) async {
+    final runtime = ThemeRuntime(
+      registry: ThemeRegistry(
+        packages: [ThemePackage.fromJson(liflyTestThemePackageJson)],
+      ),
+      preferenceStore: _FailingThemePreferenceStore(),
+      appVersion: '0.8.0',
+      platform: ThemeTargetPlatform.web,
+    );
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<ThemeRuntime>.value(
+        value: runtime,
+        child: const MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(child: ThemeSettingsSection()),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('theme_family_selector')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mint Test').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('主题切换失败，请稍后重试'), findsOneWidget);
+    expect(find.textContaining('preferences backend leaked'), findsNothing);
+  });
+
   testWidgets('user selects an installed family and color mode', (
     WidgetTester tester,
   ) async {

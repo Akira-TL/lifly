@@ -1,5 +1,6 @@
 import 'package:client_flutter/app/theme/theme_package.dart';
 import 'package:client_flutter/app/theme/theme_runtime.dart';
+import 'package:client_flutter/shared/errors/user_facing_error.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -18,11 +19,19 @@ class _ThemeSettingsSectionState extends State<ThemeSettingsSection> {
     setState(() => _saving = true);
     try {
       await action();
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('主题切换失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingFailure(
+              action: '主题切换',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
