@@ -1,17 +1,56 @@
+import { execPath } from "node:process";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  LiflyDeviceCapabilityReportSchema,
   LiflyMcpToolDescriptions,
   LiflyMcpToolNameSchema,
   parseLiflyMcpToolOutput,
 } from "../../../packages/protocol/src/index.js";
-import { createTestLocalMcpRuntime, LocalMcpServer } from "../src/index.js";
+import { createDesktopLocalMcpRuntime, createTestLocalMcpRuntime, LocalMcpServer } from "../src/index.js";
 
 function createFakeServer(): LocalMcpServer {
   return new LocalMcpServer(createTestLocalMcpRuntime());
 }
 
 describe("LocalMcpServer", () => {
+  it("executes Local MCP through a configured desktop host process", async () => {
+    const fixturePath = fileURLToPath(new URL("./fixtures/desktop-core-host.mjs", import.meta.url));
+    const server = new LocalMcpServer(
+      createDesktopLocalMcpRuntime({ bridgePath: execPath, bridgeArgs: [fixturePath] }),
+    );
+
+    try {
+      const health = await server.handle({ method: "health" });
+      expect(health.ok).toBe(true);
+      if (health.ok) {
+        expect(health.result).toMatchObject({ status: "ok", version: "desktop-host.fixture" });
+      }
+
+      const created = await server.handle({
+        method: "tools/call",
+        params: {
+          name: "memo_create",
+          input: { type: "memo", content_markdown: "desktop process bridge" },
+        },
+      });
+      expect(created.ok).toBe(true);
+
+      const searched = await server.handle({
+        method: "tools/call",
+        params: { name: "memo_search", input: { q: "desktop process bridge", limit: 20 } },
+      });
+      expect(searched.ok).toBe(true);
+      if (searched.ok) {
+        const result = parseLiflyMcpToolOutput("memo_search", searched.result);
+        expect(result.memos.map((memo) => memo.content_markdown)).toContain("desktop process bridge");
+      }
+    } finally {
+      await server.close();
+    }
+  });
+
   it("reports desktop bridge health by default", async () => {
     const server = new LocalMcpServer();
     const response = await server.handle({ method: "health" });
@@ -51,6 +90,19 @@ describe("LocalMcpServer", () => {
     expect(response.ok).toBe(true);
     if (response.ok) {
       expect(response.result).toMatchObject({ status: "ok", mode: "fake", runtime: "test" });
+    }
+  });
+
+  it("reports compute-node capabilities using the shared device contract", async () => {
+    const server = createFakeServer();
+    const response = await server.handle({ method: "node/capabilities" } as never);
+    expect(response.ok).toBe(true);
+    if (response.ok) {
+      const report = LiflyDeviceCapabilityReportSchema.parse(response.result);
+      expect(report.capabilities).toEqual(["local_mcp"]);
+      expect(report.supported_tools).toEqual(
+        LiflyMcpToolNameSchema.options.filter((name) => name !== "asset_create_upload_url"),
+      );
     }
   });
 

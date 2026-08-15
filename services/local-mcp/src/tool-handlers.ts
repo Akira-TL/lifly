@@ -2,6 +2,7 @@ import {
   DesktopLocalCoreBridge,
   FakeLocalCoreBridge,
   localMcpContext,
+  type DesktopLocalCoreTransport,
   type LocalCoreBridge,
 } from "../../../packages/local-core/src/index.js";
 import type {
@@ -19,11 +20,14 @@ import type {
   TaskListInput,
 } from "../../../packages/local-core/src/index.js";
 import {
+  LiflyDeviceProtocolVersion,
   LiflyMcpToolDescriptions,
   LiflyMcpToolInputSchemas,
   LiflyMcpToolNameSchema,
+  type LiflyDeviceCapabilityReport,
   type LiflyMcpToolName,
 } from "../../../packages/protocol/src/index.js";
+import { DesktopLocalCoreProcessTransport } from "./desktop-core-transport.js";
 import type { LocalMcpToolDefinition } from "./types.js";
 
 export type LocalMcpBridgeMode = "desktop" | "fake";
@@ -31,10 +35,28 @@ export type LocalMcpBridgeMode = "desktop" | "fake";
 export interface LocalMcpRuntime {
   core: LocalCoreBridge;
   bridgeMode: LocalMcpBridgeMode;
+  close?: () => Promise<void> | void;
 }
 
-export function createDesktopLocalMcpRuntime(): LocalMcpRuntime {
-  return { core: new DesktopLocalCoreBridge(), bridgeMode: "desktop" };
+export interface DesktopLocalMcpRuntimeOptions {
+  bridgePath?: string | null;
+  bridgeArgs?: string[];
+  transport?: DesktopLocalCoreTransport | null;
+  requestTimeoutMs?: number;
+}
+
+export function createDesktopLocalMcpRuntime(options: DesktopLocalMcpRuntimeOptions = {}): LocalMcpRuntime {
+  const bridgePath = options.bridgePath ?? process.env.LIFLY_LOCAL_CORE_BRIDGE_PATH ?? null;
+  const transport = options.transport
+    ?? (bridgePath
+      ? new DesktopLocalCoreProcessTransport({
+        bridgePath,
+        bridgeArgs: options.bridgeArgs,
+        requestTimeoutMs: options.requestTimeoutMs,
+      })
+      : null);
+  const core = new DesktopLocalCoreBridge({ bridgePath, transport });
+  return { core, bridgeMode: "desktop", close: () => core.close() };
 }
 
 export function createTestLocalMcpRuntime(): LocalMcpRuntime {
@@ -50,6 +72,14 @@ export function listLocalMcpTools(): LocalMcpToolDefinition[] {
     name,
     description: LiflyMcpToolDescriptions[name],
   }));
+}
+
+export function localMcpCapabilityReport(): LiflyDeviceCapabilityReport {
+  return {
+    protocol_version: LiflyDeviceProtocolVersion,
+    capabilities: ["local_mcp"],
+    supported_tools: LiflyMcpToolNameSchema.options.filter((name) => name !== "asset_create_upload_url"),
+  };
 }
 
 export async function callLocalMcpTool(

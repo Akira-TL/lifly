@@ -1,9 +1,19 @@
 import { LiflyMcpToolNameSchema, type LiflyMcpToolName } from "../../../packages/protocol/src/index.js";
-import { callLocalMcpTool, createDefaultLocalMcpRuntime, listLocalMcpTools, type LocalMcpRuntime } from "./tool-handlers.js";
+import {
+  callLocalMcpTool,
+  createDefaultLocalMcpRuntime,
+  listLocalMcpTools,
+  localMcpCapabilityReport,
+  type LocalMcpRuntime,
+} from "./tool-handlers.js";
 import type { LocalMcpCallParams, LocalMcpRequest, LocalMcpResponse } from "./types.js";
 
 export class LocalMcpServer {
   constructor(private readonly runtime: LocalMcpRuntime = createDefaultLocalMcpRuntime()) {}
+
+  async close(): Promise<void> {
+    await this.runtime.close?.();
+  }
 
   async handle(request: LocalMcpRequest): Promise<LocalMcpResponse> {
     try {
@@ -11,6 +21,9 @@ export class LocalMcpServer {
         case "health": {
           const health = await this.runtime.core.health();
           return { id: request.id, ok: true, result: health };
+        }
+        case "node/capabilities": {
+          return { id: request.id, ok: true, result: localMcpCapabilityReport() };
         }
         case "tools/list": {
           return { id: request.id, ok: true, result: { tools: listLocalMcpTools() } };

@@ -7,7 +7,7 @@ export interface LocalMcpToolDefinition {
 
 export interface LocalMcpRequest {
   id?: string | number | null;
-  method: "health" | "tools/list" | "tools/call";
+  method: "health" | "node/capabilities" | "tools/list" | "tools/call";
   params?: unknown;
 }
 

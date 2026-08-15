@@ -5,13 +5,17 @@ import { LocalMcpServer } from "./server.js";
 import type { LocalMcpRequest } from "./types.js";
 
 export { LocalMcpServer } from "./server.js";
+export { DesktopLocalCoreProcessTransport } from "./desktop-core-transport.js";
+export type { DesktopLocalCoreProcessTransportOptions } from "./desktop-core-transport.js";
 export {
   callLocalMcpTool,
   createDefaultLocalMcpRuntime,
   createDesktopLocalMcpRuntime,
   createTestLocalMcpRuntime,
   listLocalMcpTools,
+  localMcpCapabilityReport,
 } from "./tool-handlers.js";
+export type { DesktopLocalMcpRuntimeOptions, LocalMcpRuntime } from "./tool-handlers.js";
 export type * from "./types.js";
 
 export async function runStdioServer(): Promise<void> {
