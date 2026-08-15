@@ -254,7 +254,7 @@ Widget _fixtureApp(LocalCoreBridge bridge, Widget home) {
     providers: [
       Provider<LiflyDataMode>.value(value: LiflyDataMode.local),
       Provider<ApiClient>(
-        create: (_) => ApiClient(baseUrl: 'http://127.0.0.1:8310/api/v1'),
+        create: (_) => ApiClient(baseUrl: 'http://127.0.0.1:8210/api/v1'),
       ),
       Provider<LocalCoreBridge>.value(value: bridge),
     ],

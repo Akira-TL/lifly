@@ -8,7 +8,7 @@ import httpx
 import pytest
 
 
-API_BASE_URL = os.getenv("LIFLY_API_BASE_URL", "http://localhost:8310")
+API_BASE_URL = os.getenv("LIFLY_API_BASE_URL", "http://localhost:8210")
 
 
 class LiflyApiClient:
@@ -59,7 +59,7 @@ def test_health_reports_patch_version(api: LiflyApiClient) -> None:
 
     assert body["status"] == "ok"
     assert body["version"] == "0.1.0"
-    assert body["port"] == 8310
+    assert body["port"] == 8210
 
 
 def test_mcp_memo_create_and_search_contract(

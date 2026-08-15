@@ -6,9 +6,13 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CLIENT_DIR="$PROJECT_ROOT/apps/client_flutter"
 LOG_DIR="$PROJECT_ROOT/logs"
 
-PORT="${LIFLY_WEB_PORT:-4175}"
+export LIFLY_DEPLOY_SLOT=dev
+# shellcheck source=scripts/lib/lifly-ports.sh
+source "$SCRIPT_DIR/lib/lifly-ports.sh"
+
+PORT="$LIFLY_WEB_PORT"
 DATA_MODE="${LIFLY_DATA_MODE:-local}"
-API_BASE_URL="${LIFLY_API_BASE_URL:-http://127.0.0.1:8310/api/v1}"
+API_BASE_URL="${LIFLY_API_BASE_URL:-http://127.0.0.1:$LIFLY_API_PORT/api/v1}"
 APP_VERSION="${LIFLY_APP_VERSION:-0.8.2}"
 VISUAL_FIXTURES="${LIFLY_VISUAL_FIXTURES:-false}"
 PID_FILE="$LOG_DIR/flutter-web-$PORT.pid"
@@ -31,7 +35,7 @@ if ss -ltn | grep -q ":$PORT "; then
   exit 1
 fi
 
-echo "启动 Flutter Web 调试实例..."
+echo "启动 Flutter Web Dev..."
 echo "  URL:      http://127.0.0.1:$PORT"
 echo "  DataMode: $DATA_MODE"
 echo "  API:      $API_BASE_URL"
@@ -40,7 +44,7 @@ echo "  Log:      $LOG_FILE"
 
 cd "$CLIENT_DIR"
 nohup flutter run -d web-server \
-  --web-hostname 0.0.0.0 \
+  --web-hostname 127.0.0.1 \
   --web-port "$PORT" \
   --dart-define="LIFLY_DATA_MODE=$DATA_MODE" \
   --dart-define="LIFLY_API_BASE_URL=$API_BASE_URL" \

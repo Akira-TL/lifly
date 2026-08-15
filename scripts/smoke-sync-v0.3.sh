@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-API_BASE="${LIFLY_API_BASE_URL:-http://localhost:8310}"
+API_BASE="${LIFLY_API_BASE_URL:-http://localhost:8210}"
 TMP_DIR="$(mktemp -d)"
 LAST_BODY=""
 PASS_COUNT=0

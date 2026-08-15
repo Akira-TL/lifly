@@ -201,7 +201,7 @@ created_entities 记录 {type: memo, id}
 先调用 `capture_parse`：
 
 ```bash
-CAPTURE_ID=$(curl -s -X POST http://localhost:8310/api/v1/mcp/capture/parse \
+CAPTURE_ID=$(curl -s -X POST http://localhost:8210/api/v1/mcp/capture/parse \
   -H 'Content-Type: application/json' \
   -d '{"text":"记一下 capture_commit 测试","timezone":"Asia/Shanghai","locale":"zh-CN"}' \
   | jq -r '.capture_id')
@@ -210,7 +210,7 @@ CAPTURE_ID=$(curl -s -X POST http://localhost:8310/api/v1/mcp/capture/parse \
 再提交：
 
 ```bash
-curl -X POST http://localhost:8310/api/v1/mcp/capture/commit \
+curl -X POST http://localhost:8210/api/v1/mcp/capture/commit \
   -H 'Content-Type: application/json' \
   -d "{\"capture_id\":\"$CAPTURE_ID\"}"
 ```
@@ -301,7 +301,7 @@ MCP router 不应绕过 `app.modules.memos.service` 直接构造 `Memo`。后续
 ### 本地验证
 
 ```bash
-curl -X POST http://localhost:8310/api/v1/mcp/memo/create \
+curl -X POST http://localhost:8210/api/v1/mcp/memo/create \
   -H 'Content-Type: application/json' \
   -d '{"type":"memo","title":"MCP memo smoke test","content_markdown":"hello from memo_create","tags":["mcp","smoke"]}'
 ```
@@ -311,7 +311,7 @@ curl -X POST http://localhost:8310/api/v1/mcp/memo/create \
 无效输入应返回 `422`，例如：
 
 ```bash
-curl -X POST http://localhost:8310/api/v1/mcp/memo/create \
+curl -X POST http://localhost:8210/api/v1/mcp/memo/create \
   -H 'Content-Type: application/json' \
   -d '{"type":"invalid","content_markdown":"bad"}'
 ```

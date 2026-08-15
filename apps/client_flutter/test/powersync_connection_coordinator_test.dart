@@ -16,7 +16,7 @@ class FakeConnectionApiClient extends ApiClient {
     return {
       'success': true,
       'data': {
-        'endpoint': 'http://localhost:8380',
+        'endpoint': 'http://localhost:8204',
         'token': 'token-value',
         'user_id': 'local-dev',
         'expires_at': '2026-07-03T10:00:00Z',

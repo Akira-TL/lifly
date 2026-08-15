@@ -37,7 +37,7 @@ ROBOT_TEMPLATES: dict[str, dict] = {
             "expense_create", "expense_search", "expense_summary",
             "task_create", "task_list", "task_complete",
         ],
-        "mcp_endpoint": "http://localhost:8310/mcp",
+        "mcp_endpoint": "/mcp",
         "tags": ["通用", "入门"],
     },
     "finance-bot": {
@@ -57,7 +57,7 @@ ROBOT_TEMPLATES: dict[str, dict] = {
             "expense_create", "expense_search", "expense_summary",
             "capture_parse", "capture_commit", "capture_undo",
         ],
-        "mcp_endpoint": "http://localhost:8310/mcp",
+        "mcp_endpoint": "/mcp",
         "tags": ["财务", "记账"],
     },
     "journal-bot": {
@@ -77,7 +77,7 @@ ROBOT_TEMPLATES: dict[str, dict] = {
             "memo_create", "memo_search",
             "capture_parse", "capture_commit", "capture_undo",
         ],
-        "mcp_endpoint": "http://localhost:8310/mcp",
+        "mcp_endpoint": "/mcp",
         "tags": ["日记", "写作"],
     },
 }

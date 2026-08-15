@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-API="http://localhost:8310/api/v1"
+API="http://localhost:8210/api/v1"
 PASS=0
 FAIL=0
 

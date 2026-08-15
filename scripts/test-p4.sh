@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-API="http://localhost:8310/api/v1"
+API="http://localhost:8210/api/v1"
 
 echo "=== 1. capture_parse — 混合输入解析 ==="
 PARSE_RES=$(curl -s -X POST "$API/mcp/capture/parse" \

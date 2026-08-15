@@ -123,7 +123,7 @@ body:
       placeholder: |
         pnpm --filter @lifly/cloud-mcp test
         uv run pytest
-        curl http://localhost:8310/api/v1/health
+        curl http://localhost:8210/api/v1/health
     validations:
       required: true
 

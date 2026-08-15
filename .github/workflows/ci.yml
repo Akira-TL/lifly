@@ -73,13 +73,13 @@ jobs:
       - name: Start Lifly API
         working-directory: services/api
         run: |
-          uv run uvicorn app.main:app --host 127.0.0.1 --port 8310 > /tmp/lifly-api.log 2>&1 &
+          uv run uvicorn app.main:app --host 127.0.0.1 --port 8210 > /tmp/lifly-api.log 2>&1 &
           echo $! > /tmp/lifly-api.pid
 
       - name: Wait for Lifly API
         run: |
           for i in {1..60}; do
-            if curl -fsS http://127.0.0.1:8310/api/v1/health; then
+            if curl -fsS http://127.0.0.1:8210/api/v1/health; then
               exit 0
             fi
             sleep 2
@@ -91,7 +91,7 @@ jobs:
       - name: Run MCP v0.1 API integration tests
         working-directory: services/api
         env:
-          LIFLY_API_BASE_URL: http://127.0.0.1:8310
+          LIFLY_API_BASE_URL: http://127.0.0.1:8210
         run: uv run --group dev pytest tests/integration/test_mcp_v0_1_contract.py
 
       - name: Print API logs on failure

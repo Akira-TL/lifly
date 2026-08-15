@@ -55,7 +55,7 @@ void main() {
       occurredAt: DateTime.utc(2026, 7, 30, 10),
       stage: 'database_initialize_start',
       databasePath: 'lifly-local-core.db',
-      pageUri: Uri.parse('http://127.0.0.1:4173/'),
+      pageUri: Uri.parse('http://127.0.0.1:8211/'),
       schemaTableCount: 18,
       cause: StateError('Unexpected null value'),
       causeStackTrace: StackTrace.fromString('frame one\nframe two'),

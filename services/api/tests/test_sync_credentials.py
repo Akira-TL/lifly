@@ -11,7 +11,7 @@ def test_issue_powersync_credentials_returns_development_token() -> None:
     credentials = issue_powersync_credentials()
     after = datetime.now(timezone.utc)
 
-    assert credentials.endpoint == "http://localhost:8380"
+    assert credentials.endpoint == "http://localhost:8204"
     assert credentials.user_id == "local-dev"
     assert credentials.mode == "development"
     assert credentials.token

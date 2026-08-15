@@ -1,5 +1,5 @@
 const CDP_HTTP = process.env.LIFLY_CDP_HTTP ?? 'http://127.0.0.1:9222';
-const TARGET_URL = process.env.LIFLY_WEB_URL ?? 'http://127.0.0.1:4173/';
+const TARGET_URL = process.env.LIFLY_WEB_URL ?? 'http://127.0.0.1:8211/';
 const ASSERTION_PATTERN = /ViewInsets cannot be negative|_viewInsets\.isNonNegative/i;
 
 class Cdp {

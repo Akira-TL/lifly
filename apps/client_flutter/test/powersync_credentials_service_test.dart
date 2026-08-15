@@ -14,7 +14,7 @@ class FakeCredentialsApiClient extends ApiClient {
     return {
       'success': true,
       'data': {
-        'endpoint': 'http://localhost:8380',
+        'endpoint': 'http://localhost:8204',
         'token': 'token-value',
         'user_id': 'local-dev',
         'expires_at': '2026-07-03T10:00:00Z',
@@ -30,7 +30,7 @@ void main() {
 
     final credentials = await service.fetchCredentials();
 
-    expect(credentials.endpoint, 'http://localhost:8380');
+    expect(credentials.endpoint, 'http://localhost:8204');
     expect(credentials.tokenStatus, '已获取');
     expect(credentials.userId, 'local-dev');
     expect(credentials.mode, 'development');

@@ -13,7 +13,7 @@ class ApiClient {
   late final Dio _dio;
   final String baseUrl;
 
-  ApiClient({this.baseUrl = 'http://127.0.0.1:8310/api/v1', Dio? dio}) {
+  ApiClient({this.baseUrl = 'http://127.0.0.1:8210/api/v1', Dio? dio}) {
     _dio =
         dio ??
         Dio(

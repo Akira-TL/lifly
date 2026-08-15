@@ -60,8 +60,8 @@ Validation:
 - pnpm install
 - docker compose -f infra/docker-compose.yml config
 - docker compose -f infra/docker-compose.yml up -d
-- cd services/api && uv run uvicorn app.main:app --reload --port 8310
-- curl http://localhost:8310/api/v1/health
+- cd services/api && uv run uvicorn app.main:app --reload --port 8210
+- curl http://localhost:8210/api/v1/health
 
 Related Docs:
 - doc/archive/v0.1.0plan/architecture-freeze.md

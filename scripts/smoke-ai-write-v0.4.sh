@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-API_BASE="${API_BASE:-http://127.0.0.1:8310}"
+API_BASE="${API_BASE:-http://127.0.0.1:8210}"
 API_V1="$API_BASE/api/v1"
 RUN_ID="$(date +%s)"
 

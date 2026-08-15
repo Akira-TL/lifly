@@ -4,7 +4,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOG_DIR="$PROJECT_ROOT/logs"
-PORT="${LIFLY_WEB_PORT:-4175}"
+
+export LIFLY_DEPLOY_SLOT=dev
+# shellcheck source=scripts/lib/lifly-ports.sh
+source "$SCRIPT_DIR/lib/lifly-ports.sh"
+
+PORT="$LIFLY_WEB_PORT"
 PID_FILE="$LOG_DIR/flutter-web-$PORT.pid"
 
 PID=""
@@ -18,14 +23,14 @@ else
 fi
 
 if [[ -z "$PID" ]]; then
-  echo "没有运行中的 Flutter Web 调试实例: port=$PORT"
+  echo "没有运行中的 Flutter Web Dev: port=$PORT"
   exit 0
 fi
 
 COMMAND="$(ps -p "$PID" -o args= 2>/dev/null || true)"
 if [[ "$COMMAND" != *"flutter_tools.snapshot run -d web-server"* ]] ||
    [[ "$COMMAND" != *"--web-port $PORT"* ]]; then
-  echo "端口 $PORT 的进程不是受支持的 Flutter Web 调试实例，拒绝停止。" >&2
+  echo "端口 $PORT 的进程不是受支持的 Lifly Flutter Web Dev，拒绝停止。" >&2
   echo "pid=$PID command=$COMMAND" >&2
   exit 1
 fi

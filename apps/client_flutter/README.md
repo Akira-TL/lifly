@@ -3,21 +3,21 @@
 Flutter 客户端当前处于真实 API 接入早期阶段。默认连接本机 Lifly API：
 
 ```bash
-http://127.0.0.1:8310/api/v1
+http://127.0.0.1:8210/api/v1
 ```
 
 可以通过 `--dart-define` 覆盖：
 
 ```bash
 flutter run \
-  --dart-define=LIFLY_API_BASE_URL=http://127.0.0.1:8310/api/v1
+  --dart-define=LIFLY_API_BASE_URL=http://127.0.0.1:8210/api/v1
 ```
 
 Android 模拟器访问宿主机 API 时通常需要：
 
 ```bash
 flutter run \
-  --dart-define=LIFLY_API_BASE_URL=http://10.0.2.2:8310/api/v1
+  --dart-define=LIFLY_API_BASE_URL=http://10.0.2.2:8210/api/v1
 ```
 
 ## 后端连接诊断

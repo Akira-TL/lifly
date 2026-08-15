@@ -1,3 +1,5 @@
+name: lifly
+
 services:
   postgres:
     image: postgres:16
@@ -7,7 +9,7 @@ services:
       POSTGRES_PASSWORD: lifly
       POSTGRES_DB: lifly
     ports:
-      - "8332:5432"
+      - "127.0.0.1:${LIFLY_COMMON_POSTGRES_PORT:-8200}:5432"
     volumes:
       - lifly_postgres:/var/lib/postgresql/data
 
@@ -15,32 +17,37 @@ services:
     image: redis:7
     container_name: lifly-redis
     ports:
-      - "8379:6379"
+      - "127.0.0.1:${LIFLY_COMMON_REDIS_PORT:-8201}:6379"
 
   minio:
     image: minio/minio:latest
     container_name: lifly-minio
-    command: server /data --console-address ":8301"
+    command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: lifly
       MINIO_ROOT_PASSWORD: lifly-secret
     ports:
-      - "8300:9000"
-      - "8301:9001"
+      - "127.0.0.1:${LIFLY_COMMON_MINIO_API_PORT:-8202}:9000"
+      - "127.0.0.1:${LIFLY_COMMON_MINIO_CONSOLE_PORT:-8203}:9001"
     volumes:
       - lifly_minio:/data
 
   powersync:
-    image: powersync/powersync-service:latest
+    image: journeyapps/powersync-service:latest
     container_name: lifly-powersync
     profiles: ["powersync"]
     ports:
-      - "8380:8080"
+      - "127.0.0.1:${LIFLY_COMMON_POWERSYNC_PORT:-8204}:8080"
     environment:
       POWERSYNC_CONFIG_PATH: /config/powersync.yaml
     volumes:
       - ./powersync:/config
 
 volumes:
+  # 沿用迁移前由 infra compose 创建的数据卷，避免端口规范化导致本地数据丢失。
   lifly_postgres:
+    external: true
+    name: infra_lifly_postgres
   lifly_minio:
+    external: true
+    name: infra_lifly_minio
