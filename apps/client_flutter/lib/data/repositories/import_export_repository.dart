@@ -63,20 +63,27 @@ class ImportExportRepository {
 
   Future<ExportMetadata> exportMetadata({
     ExportEntityType entityType = ExportEntityType.all,
+    ExportMode mode = ExportMode.encryptedBackup,
   }) async {
     final res = await api.post(
       '/export',
-      data: {'entity_type': entityType.value},
+      data: {'entity_type': entityType.value, 'mode': mode.value},
     );
     return ExportMetadata.fromJson(_data(res));
   }
 
   Future<ExportStreamPayload> downloadExport({
     ExportEntityType entityType = ExportEntityType.all,
+    ExportMode mode = ExportMode.encryptedBackup,
   }) async {
+    if (mode == ExportMode.plaintext) {
+      throw ArgumentError(
+        'Plaintext export must be generated from the local decrypted projection',
+      );
+    }
     final response = await api.downloadBytes(
       '/export/stream',
-      params: {'entity_type': entityType.value},
+      params: {'entity_type': entityType.value, 'mode': mode.value},
     );
     return ExportStreamPayload(
       bytes: response.bytes,

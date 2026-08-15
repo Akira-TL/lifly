@@ -9,6 +9,15 @@ enum ImportProvider {
   final String value;
 }
 
+enum ExportMode {
+  plaintext('plaintext'),
+  encryptedBackup('encrypted_backup');
+
+  const ExportMode(this.value);
+
+  final String value;
+}
+
 enum ExportEntityType {
   ledgerTransactions('ledger_transactions'),
   memos('memos'),
@@ -226,6 +235,11 @@ class ImportRollbackResult {
 
 class ExportMetadata {
   final String contractVersion;
+  final ExportMode mode;
+  final String executionLocation;
+  final bool containsDecryptedUserData;
+  final bool availableFromCloud;
+  final String privacyWarning;
   final String entityType;
   final String format;
   final String mediaType;
@@ -237,6 +251,11 @@ class ExportMetadata {
 
   const ExportMetadata({
     required this.contractVersion,
+    required this.mode,
+    required this.executionLocation,
+    required this.containsDecryptedUserData,
+    required this.availableFromCloud,
+    required this.privacyWarning,
     required this.entityType,
     required this.format,
     required this.mediaType,
@@ -250,6 +269,13 @@ class ExportMetadata {
   factory ExportMetadata.fromJson(Map<String, dynamic> json) {
     return ExportMetadata(
       contractVersion: _stringValue(json['contract_version']),
+      mode: _exportModeValue(json['mode']),
+      executionLocation: _stringValue(json['execution_location']),
+      containsDecryptedUserData: _boolValue(
+        json['contains_decrypted_user_data'],
+      ),
+      availableFromCloud: _boolValue(json['available_from_cloud']),
+      privacyWarning: _stringValue(json['privacy_warning']),
       entityType: _stringValue(json['entity_type']),
       format: _stringValue(json['format']),
       mediaType: _stringValue(json['media_type']),
@@ -271,6 +297,7 @@ class ExportStreamPayload {
 
 class ExportStreamMetadata {
   final String entityType;
+  final ExportMode mode;
   final String? contractVersion;
   final String? checksumSha256;
   final int? sizeBytes;
@@ -279,6 +306,7 @@ class ExportStreamMetadata {
 
   const ExportStreamMetadata({
     required this.entityType,
+    required this.mode,
     required this.contractVersion,
     required this.checksumSha256,
     required this.sizeBytes,
@@ -292,6 +320,7 @@ class ExportStreamMetadata {
   }) {
     return ExportStreamMetadata(
       entityType: entityType,
+      mode: _exportModeValue(headers['x-lifly-export-mode']),
       contractVersion: headers['x-lifly-export-contract'],
       checksumSha256: headers['x-lifly-export-checksum-sha256'],
       sizeBytes: _nullableIntValue(headers['x-lifly-export-size-bytes']),
@@ -299,6 +328,20 @@ class ExportStreamMetadata {
       mediaType: headers['content-type'],
     );
   }
+}
+
+ExportMode _exportModeValue(Object? value) {
+  final normalized = value?.toString();
+  return ExportMode.values.firstWhere(
+    (mode) => mode.value == normalized,
+    orElse: () => ExportMode.encryptedBackup,
+  );
+}
+
+bool _boolValue(Object? value) {
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+  return value?.toString().toLowerCase() == 'true';
 }
 
 String _stringValue(Object? value, {String fallback = ''}) {

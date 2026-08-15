@@ -1,162 +1,176 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from decimal import Decimal
-import hashlib
 import inspect
+import json
+from datetime import datetime, timezone
 
-from app.db.models import Asset, LedgerTransaction, Memo, Task
+import pytest
+
+from app.db.models import AccountKeyEnvelope, Asset, EncryptedEntity
 from app.modules.imexport import exporter
 from app.modules.imexport import router as imexport_router
 
 
-def test_export_result_metadata_includes_contract_checksum_and_counts() -> None:
-    content = b"id,amount\n1,12.50\n"
-    result = exporter._result(
-        "ledger_transactions",
-        "csv",
-        "text/csv",
-        content,
-        {"ledger_transactions": 1},
+NOW = datetime(2026, 8, 15, 10, tzinfo=timezone.utc)
+
+
+class _ScalarRows:
+    def __init__(self, rows: list[object]) -> None:
+        self._rows = rows
+
+    def all(self) -> list[object]:
+        return self._rows
+
+
+class _Result:
+    def __init__(self, rows: list[object]) -> None:
+        self._rows = rows
+
+    def scalars(self) -> _ScalarRows:
+        return _ScalarRows(self._rows)
+
+
+class _FakeSession:
+    def __init__(self, *batches: list[object]) -> None:
+        self._batches = list(batches)
+
+    async def execute(self, statement: object) -> _Result:
+        del statement
+        return _Result(self._batches.pop(0))
+
+
+def _encrypted_entity() -> EncryptedEntity:
+    return EncryptedEntity(
+        id="entity-1",
+        user_id="account-1",
+        entity_type="memo",
+        revision=3,
+        lifecycle_status="active",
+        key_version=2,
+        encryption_version=1,
+        schema_version=1,
+        nonce="bm9uY2U=",
+        ciphertext="Y2lwaGVydGV4dA==",
+        created_at=NOW,
+        updated_at=NOW,
     )
 
-    metadata = result.metadata()
-    assert metadata["contract_version"] == "export.v0.5.6"
-    assert metadata["entity_type"] == "ledger_transactions"
-    assert metadata["format"] == "csv"
-    assert metadata["media_type"] == "text/csv"
-    assert metadata["filename"] == "lifly-export-ledger_transactions.csv"
-    assert metadata["size_bytes"] == len(content)
-    assert metadata["checksum_sha256"] == hashlib.sha256(content).hexdigest()
-    assert metadata["counts"] == {"ledger_transactions": 1}
 
-
-def test_export_dicts_strip_internal_sensitive_fields() -> None:
-    tx = LedgerTransaction(
-        id="tx_1",
-        user_id="local-dev",
-        direction="expense",
-        amount=Decimal("12.50"),
-        currency="CNY",
-        account_id="account_1",
-        category_id="category_1",
-        merchant="便利店",
-        note="早餐",
-        occurred_at=datetime(2026, 6, 1, 8, 0, tzinfo=timezone.utc),
-        source="import",
-        import_batch_id="batch_1",
-        source_capture_id="capture_1",
-        status="active",
+def _key_envelope() -> AccountKeyEnvelope:
+    return AccountKeyEnvelope(
+        id="key-envelope-1",
+        account_id="account-1",
+        envelope_type="password",
+        key_version=2,
+        encryption_version=1,
+        schema_version=1,
+        nonce="a2V5LW5vbmNl",
+        ciphertext="d3JhcHBlZC1hZGs=",
+        created_at=NOW,
+        updated_at=NOW,
     )
-    asset = Asset(
-        id="asset_1",
-        user_id="local-dev",
+
+
+def _asset() -> Asset:
+    return Asset(
+        id="asset-1",
+        user_id="account-1",
         kind="internal",
         asset_type="file",
-        filename="demo.pdf",
-        mime_type="application/pdf",
-        size_bytes=100,
-        sha256="secret_hash",
-        storage_provider="local",
-        storage_key="private/path/demo.pdf",
+        filename=None,
+        mime_type="application/octet-stream",
+        size_bytes=321,
+        sha256="a" * 64,
+        storage_provider="minio",
+        storage_key="attachments/account-1/asset-1/payload.e2ee",
+        external_url=None,
+        external_provider=None,
         visibility="private",
         sync_status="synced",
         status="active",
+        created_at=NOW,
+        updated_at=NOW,
     )
 
-    tx_data = exporter._ledger_export_dict(tx)
-    asset_data = exporter._asset_export_dict(asset)
 
-    assert "user_id" not in tx_data
-    assert "source_capture_id" not in tx_data
-    assert tx_data["amount"] == 12.5
-    assert tx_data["source"] == "import"
-    assert "user_id" not in asset_data
-    assert "storage_key" not in asset_data
-    assert "sha256" not in asset_data
-    assert asset_data["filename"] == "demo.pdf"
+def test_plaintext_export_boundary_is_client_only_and_warns_user() -> None:
+    boundary = exporter.plaintext_export_boundary().metadata()
 
-
-def test_export_all_json_contains_core_sections_and_version() -> None:
-    source = inspect.getsource(exporter._export_all_json)
-
-    assert '"contract_version": EXPORT_CONTRACT_VERSION' in source
-    assert '"memos"' in source
-    assert '"ledger_transactions"' in source
-    assert '"tasks"' in source
-    assert '"assets"' in source
-    assert "_memo_export_dict" in source
-    assert "_ledger_export_dict" in source
-    assert "_task_export_dict" in source
-    assert "_asset_export_dict" in source
+    assert boundary["contract_version"] == "export.e2ee.v1"
+    assert boundary["mode"] == "plaintext"
+    assert boundary["execution_location"] == "trusted_client"
+    assert boundary["contains_decrypted_user_data"] is True
+    assert boundary["available_from_cloud"] is False
+    assert "明文" in boundary["privacy_warning"]
+    assert "受信设备" in boundary["privacy_warning"]
 
 
-def test_supported_export_types_and_formats_are_explicit() -> None:
-    assert exporter.SUPPORTED_EXPORT_ENTITY_TYPES == (
-        "ledger_transactions",
-        "memos",
-        "tasks",
-        "assets",
-        "all",
+@pytest.mark.anyio
+async def test_encrypted_backup_contains_only_opaque_envelopes_and_object_manifest() -> None:
+    db = _FakeSession([_encrypted_entity()], [_key_envelope()], [_asset()])
+
+    result = await exporter.build_encrypted_backup_result(
+        db,
+        user_id="account-1",
+        include_asset_ciphertext=False,
+    )
+    payload = json.loads(result.content)
+
+    assert result.mode == "encrypted_backup"
+    assert result.filename == "lifly-encrypted-backup.json"
+    assert result.counts == {
+        "encrypted_entities": 1,
+        "account_key_envelopes": 1,
+        "encrypted_asset_objects": 1,
+    }
+    assert payload["encrypted_entities"][0]["ciphertext"] == "Y2lwaGVydGV4dA=="
+    assert payload["account_key_envelopes"][0]["ciphertext"] == "d3JhcHBlZC1hZGs="
+    assert payload["encrypted_asset_objects"][0]["storage_key"].endswith("payload.e2ee")
+    serialized = result.content.decode()
+    assert "filename" not in serialized
+    assert "mime_type" not in serialized
+    assert "external_url" not in serialized
+    assert "private memo title" not in serialized
+
+
+@pytest.mark.anyio
+async def test_encrypted_backup_can_embed_attachment_ciphertext(monkeypatch: pytest.MonkeyPatch) -> None:
+    db = _FakeSession([_encrypted_entity()], [_key_envelope()], [_asset()])
+    monkeypatch.setattr(
+        exporter,
+        "_read_asset_ciphertext",
+        lambda storage_key: b"LFLYAS01\x00\x01ciphertext",
     )
 
-    source = inspect.getsource(exporter.build_export_result)
-    assert '"ledger_transactions"' in source
-    assert '"csv"' in source
-    assert '"memos"' in source
-    assert '"md"' in source
-    assert '"tasks"' in source
-    assert '"assets"' in source
-    assert '"all"' in source
-
-
-def test_export_routes_return_metadata_and_stream_headers() -> None:
-    export_data_source = inspect.getsource(imexport_router.export_data)
-    export_stream_source = inspect.getsource(imexport_router.export_stream)
-
-    assert "build_export_result" in export_data_source
-    assert "result.metadata()" in export_data_source
-    assert "preview" in export_data_source
-    assert "ValueError" in export_data_source
-    assert "status_code=400" in export_data_source
-
-    assert "build_export_result" in export_stream_source
-    assert "result.media_type" in export_stream_source
-    assert "result.filename" in export_stream_source
-    assert "X-Lifly-Export-Contract" in export_stream_source
-    assert "X-Lifly-Export-Checksum-SHA256" in export_stream_source
-    assert "X-Lifly-Export-Size-Bytes" in export_stream_source
-
-
-def test_memo_and_task_export_dicts_do_not_include_internal_user_id() -> None:
-    memo = Memo(
-        id="memo_1",
-        user_id="local-dev",
-        type="memo",
-        title="标题",
-        content_markdown="内容",
-        tags=["tag"],
-        mood="ok",
-        source_capture_id="capture_1",
-        status="active",
+    result = await exporter.build_encrypted_backup_result(
+        db,
+        user_id="account-1",
+        include_asset_ciphertext=True,
     )
-    task = Task(
-        id="task_1",
-        user_id="local-dev",
-        title="任务",
-        description="说明",
-        task_status="todo",
-        priority="normal",
-        source_capture_id="capture_2",
-        status="active",
-    )
+    payload = json.loads(result.content)
 
-    memo_data = exporter._memo_export_dict(memo)
-    task_data = exporter._task_export_dict(task)
+    embedded = payload["encrypted_asset_objects"][0]["ciphertext_base64"]
+    assert embedded
+    assert "LFLYAS01" not in embedded
 
-    assert "user_id" not in memo_data
-    assert "source_capture_id" not in memo_data
-    assert memo_data["title"] == "标题"
-    assert "user_id" not in task_data
-    assert "source_capture_id" not in task_data
-    assert task_data["title"] == "任务"
+
+def test_export_routes_never_call_server_plaintext_exporter() -> None:
+    metadata_source = inspect.getsource(imexport_router.export_data)
+    stream_source = inspect.getsource(imexport_router.export_stream)
+
+    assert "plaintext_export_boundary" in metadata_source
+    assert "trusted client" not in metadata_source.lower()
+    assert "build_encrypted_backup_result" in metadata_source
+    assert "build_encrypted_backup_result" in stream_source
+    assert "Plaintext export must be generated on the trusted client device" in stream_source
+    assert "build_export_result" not in metadata_source
+    assert "build_export_result" not in stream_source
+    assert "get_active_subject" in inspect.getsource(imexport_router)
+
+
+def test_import_export_cloud_audit_is_operational_only() -> None:
+    source = inspect.getsource(imexport_router._write_audit)
+
+    assert "before_snapshot=None" in source
+    assert "after_snapshot=None" in source
+    assert "source_text=None" in source

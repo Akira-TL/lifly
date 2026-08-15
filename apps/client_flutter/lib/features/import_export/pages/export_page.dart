@@ -1,7 +1,9 @@
 import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/powersync/sync_service.dart';
 import 'package:client_flutter/data/repositories/import_export_models.dart';
 import 'package:client_flutter/data/repositories/import_export_repository.dart';
+import 'package:client_flutter/features/import_export/data/local_plaintext_export.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -15,6 +17,7 @@ class ExportPage extends StatefulWidget {
 }
 
 class _ExportPageState extends State<ExportPage> {
+  ExportMode _mode = ExportMode.plaintext;
   ExportEntityType _entityType = ExportEntityType.all;
   ExportMetadata? _metadata;
   ExportStreamPayload? _download;
@@ -27,6 +30,10 @@ class _ExportPageState extends State<ExportPage> {
   ImportExportRepository get _repository =>
       widget.repository ?? ImportExportRepository(context.read<ApiClient>());
 
+  LocalPlaintextExportBuilder get _localBuilder => LocalPlaintextExportBuilder(
+    SyncServicePlaintextExportDataSource(context.read<SyncService>()),
+  );
+
   Future<void> _loadMetadata() async {
     setState(() {
       _loadingMetadata = true;
@@ -36,9 +43,12 @@ class _ExportPageState extends State<ExportPage> {
     });
 
     try {
-      final metadata = await _repository.exportMetadata(
-        entityType: _entityType,
-      );
+      final metadata = _mode == ExportMode.plaintext
+          ? (await _localBuilder.build(entityType: _entityType)).metadata
+          : await _repository.exportMetadata(
+              entityType: _entityType,
+              mode: ExportMode.encryptedBackup,
+            );
       if (!mounted) return;
       setState(() => _metadata = metadata);
     } catch (error) {
@@ -57,7 +67,14 @@ class _ExportPageState extends State<ExportPage> {
     });
 
     try {
-      final payload = await _repository.downloadExport(entityType: _entityType);
+      final payload = _mode == ExportMode.plaintext
+          ? (await _localBuilder.build(
+              entityType: _entityType,
+            )).toStreamPayload()
+          : await _repository.downloadExport(
+              entityType: _entityType,
+              mode: ExportMode.encryptedBackup,
+            );
       if (!mounted) return;
       setState(() => _download = payload);
     } catch (error) {
@@ -66,6 +83,15 @@ class _ExportPageState extends State<ExportPage> {
     } finally {
       if (mounted) setState(() => _downloading = false);
     }
+  }
+
+  void _changeMode(ExportMode mode) {
+    setState(() {
+      _mode = mode;
+      _metadata = null;
+      _download = null;
+      _error = null;
+    });
   }
 
   void _changeEntityType(ExportEntityType entityType) {
@@ -87,16 +113,18 @@ class _ExportPageState extends State<ExportPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _IntroCard(apiMode: apiMode),
+          _IntroCard(apiMode: apiMode, mode: _mode),
+          const SizedBox(height: 12),
+          _ExportModeCard(mode: _mode, onChanged: _changeMode),
           const SizedBox(height: 12),
           _ExportSelectorCard(
             entityType: _entityType,
-            enabled: apiMode && !_busy,
+            enabled: !_busy,
             onChanged: _changeEntityType,
           ),
           const SizedBox(height: 12),
           _ExportActionCard(
-            apiMode: apiMode,
+            enabled: (_mode == ExportMode.plaintext || apiMode) && !_busy,
             loadingMetadata: _loadingMetadata,
             downloading: _downloading,
             onLoadMetadata: _loadMetadata,
@@ -122,8 +150,9 @@ class _ExportPageState extends State<ExportPage> {
 
 class _IntroCard extends StatelessWidget {
   final bool apiMode;
+  final ExportMode mode;
 
-  const _IntroCard({required this.apiMode});
+  const _IntroCard({required this.apiMode, required this.mode});
 
   @override
   Widget build(BuildContext context) {
@@ -150,15 +179,59 @@ class _IntroCard extends StatelessWidget {
             const Text('先生成导出元数据预览，确认文件名、大小和校验值后再下载导出流。'),
             const SizedBox(height: 8),
             Text(
-              apiMode
-                  ? '当前为云端模式，可生成和下载导出。'
-                  : '当前为本地模式，导出需要连接云端服务。',
+              mode == ExportMode.plaintext
+                  ? '明文导出只在本机已解密数据上生成，不会把明文发送到 Lifly 云端。'
+                  : apiMode
+                  ? '加密备份从云端下载 ciphertext、wrapped key 与加密附件。'
+                  : '加密备份需要连接云端服务。',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: apiMode
+                color: mode == ExportMode.plaintext || apiMode
                     ? theme.colorScheme.primary
                     : theme.colorScheme.error,
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ExportModeCard extends StatelessWidget {
+  final ExportMode mode;
+  final ValueChanged<ExportMode> onChanged;
+
+  const _ExportModeCard({required this.mode, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final warning = mode == ExportMode.plaintext
+        ? localPlaintextExportWarning
+        : '加密备份保持 ciphertext，不包含服务器可读取的业务明文；恢复仍需要用户侧密钥。';
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SegmentedButton<ExportMode>(
+              segments: const [
+                ButtonSegment(
+                  value: ExportMode.plaintext,
+                  label: Text('明文导出'),
+                  icon: Icon(Icons.lock_open_outlined),
+                ),
+                ButtonSegment(
+                  value: ExportMode.encryptedBackup,
+                  label: Text('加密备份'),
+                  icon: Icon(Icons.lock_outline),
+                ),
+              ],
+              selected: {mode},
+              onSelectionChanged: (selection) => onChanged(selection.single),
+            ),
+            const SizedBox(height: 10),
+            Text(warning),
           ],
         ),
       ),
@@ -218,14 +291,14 @@ class _ExportSelectorCard extends StatelessWidget {
 }
 
 class _ExportActionCard extends StatelessWidget {
-  final bool apiMode;
+  final bool enabled;
   final bool loadingMetadata;
   final bool downloading;
   final VoidCallback onLoadMetadata;
   final VoidCallback onDownload;
 
   const _ExportActionCard({
-    required this.apiMode,
+    required this.enabled,
     required this.loadingMetadata,
     required this.downloading,
     required this.onLoadMetadata,
@@ -243,14 +316,14 @@ class _ExportActionCard extends StatelessWidget {
           runSpacing: 12,
           children: [
             FilledButton.icon(
-              onPressed: apiMode && !busy ? onLoadMetadata : null,
+              onPressed: enabled && !busy ? onLoadMetadata : null,
               icon: loadingMetadata
                   ? const _SmallProgress()
                   : const Icon(Icons.fact_check_outlined),
               label: Text(loadingMetadata ? '生成中...' : '生成导出预览'),
             ),
             OutlinedButton.icon(
-              onPressed: apiMode && !busy ? onDownload : null,
+              onPressed: enabled && !busy ? onDownload : null,
               icon: downloading
                   ? const _SmallProgress()
                   : const Icon(Icons.download_for_offline_outlined),
@@ -293,6 +366,17 @@ class _MetadataCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
+            if (metadata.privacyWarning.isNotEmpty) ...[
+              Text(
+                metadata.privacyWarning,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: metadata.containsDecryptedUserData
+                      ? theme.colorScheme.error
+                      : theme.colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             _DetailLine(label: '文件名', value: metadata.filename),
             _DetailLine(
               label: '导出范围',
@@ -311,7 +395,9 @@ class _MetadataCard extends StatelessWidget {
                 children: metadata.counts.entries
                     .map((entry) {
                       return Chip(
-                        label: Text('${_exportCountLabel(entry.key)}：${entry.value}'),
+                        label: Text(
+                          '${_exportCountLabel(entry.key)}：${entry.value}',
+                        ),
                       );
                     })
                     .toList(growable: false),
@@ -374,18 +460,9 @@ class _DownloadResultCard extends StatelessWidget {
             ),
             _DetailLine(label: '文件类型', value: metadata.mediaType ?? '-'),
             if (metadata.sizeBytes != null)
-              _DetailLine(
-                label: '标注大小',
-                value: '${metadata.sizeBytes} bytes',
-              ),
-            _DetailLine(
-              label: '校验值',
-              value: metadata.checksumSha256 ?? '-',
-            ),
-            _DetailLine(
-              label: '格式版本',
-              value: metadata.contractVersion ?? '-',
-            ),
+              _DetailLine(label: '标注大小', value: '${metadata.sizeBytes} bytes'),
+            _DetailLine(label: '校验值', value: metadata.checksumSha256 ?? '-'),
+            _DetailLine(label: '格式版本', value: metadata.contractVersion ?? '-'),
           ],
         ),
       ),

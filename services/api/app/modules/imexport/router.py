@@ -3,13 +3,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from fastapi.responses import StreamingResponse
 import io
 
 from app.core.database import get_db
+from app.core.security import AuthenticatedSubject
 from app.db.models import (
     ImportBatch,
     ImportRow,
@@ -18,7 +19,11 @@ from app.db.models import (
 )
 from app.schemas.common import ApiResponse, json_serialize
 from app.modules.imexport.csv_parser import PARSERS, compute_file_hash
-from app.modules.imexport.exporter import build_export_result
+from app.modules.auth.sessions import get_active_subject
+from app.modules.imexport.exporter import (
+    build_encrypted_backup_result,
+    plaintext_export_boundary,
+)
 
 router = APIRouter()
 
@@ -33,15 +38,19 @@ async def _write_audit(
     after: dict | None = None,
     source: str = "import",
 ):
+    # Import/export cloud audit is operational-only. Sensitive before/after
+    # snapshots belong in the client-side E2EE audit envelope.
+    del before, after
     log = AuditLog(
         user_id=user_id,
         actor_type="user",
         action=action,
         entity_type=entity_type,
         entity_id=entity_id,
-        before_snapshot=before,
-        after_snapshot=after,
+        before_snapshot=None,
+        after_snapshot=None,
         source_channel=source,
+        source_text=None,
     )
     db.add(log)
 
@@ -626,37 +635,72 @@ async def get_batch(batch_id: str, db: AsyncSession = Depends(get_db)):
 # ─── Export ────────────────────────────────────────────────────────────────────
 
 @router.post("/export", response_model=ApiResponse)
-async def export_data(request: Request, db: AsyncSession = Depends(get_db)):
-    body = await request.json()
-    entity_type = body.get("entity_type", "all")
+async def export_data(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    subject: AuthenticatedSubject = Depends(get_active_subject),
+):
+    mode = str(body.get("mode") or "plaintext")
+    entity_type = str(body.get("entity_type") or "all")
+    if mode == "plaintext":
+        return ApiResponse(
+            data={
+                **plaintext_export_boundary().metadata(),
+                "entity_type": entity_type,
+                "format": "local",
+                "media_type": "application/octet-stream",
+                "filename": "",
+                "size_bytes": 0,
+                "checksum_sha256": "",
+                "counts": {},
+                "preview": "",
+            }
+        )
+    if mode != "encrypted_backup":
+        raise HTTPException(status_code=400, detail=f"Unknown export mode: {mode}")
 
     try:
-        result = await build_export_result(db, entity_type)
+        result = await build_encrypted_backup_result(
+            db,
+            user_id=subject.account_id,
+            include_asset_ciphertext=False,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    return ApiResponse(data={
-        **result.metadata(),
-        "preview": result.preview_text(),
-    })
+    return ApiResponse(data=result.metadata())
 
 
 @router.get("/export/stream")
 async def export_stream(
+    mode: str = Query(default="encrypted_backup"),
     entity_type: str = Query(default="all"),
     db: AsyncSession = Depends(get_db),
+    subject: AuthenticatedSubject = Depends(get_active_subject),
 ):
+    del entity_type
+    if mode == "plaintext":
+        raise HTTPException(
+            status_code=409,
+            detail="Plaintext export must be generated on the trusted client device",
+        )
+    if mode != "encrypted_backup":
+        raise HTTPException(status_code=400, detail=f"Unknown export mode: {mode}")
+
     try:
-        result = await build_export_result(db, entity_type)
+        result = await build_encrypted_backup_result(
+            db,
+            user_id=subject.account_id,
+            include_asset_ciphertext=True,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
     return StreamingResponse(
         io.BytesIO(result.content),
         media_type=result.media_type,
         headers={
             "Content-Disposition": f'attachment; filename="{result.filename}"',
             "X-Lifly-Export-Contract": result.contract_version,
+            "X-Lifly-Export-Mode": result.mode,
             "X-Lifly-Export-Checksum-SHA256": result.checksum_sha256,
             "X-Lifly-Export-Size-Bytes": str(result.size_bytes),
         },

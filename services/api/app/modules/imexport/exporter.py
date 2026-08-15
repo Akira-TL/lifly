@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import csv
+import base64
 import hashlib
-import io
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -10,18 +9,42 @@ from typing import Any
 
 from sqlalchemy import select
 
-from app.db.models import Asset, LedgerTransaction, Memo, Task
+from app.core.config import settings
+from app.core.storage import get_storage
+from app.db.models import AccountKeyEnvelope, Asset, EncryptedEntity
 
-EXPORT_CONTRACT_VERSION = "export.v0.5.6"
+EXPORT_CONTRACT_VERSION = "export.e2ee.v1"
 EXPORT_ENCODING = "utf-8"
-EXPORT_BOM_ENCODING = "utf-8-sig"
-SUPPORTED_EXPORT_ENTITY_TYPES = ("ledger_transactions", "memos", "tasks", "assets", "all")
+PLAINTEXT_EXPORT_WARNING = (
+    "明文导出包含可直接阅读的个人数据，只能在已解密的受信设备本地生成；"
+    "请自行保护导出文件。"
+)
+MAX_BACKUP_ASSET_BYTES = 100 * 1024 * 1024
+
+
+@dataclass(frozen=True)
+class ExportBoundary:
+    mode: str
+    execution_location: str
+    contains_decrypted_user_data: bool
+    available_from_cloud: bool
+    privacy_warning: str
+    contract_version: str = EXPORT_CONTRACT_VERSION
+
+    def metadata(self) -> dict[str, Any]:
+        return {
+            "contract_version": self.contract_version,
+            "mode": self.mode,
+            "execution_location": self.execution_location,
+            "contains_decrypted_user_data": self.contains_decrypted_user_data,
+            "available_from_cloud": self.available_from_cloud,
+            "privacy_warning": self.privacy_warning,
+        }
 
 
 @dataclass(frozen=True)
 class ExportResult:
-    entity_type: str
-    format: str
+    mode: str
     media_type: str
     filename: str
     content: bytes
@@ -33,310 +56,144 @@ class ExportResult:
     def size_bytes(self) -> int:
         return len(self.content)
 
-    def preview_text(self, *, limit: int = 500) -> str:
-        return self.content.decode(EXPORT_BOM_ENCODING, errors="replace")[:limit]
-
     def metadata(self) -> dict[str, Any]:
         return {
             "contract_version": self.contract_version,
-            "entity_type": self.entity_type,
-            "format": self.format,
+            "mode": self.mode,
+            "execution_location": "cloud_ciphertext_only",
+            "contains_decrypted_user_data": False,
+            "available_from_cloud": True,
+            "privacy_warning": "该备份保持端到端加密；恢复仍需要用户侧密钥材料。",
+            "entity_type": "all",
+            "format": "json",
             "media_type": self.media_type,
             "filename": self.filename,
             "size_bytes": self.size_bytes,
             "checksum_sha256": self.checksum_sha256,
             "counts": self.counts,
+            "preview": "",
         }
 
 
-async def export_entities(db, entity_type: str, user_id: str = "local-dev") -> bytes:
-    """兼容旧调用方：导出实体内容 bytes。"""
-    return (await build_export_result(db, entity_type, user_id=user_id)).content
+def plaintext_export_boundary() -> ExportBoundary:
+    return ExportBoundary(
+        mode="plaintext",
+        execution_location="trusted_client",
+        contains_decrypted_user_data=True,
+        available_from_cloud=False,
+        privacy_warning=PLAINTEXT_EXPORT_WARNING,
+    )
 
 
-async def build_export_result(db, entity_type: str, user_id: str = "local-dev") -> ExportResult:
-    if entity_type not in SUPPORTED_EXPORT_ENTITY_TYPES:
-        raise ValueError(f"Unknown entity type: {entity_type}")
-
-    if entity_type == "ledger_transactions":
-        content, counts = await _export_ledger_csv(db, user_id)
-        return _result(entity_type, "csv", "text/csv", content, counts)
-    if entity_type == "memos":
-        content, counts = await _export_memos_md(db, user_id)
-        return _result(entity_type, "md", "text/markdown", content, counts)
-    if entity_type == "tasks":
-        content, counts = await _export_tasks_json(db, user_id)
-        return _result(entity_type, "json", "application/json", content, counts)
-    if entity_type == "assets":
-        content, counts = await _export_assets_json(db, user_id)
-        return _result(entity_type, "json", "application/json", content, counts)
-    if entity_type == "all":
-        content, counts = await _export_all_json(db, user_id)
-        return _result(entity_type, "json", "application/json", content, counts)
-
-    raise ValueError(f"Unknown entity type: {entity_type}")
-
-
-def _result(
-    entity_type: str,
-    format: str,
-    media_type: str,
-    content: bytes,
-    counts: dict[str, int],
+async def build_encrypted_backup_result(
+    db,
+    *,
+    user_id: str,
+    include_asset_ciphertext: bool = True,
 ) -> ExportResult:
-    checksum = hashlib.sha256(content).hexdigest()
-    filename = f"lifly-export-{entity_type}.{format}"
-    return ExportResult(
-        entity_type=entity_type,
-        format=format,
-        media_type=media_type,
-        filename=filename,
-        content=content,
-        counts=counts,
-        checksum_sha256=checksum,
+    entity_result = await db.execute(
+        select(EncryptedEntity)
+        .where(EncryptedEntity.user_id == user_id)
+        .order_by(EncryptedEntity.updated_at.asc())
     )
+    entities = entity_result.scalars().all()
 
-
-async def _export_ledger_csv(db, user_id: str) -> tuple[bytes, dict[str, int]]:
-    result = await db.execute(
-        select(LedgerTransaction)
-        .where(
-            LedgerTransaction.user_id == user_id,
-            LedgerTransaction.status == "active",
-        )
-        .order_by(LedgerTransaction.occurred_at.desc())
+    key_result = await db.execute(
+        select(AccountKeyEnvelope)
+        .where(AccountKeyEnvelope.account_id == user_id)
+        .order_by(AccountKeyEnvelope.key_version.asc())
     )
-    txs = result.scalars().all()
+    key_envelopes = key_result.scalars().all()
 
-    output = io.StringIO()
-    fieldnames = [
-        "id",
-        "occurred_at",
-        "direction",
-        "amount",
-        "currency",
-        "merchant",
-        "note",
-        "source",
-        "import_batch_id",
-        "created_at",
-        "updated_at",
-    ]
-    writer = csv.DictWriter(output, fieldnames=fieldnames)
-    writer.writeheader()
-    for tx in txs:
-        writer.writerow(_ledger_export_dict(tx))
-    return output.getvalue().encode(EXPORT_BOM_ENCODING), {"ledger_transactions": len(txs)}
-
-
-async def _export_memos_md(db, user_id: str) -> tuple[bytes, dict[str, int]]:
-    result = await db.execute(
-        select(Memo)
-        .where(
-            Memo.user_id == user_id,
-            Memo.status == "active",
-        )
-        .order_by(Memo.created_at.desc())
-    )
-    memos = result.scalars().all()
-
-    lines = [
-        "# Lifly 备忘导出",
-        "",
-        f"- contract_version: {EXPORT_CONTRACT_VERSION}",
-        f"- exported_at: {_now_iso()}",
-        f"- total: {len(memos)}",
-        "",
-        "---",
-        "",
-    ]
-    for memo in memos:
-        lines.extend([
-            f"## {memo.title or '无标题'}",
-            "",
-            f"- id: {memo.id}",
-            f"- type: {memo.type}",
-            f"- mood: {memo.mood or ''}",
-            f"- tags: {', '.join(memo.tags or [])}",
-            f"- created_at: {_iso(memo.created_at)}",
-            f"- updated_at: {_iso(memo.updated_at)}",
-            "",
-            memo.content_markdown or "",
-            "",
-            "---",
-            "",
-        ])
-    return "\n".join(lines).encode(EXPORT_ENCODING), {"memos": len(memos)}
-
-
-async def _export_tasks_json(db, user_id: str) -> tuple[bytes, dict[str, int]]:
-    result = await db.execute(
-        select(Task)
-        .where(
-            Task.user_id == user_id,
-            Task.status == "active",
-        )
-        .order_by(Task.created_at.desc())
-    )
-    tasks = result.scalars().all()
-    payload = {
-        "contract_version": EXPORT_CONTRACT_VERSION,
-        "exported_at": _now_iso(),
-        "counts": {"tasks": len(tasks)},
-        "tasks": [_task_export_dict(task) for task in tasks],
-    }
-    return _json_bytes(payload), {"tasks": len(tasks)}
-
-
-async def _export_assets_json(db, user_id: str) -> tuple[bytes, dict[str, int]]:
-    result = await db.execute(
+    asset_result = await db.execute(
         select(Asset)
         .where(
             Asset.user_id == user_id,
-            Asset.status == "active",
+            Asset.kind == "internal",
+            Asset.status != "purged",
         )
-        .order_by(Asset.created_at.desc())
-    )
-    assets = result.scalars().all()
-    payload = {
-        "contract_version": EXPORT_CONTRACT_VERSION,
-        "exported_at": _now_iso(),
-        "counts": {"assets": len(assets)},
-        "assets": [_asset_export_dict(asset) for asset in assets],
-    }
-    return _json_bytes(payload), {"assets": len(assets)}
-
-
-async def _export_all_json(db, user_id: str) -> tuple[bytes, dict[str, int]]:
-    memo_result = await db.execute(
-        select(Memo).where(Memo.user_id == user_id, Memo.status == "active")
-    )
-    memos = memo_result.scalars().all()
-
-    tx_result = await db.execute(
-        select(LedgerTransaction).where(
-            LedgerTransaction.user_id == user_id,
-            LedgerTransaction.status == "active",
-        )
-    )
-    txs = tx_result.scalars().all()
-
-    task_result = await db.execute(
-        select(Task).where(Task.user_id == user_id, Task.status == "active")
-    )
-    tasks = task_result.scalars().all()
-
-    asset_result = await db.execute(
-        select(Asset).where(Asset.user_id == user_id, Asset.status == "active")
+        .order_by(Asset.created_at.asc())
     )
     assets = asset_result.scalars().all()
 
-    counts = {
-        "memos": len(memos),
-        "ledger_transactions": len(txs),
-        "tasks": len(tasks),
-        "assets": len(assets),
-    }
+    asset_objects: list[dict[str, Any]] = []
+    for asset in assets:
+        item: dict[str, Any] = {
+            "asset_id": asset.id,
+            "storage_key": asset.storage_key,
+            "ciphertext_size_bytes": asset.size_bytes,
+            "ciphertext_sha256": asset.sha256,
+            "status": asset.status,
+        }
+        if include_asset_ciphertext and asset.storage_key:
+            ciphertext = _read_asset_ciphertext(asset.storage_key)
+            item["ciphertext_base64"] = base64.b64encode(ciphertext).decode("ascii")
+        asset_objects.append(item)
+
     payload = {
         "contract_version": EXPORT_CONTRACT_VERSION,
-        "exported_at": _now_iso(),
-        "counts": counts,
-        "memos": [_memo_export_dict(memo) for memo in memos],
-        "ledger_transactions": [_ledger_export_dict(tx) for tx in txs],
-        "tasks": [_task_export_dict(task) for task in tasks],
-        "assets": [_asset_export_dict(asset) for asset in assets],
+        "mode": "encrypted_backup",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "account_id": user_id,
+        "encrypted_entities": [_encrypted_entity_dict(item) for item in entities],
+        "account_key_envelopes": [_key_envelope_dict(item) for item in key_envelopes],
+        "encrypted_asset_objects": asset_objects,
     }
-    return _json_bytes(payload), counts
-
-
-def _memo_export_dict(memo: Memo) -> dict[str, Any]:
-    return _strip_sensitive({
-        "id": memo.id,
-        "type": memo.type,
-        "title": memo.title,
-        "content_markdown": memo.content_markdown,
-        "tags": memo.tags,
-        "mood": memo.mood,
-        "status": memo.status,
-        "created_at": _iso(memo.created_at),
-        "updated_at": _iso(memo.updated_at),
-    })
-
-
-def _ledger_export_dict(tx: LedgerTransaction) -> dict[str, Any]:
-    return _strip_sensitive({
-        "id": tx.id,
-        "direction": tx.direction,
-        "amount": float(tx.amount),
-        "currency": tx.currency,
-        "account_id": tx.account_id,
-        "category_id": tx.category_id,
-        "merchant": tx.merchant,
-        "note": tx.note,
-        "occurred_at": _iso(tx.occurred_at),
-        "source": tx.source,
-        "import_batch_id": tx.import_batch_id,
-        "status": tx.status,
-        "created_at": _iso(tx.created_at),
-        "updated_at": _iso(tx.updated_at),
-    })
-
-
-def _task_export_dict(task: Task) -> dict[str, Any]:
-    return _strip_sensitive({
-        "id": task.id,
-        "title": task.title,
-        "description": task.description,
-        "task_status": task.task_status,
-        "priority": task.priority,
-        "due_at": _iso(task.due_at),
-        "remind_at": _iso(task.remind_at),
-        "completed_at": _iso(task.completed_at),
-        "source": task.source,
-        "status": task.status,
-        "created_at": _iso(task.created_at),
-        "updated_at": _iso(task.updated_at),
-    })
-
-
-def _asset_export_dict(asset: Asset) -> dict[str, Any]:
-    return _strip_sensitive({
-        "id": asset.id,
-        "kind": asset.kind,
-        "asset_type": asset.asset_type,
-        "filename": asset.filename,
-        "mime_type": asset.mime_type,
-        "size_bytes": asset.size_bytes,
-        "external_url": asset.external_url,
-        "external_provider": asset.external_provider,
-        "visibility": asset.visibility,
-        "sync_status": asset.sync_status,
-        "status": asset.status,
-        "created_at": _iso(asset.created_at),
-        "updated_at": _iso(asset.updated_at),
-    })
-
-
-def _strip_sensitive(data: dict[str, Any]) -> dict[str, Any]:
-    sensitive_keys = {
-        "user_id",
-        "storage_key",
-        "sha256",
-        "source_capture_id",
-        "deleted_at",
-        "hashed_password",
-        "token_hash",
+    content = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode(
+        EXPORT_ENCODING
+    )
+    counts = {
+        "encrypted_entities": len(entities),
+        "account_key_envelopes": len(key_envelopes),
+        "encrypted_asset_objects": len(asset_objects),
     }
-    return {key: value for key, value in data.items() if key not in sensitive_keys}
+    return ExportResult(
+        mode="encrypted_backup",
+        media_type="application/json",
+        filename="lifly-encrypted-backup.json",
+        content=content,
+        counts=counts,
+        checksum_sha256=hashlib.sha256(content).hexdigest(),
+    )
 
 
-def _json_bytes(payload: dict[str, Any]) -> bytes:
-    return json.dumps(payload, ensure_ascii=False, indent=2).encode(EXPORT_ENCODING)
+def _encrypted_entity_dict(entity: EncryptedEntity) -> dict[str, Any]:
+    return {
+        "id": entity.id,
+        "user_id": entity.user_id,
+        "entity_type": entity.entity_type,
+        "revision": entity.revision,
+        "lifecycle_status": entity.lifecycle_status,
+        "updated_at": entity.updated_at.isoformat(),
+        "key_version": entity.key_version,
+        "encryption_version": entity.encryption_version,
+        "schema_version": entity.schema_version,
+        "nonce": entity.nonce,
+        "ciphertext": entity.ciphertext,
+    }
 
 
-def _iso(value: Any) -> str | None:
-    return value.isoformat() if value else None
+def _key_envelope_dict(envelope: AccountKeyEnvelope) -> dict[str, Any]:
+    return {
+        "account_id": envelope.account_id,
+        "envelope_type": envelope.envelope_type,
+        "key_version": envelope.key_version,
+        "encryption_version": envelope.encryption_version,
+        "schema_version": envelope.schema_version,
+        "nonce": envelope.nonce,
+        "ciphertext": envelope.ciphertext,
+    }
 
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+def _read_asset_ciphertext(storage_key: str) -> bytes:
+    response = get_storage().get_object(settings.minio_bucket, storage_key)
+    try:
+        payload = response.read(MAX_BACKUP_ASSET_BYTES + 1)
+    finally:
+        response.close()
+        response.release_conn()
+    if len(payload) > MAX_BACKUP_ASSET_BYTES:
+        raise ValueError(
+            f"Encrypted asset exceeds backup limit of {MAX_BACKUP_ASSET_BYTES} bytes"
+        )
+    return payload
