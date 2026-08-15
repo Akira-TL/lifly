@@ -12,7 +12,6 @@ enum AiJobMessageType {
 }
 
 class AiJobEnvelope {
-  final int protocolVersion;
   final String jobId;
   final String accountId;
   final String sourceDeviceId;
@@ -26,7 +25,6 @@ class AiJobEnvelope {
   final String ciphertext;
 
   const AiJobEnvelope({
-    this.protocolVersion = liflyAiJobProtocolVersion,
     required this.jobId,
     required this.accountId,
     required this.sourceDeviceId,
@@ -46,7 +44,6 @@ class AiJobEnvelope {
       throw FormatException('Unsupported AI job protocol: $protocolVersion');
     }
     return AiJobEnvelope(
-      protocolVersion: protocolVersion,
       jobId: _requiredString(json, 'job_id'),
       accountId: _requiredString(json, 'account_id'),
       sourceDeviceId: _requiredString(json, 'source_device_id'),
@@ -56,7 +53,7 @@ class AiJobEnvelope {
       ),
       correlationId: _nullableString(json['correlation_id']),
       idempotencyKey: _requiredString(json, 'idempotency_key'),
-      expiresAt: DateTime.parse(_requiredString(json, 'expires_at')),
+      expiresAt: _requiredAwareDateTime(json, 'expires_at'),
       encryptionVersion: _requiredPositiveInt(json, 'encryption_version'),
       nonce: _requiredString(json, 'nonce'),
       ciphertext: _requiredString(json, 'ciphertext'),
@@ -64,7 +61,7 @@ class AiJobEnvelope {
   }
 
   Map<String, dynamic> toJson() => {
-    'protocol_version': protocolVersion,
+    'protocol_version': liflyAiJobProtocolVersion,
     'job_id': jobId,
     'account_id': accountId,
     'source_device_id': sourceDeviceId,
@@ -89,6 +86,14 @@ String? _nullableString(Object? value) {
   if (value == null) return null;
   if (value is String && value.isNotEmpty) return value;
   throw const FormatException('Expected null or non-empty string');
+}
+
+DateTime _requiredAwareDateTime(Map<String, dynamic> json, String key) {
+  final parsed = DateTime.parse(_requiredString(json, key));
+  if (!parsed.isUtc) {
+    throw FormatException('Expected timezone-aware datetime for $key');
+  }
+  return parsed;
 }
 
 int _requiredPositiveInt(Map<String, dynamic> json, String key) {

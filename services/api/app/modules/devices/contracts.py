@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -20,7 +21,7 @@ class DeviceTrustState(StrEnum):
 
 
 class DeviceCapabilityReport(BaseModel):
-    protocol_version: int = DEVICE_PROTOCOL_VERSION
+    protocol_version: Literal[1] = DEVICE_PROTOCOL_VERSION
     capabilities: list[DeviceCapability] = Field(default_factory=list)
     supported_tools: list[str] = Field(default_factory=list)
 

@@ -15,7 +15,6 @@ enum EncryptedEntityLifecycleStatus {
 }
 
 class EncryptedEntityEnvelope {
-  final int schemaVersion;
   final String id;
   final String userId;
   final String entityType;
@@ -28,7 +27,6 @@ class EncryptedEntityEnvelope {
   final String ciphertext;
 
   const EncryptedEntityEnvelope({
-    this.schemaVersion = liflyEncryptedEntitySchemaVersion,
     required this.id,
     required this.userId,
     required this.entityType,
@@ -49,7 +47,6 @@ class EncryptedEntityEnvelope {
       );
     }
     return EncryptedEntityEnvelope(
-      schemaVersion: schemaVersion,
       id: _requiredString(json, 'id'),
       userId: _requiredString(json, 'user_id'),
       entityType: _requiredString(json, 'entity_type'),
@@ -57,7 +54,7 @@ class EncryptedEntityEnvelope {
       lifecycleStatus: EncryptedEntityLifecycleStatus.fromValue(
         _requiredString(json, 'lifecycle_status'),
       ),
-      updatedAt: DateTime.parse(_requiredString(json, 'updated_at')),
+      updatedAt: _requiredAwareDateTime(json, 'updated_at'),
       keyVersion: _requiredPositiveInt(json, 'key_version'),
       encryptionVersion: _requiredPositiveInt(json, 'encryption_version'),
       nonce: _requiredString(json, 'nonce'),
@@ -66,7 +63,7 @@ class EncryptedEntityEnvelope {
   }
 
   Map<String, dynamic> toJson() => {
-    'schema_version': schemaVersion,
+    'schema_version': liflyEncryptedEntitySchemaVersion,
     'id': id,
     'user_id': userId,
     'entity_type': entityType,
@@ -81,7 +78,6 @@ class EncryptedEntityEnvelope {
 }
 
 class PasswordKeyEnvelope {
-  final int schemaVersion;
   final String accountId;
   final int keyVersion;
   final int encryptionVersion;
@@ -89,7 +85,6 @@ class PasswordKeyEnvelope {
   final String ciphertext;
 
   const PasswordKeyEnvelope({
-    this.schemaVersion = liflyPasswordKeyEnvelopeSchemaVersion,
     required this.accountId,
     required this.keyVersion,
     required this.encryptionVersion,
@@ -105,7 +100,6 @@ class PasswordKeyEnvelope {
       );
     }
     return PasswordKeyEnvelope(
-      schemaVersion: schemaVersion,
       accountId: _requiredString(json, 'account_id'),
       keyVersion: _requiredPositiveInt(json, 'key_version'),
       encryptionVersion: _requiredPositiveInt(json, 'encryption_version'),
@@ -115,7 +109,7 @@ class PasswordKeyEnvelope {
   }
 
   Map<String, dynamic> toJson() => {
-    'schema_version': schemaVersion,
+    'schema_version': liflyPasswordKeyEnvelopeSchemaVersion,
     'account_id': accountId,
     'key_version': keyVersion,
     'encryption_version': encryptionVersion,
@@ -128,6 +122,14 @@ String _requiredString(Map<String, dynamic> json, String key) {
   final value = json[key];
   if (value is String && value.isNotEmpty) return value;
   throw FormatException('Expected non-empty string for $key');
+}
+
+DateTime _requiredAwareDateTime(Map<String, dynamic> json, String key) {
+  final parsed = DateTime.parse(_requiredString(json, key));
+  if (!parsed.isUtc) {
+    throw FormatException('Expected timezone-aware datetime for $key');
+  }
+  return parsed;
 }
 
 int _requiredPositiveInt(Map<String, dynamic> json, String key) {

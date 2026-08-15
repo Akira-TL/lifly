@@ -25,12 +25,10 @@ enum DeviceTrustState {
 }
 
 class DeviceCapabilityReport {
-  final int protocolVersion;
   final List<DeviceCapability> capabilities;
   final List<String> supportedTools;
 
   const DeviceCapabilityReport({
-    this.protocolVersion = liflyDeviceProtocolVersion,
     this.capabilities = const [],
     this.supportedTools = const [],
   });
@@ -43,7 +41,6 @@ class DeviceCapabilityReport {
       );
     }
     return DeviceCapabilityReport(
-      protocolVersion: protocolVersion,
       capabilities: _stringList(
         json['capabilities'],
       ).map(DeviceCapability.fromValue).toList(growable: false),
@@ -52,7 +49,7 @@ class DeviceCapabilityReport {
   }
 
   Map<String, dynamic> toJson() => {
-    'protocol_version': protocolVersion,
+    'protocol_version': liflyDeviceProtocolVersion,
     'capabilities': capabilities
         .map((item) => item.value)
         .toList(growable: false),

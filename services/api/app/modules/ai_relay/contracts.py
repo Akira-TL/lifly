@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
 from enum import StrEnum
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field
 
 AI_JOB_PROTOCOL_VERSION = 1
 
@@ -21,7 +21,7 @@ class AiJobEnvelope(BaseModel):
     job content or a key capable of decrypting ``ciphertext``.
     """
 
-    protocol_version: int = AI_JOB_PROTOCOL_VERSION
+    protocol_version: Literal[1] = AI_JOB_PROTOCOL_VERSION
     job_id: str = Field(min_length=1)
     account_id: str = Field(min_length=1)
     source_device_id: str = Field(min_length=1)
@@ -29,7 +29,7 @@ class AiJobEnvelope(BaseModel):
     message_type: AiJobMessageType = AiJobMessageType.REQUEST
     correlation_id: str | None = None
     idempotency_key: str = Field(min_length=1)
-    expires_at: datetime
+    expires_at: AwareDatetime
     encryption_version: int = Field(default=1, ge=1)
     nonce: str = Field(min_length=1, description="Text-safe encoded device-envelope nonce")
     ciphertext: str = Field(min_length=1, description="Text-safe encoded job payload")
