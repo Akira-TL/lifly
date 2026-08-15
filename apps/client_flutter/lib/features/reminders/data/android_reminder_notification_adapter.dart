@@ -36,7 +36,7 @@ class FlutterLocalNotificationsAndroidGateway
     if (_initialized) return;
     final initialized = await plugin.initialize(
       settings: const InitializationSettings(
-        android: AndroidInitializationSettings('ic_launcher'),
+        android: AndroidInitializationSettings('ic_stat_lifly'),
       ),
     );
     if (initialized == false) {

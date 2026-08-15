@@ -7,6 +7,7 @@ ANDROID_DIR="$CLIENT_DIR/android"
 MANIFEST="$ANDROID_DIR/app/src/main/AndroidManifest.xml"
 APP_GRADLE="$ANDROID_DIR/app/build.gradle.kts"
 MAIN_ACTIVITY="$ANDROID_DIR/app/src/main/kotlin/com/lifly/app/MainActivity.kt"
+NOTIFICATION_ICON="$ANDROID_DIR/app/src/main/res/drawable/ic_stat_lifly.xml"
 
 fail() {
   printf '[android-demo] FAIL: %s\n' "$*" >&2
@@ -20,6 +21,10 @@ grep -q 'android.permission.INTERNET' "$MANIFEST" || fail 'main manifest must de
 grep -q 'android.permission.POST_NOTIFICATIONS' "$MANIFEST" || fail 'main manifest must declare POST_NOTIFICATIONS'
 grep -q 'android:label="Lifly"' "$MANIFEST" || fail 'app label must be Lifly'
 grep -q '^package com.lifly.app$' "$MAIN_ACTIVITY" || fail 'MainActivity package must match application namespace'
+[[ -f "$NOTIFICATION_ICON" ]] || fail 'notification small icon must exist as a drawable resource'
+grep -q "AndroidInitializationSettings('ic_stat_lifly')" \
+  "$CLIENT_DIR/lib/features/reminders/data/android_reminder_notification_adapter.dart" \
+  || fail 'Android notification adapter must use the drawable small icon'
 if grep -q 'signingConfigs.getByName("debug")' "$APP_GRADLE"; then
   fail 'release build must not use the debug signing key'
 fi
