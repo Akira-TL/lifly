@@ -19,6 +19,8 @@ import 'package:client_flutter/app/theme/theme_runtime.dart';
 import 'package:client_flutter/app/theme/theme_tokens.dart';
 import 'package:client_flutter/app/theme/themes/lifly_test_theme.dart';
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/auth/secure_secret_store.dart';
+import 'package:client_flutter/data/auth/secure_session_store.dart';
 import 'package:client_flutter/data/local_core/fake_local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/powersync_local_core_bridge.dart';
@@ -31,6 +33,12 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   StartupMetrics.markDartEntrypoint();
   final useVisualFixtures = kDebugMode && AppConfig.visualFixtures;
+  final secrets = FlutterSecureSecretStore();
+  final sessions = SecureAuthSessionStore(secrets);
+  final api = ApiClient(
+    baseUrl: AppConfig.apiBaseUrl,
+    accessTokenProvider: sessions.readAccessToken,
+  );
   runApp(
     MultiProvider(
       providers: [
@@ -64,9 +72,9 @@ void main() {
         Provider<LiflyDataMode>.value(
           value: useVisualFixtures ? LiflyDataMode.local : AppConfig.dataMode,
         ),
-        Provider<ApiClient>(
-          create: (_) => ApiClient(baseUrl: AppConfig.apiBaseUrl),
-        ),
+        Provider<SecretStore>.value(value: secrets),
+        Provider<AuthSessionStore>.value(value: sessions),
+        Provider<ApiClient>.value(value: api),
         Provider<SyncService>(
           create: (context) => SyncService(api: context.read<ApiClient>()),
           dispose: (_, service) => service.dispose(),
