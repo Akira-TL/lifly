@@ -20,7 +20,8 @@ fun releaseKeystoreValue(name: String): String =
 
 android {
     namespace = "com.lifly.app"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 37
+    compileSdkMinor = 0
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

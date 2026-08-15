@@ -6,6 +6,7 @@ CLIENT_DIR="$ROOT_DIR/apps/client_flutter"
 ANDROID_DIR="$CLIENT_DIR/android"
 MANIFEST="$ANDROID_DIR/app/src/main/AndroidManifest.xml"
 APP_GRADLE="$ANDROID_DIR/app/build.gradle.kts"
+ROOT_GRADLE="$ANDROID_DIR/build.gradle.kts"
 MAIN_ACTIVITY="$ANDROID_DIR/app/src/main/kotlin/com/lifly/app/MainActivity.kt"
 NOTIFICATION_ICON="$ANDROID_DIR/app/src/main/res/drawable/ic_stat_lifly.xml"
 
@@ -17,6 +18,9 @@ fail() {
 printf '%s\n' '[android-demo] checking Android packaging contract'
 grep -q 'applicationId = "com.lifly.app"' "$APP_GRADLE" || fail 'applicationId must be com.lifly.app'
 grep -q 'namespace = "com.lifly.app"' "$APP_GRADLE" || fail 'namespace must be com.lifly.app'
+grep -q 'compileSdk = 37' "$APP_GRADLE" || fail 'app must compile against Android API 37'
+grep -q 'compileSdkMinor = 0' "$APP_GRADLE" || fail 'app must compile against Android API 37.0'
+grep -q 'name == "flutter_secure_storage"' "$ROOT_GRADLE" || fail 'flutter_secure_storage API 37.0 compatibility override is missing'
 grep -q 'android.permission.INTERNET' "$MANIFEST" || fail 'main manifest must declare INTERNET'
 grep -q 'android.permission.POST_NOTIFICATIONS' "$MANIFEST" || fail 'main manifest must declare POST_NOTIFICATIONS'
 grep -q 'android:label="Lifly"' "$MANIFEST" || fail 'app label must be Lifly'
