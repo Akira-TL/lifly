@@ -6,7 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 void main() {
-  testWidgets('ExportPage disables actions in local mode', (tester) async {
+  testWidgets('ExportPage disables encrypted backup in local mode', (
+    tester,
+  ) async {
     final api = _FakeApiClient();
 
     await tester.pumpWidget(
@@ -14,11 +16,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('当前为本地模式，导出需要连接云端服务。'), findsOneWidget);
+    await _selectEncryptedBackup(tester);
 
-    await tester.tap(find.text('生成导出预览'));
-    await tester.pumpAndSettle();
-
+    expect(find.text('加密备份需要连接云端服务。'), findsOneWidget);
+    final previewButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, '生成导出预览'),
+    );
+    expect(previewButton.onPressed, isNull);
     expect(api.postCalls, isEmpty);
   });
 
@@ -42,12 +46,16 @@ void main() {
 
     await tester.pumpWidget(_buildPage(dataMode: LiflyDataMode.api, api: api));
     await tester.pumpAndSettle();
+    await _selectEncryptedBackup(tester);
 
     await tester.tap(find.text('生成导出预览'));
     await tester.pumpAndSettle();
 
     expect(api.postCalls.single.path, '/export');
-    expect(api.postCalls.single.data, {'entity_type': 'all'});
+    expect(api.postCalls.single.data, {
+      'entity_type': 'all',
+      'mode': 'encrypted_backup',
+    });
     expect(find.text('导出预览'), findsOneWidget);
     expect(find.text('文件名：lifly-export-all.jsonl'), findsOneWidget);
     expect(find.text('大小：120 bytes'), findsOneWidget);
@@ -83,12 +91,16 @@ void main() {
         _buildPage(dataMode: LiflyDataMode.api, api: api),
       );
       await tester.pumpAndSettle();
+      await _selectEncryptedBackup(tester);
 
       await tester.tap(find.text('下载导出文件'));
       await tester.pumpAndSettle();
 
       expect(api.downloadCalls.single.path, '/export/stream');
-      expect(api.downloadCalls.single.params, {'entity_type': 'all'});
+      expect(api.downloadCalls.single.params, {
+        'entity_type': 'all',
+        'mode': 'encrypted_backup',
+      });
       expect(find.text('下载完成'), findsOneWidget);
       expect(find.text('文件大小：4 bytes'), findsOneWidget);
       expect(find.text('文件名：lifly-export-all.jsonl'), findsOneWidget);
@@ -107,6 +119,7 @@ void main() {
 
     await tester.pumpWidget(_buildPage(dataMode: LiflyDataMode.api, api: api));
     await tester.pumpAndSettle();
+    await _selectEncryptedBackup(tester);
 
     await tester.tap(find.text('生成导出预览'));
     await tester.pumpAndSettle();
@@ -124,6 +137,11 @@ void main() {
     expect(find.textContaining('下载导出文件失败'), findsOneWidget);
     expect(find.textContaining('stream unavailable'), findsOneWidget);
   });
+}
+
+Future<void> _selectEncryptedBackup(WidgetTester tester) async {
+  await tester.tap(find.text('加密备份'));
+  await tester.pumpAndSettle();
 }
 
 Widget _buildPage({required LiflyDataMode dataMode, required ApiClient api}) {
