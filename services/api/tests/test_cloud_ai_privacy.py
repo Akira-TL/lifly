@@ -33,7 +33,12 @@ from app.modules.ai.router import (
 
 
 class _RecordingProvider(AiProvider):
-    def __init__(self, *, fail: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        fail: bool = False,
+        failure_message: str = "provider unavailable",
+    ) -> None:
         super().__init__(
             AiProviderConfig(
                 kind=AiProviderKind.OLLAMA,
@@ -45,11 +50,12 @@ class _RecordingProvider(AiProvider):
         )
         self.requests: list[AiPlanRequest] = []
         self.fail = fail
+        self.failure_message = failure_message
 
     async def plan(self, request: AiPlanRequest) -> AiPlanResult:
         self.requests.append(request)
         if self.fail:
-            raise AiProviderError("provider unavailable")
+            raise AiProviderError(self.failure_message)
         actions = CandidateActionEnvelope.model_validate(
             {
                 "actions": [
@@ -212,6 +218,26 @@ def test_cloud_ai_route_is_authenticated_and_returns_candidate_actions_only() ->
     assert set(body) == {"request_id", "provider", "model", "actions"}
     assert body["actions"][0]["type"] == "memo_create"
     assert "account-1" not in response.text
+
+
+def test_cloud_ai_route_does_not_echo_provider_error_payload() -> None:
+    provider = _RecordingProvider(fail=True, failure_message="secret-prompt-marker")
+    gateway = CloudAiInferenceGateway(provider)
+    app = FastAPI()
+    app.include_router(ai_router, prefix="/ai")
+    app.dependency_overrides[get_authenticated_subject] = lambda: AuthenticatedSubject(
+        account_id="account-1"
+    )
+    app.dependency_overrides[get_cloud_ai_gateway] = lambda: gateway
+
+    response = TestClient(app).post(
+        "/ai/cloud/plan",
+        json=_request().model_dump(mode="json"),
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Cloud AI provider unavailable"}
+    assert "secret-prompt-marker" not in response.text
 
 
 def test_cloud_ai_provider_failure_does_not_fallback_or_retain_payload() -> None:

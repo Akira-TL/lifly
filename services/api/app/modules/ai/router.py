@@ -87,4 +87,7 @@ async def cloud_plan(
     except CloudAiConsentError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except AiProviderError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=503,
+            detail="Cloud AI provider unavailable",
+        ) from exc
