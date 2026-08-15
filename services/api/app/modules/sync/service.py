@@ -3,11 +3,12 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from jose import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.security import create_access_token
+from app.core.security import AuthenticatedSubject
 from app.db.models import (
     AuditLog,
     LedgerBudget,
@@ -36,18 +37,33 @@ from app.modules.tasks.reminder_delivery_service import reminder_to_dict
 from app.modules.tasks.service import task_to_dict
 
 
-def issue_powersync_credentials() -> PowerSyncCredentialsResponse:
-    expires_at = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.powersync_token_expire_minutes
-    )
-    token = create_access_token(
-        settings.powersync_dev_user_id,
-        expires_delta=timedelta(minutes=settings.powersync_token_expire_minutes),
+def issue_powersync_credentials(
+    subject: AuthenticatedSubject,
+) -> PowerSyncCredentialsResponse:
+    """Issue a short-lived PowerSync JWT bound to Account + Device identity."""
+
+    if subject.device_id is None:
+        raise ValueError("PowerSync credentials require device identity")
+
+    issued_at = datetime.now(timezone.utc)
+    expires_at = issued_at + timedelta(minutes=settings.powersync_token_expire_minutes)
+    token = jwt.encode(
+        {
+            **subject.token_claims(),
+            "type": "powersync",
+            "aud": settings.powersync_url,
+            "iat": int(issued_at.timestamp()),
+            "exp": int(expires_at.timestamp()),
+        },
+        settings.jwt_secret,
+        algorithm=settings.jwt_algorithm,
+        headers={"kid": "lifly-dev-hs256"},
     )
     return PowerSyncCredentialsResponse(
         endpoint=settings.powersync_url,
         token=token,
-        user_id=settings.powersync_dev_user_id,
+        user_id=subject.user_id,
+        device_id=subject.device_id,
         expires_at=expires_at,
     )
 

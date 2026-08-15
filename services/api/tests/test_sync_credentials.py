@@ -2,23 +2,37 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from app.core.security import decode_token
+from jose import jwt
+
+from app.core.config import settings
+from app.core.security import AuthenticatedSubject
 from app.modules.sync.service import issue_powersync_credentials
 
 
-def test_issue_powersync_credentials_returns_development_token() -> None:
+def test_issue_powersync_credentials_returns_authenticated_device_token() -> None:
     before = datetime.now(timezone.utc)
-    credentials = issue_powersync_credentials()
+    credentials = issue_powersync_credentials(
+        AuthenticatedSubject(account_id="account-1", device_id="device-1")
+    )
     after = datetime.now(timezone.utc)
 
     assert credentials.endpoint == "http://localhost:8204"
-    assert credentials.user_id == "local-dev"
-    assert credentials.mode == "development"
+    assert credentials.user_id == "account-1"
+    assert credentials.device_id == "device-1"
+    assert credentials.mode == "authenticated"
     assert credentials.token
     assert credentials.expires_at > before
     assert credentials.expires_at > after
 
-    payload = decode_token(credentials.token)
-    assert payload is not None
-    assert payload["sub"] == "local-dev"
-    assert payload["type"] == "access"
+    payload = jwt.decode(
+        credentials.token,
+        settings.jwt_secret,
+        algorithms=[settings.jwt_algorithm],
+        audience=settings.powersync_url,
+    )
+    assert payload["sub"] == "account-1"
+    assert payload["account_id"] == "account-1"
+    assert payload["device_id"] == "device-1"
+    assert payload["type"] == "powersync"
+    assert payload["aud"] == settings.powersync_url
+    assert payload["iat"] <= payload["exp"]
