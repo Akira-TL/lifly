@@ -65,24 +65,29 @@ class LocalDecryptedProjection {
       await _upsert(spec.table, envelope.id, values);
     }
 
-    await db.execute(
-      'INSERT INTO e2ee_projection_state('
-      'id, user_id, entity_type, revision, key_version, lifecycle_status, updated_at'
-      ') VALUES (?, ?, ?, ?, ?, ?, ?) '
-      'ON CONFLICT(id) DO UPDATE SET '
-      'user_id = excluded.user_id, entity_type = excluded.entity_type, '
-      'revision = excluded.revision, key_version = excluded.key_version, '
-      'lifecycle_status = excluded.lifecycle_status, updated_at = excluded.updated_at',
-      [
-        envelope.id,
-        envelope.userId,
-        envelope.entityType,
-        envelope.revision,
-        envelope.keyVersion,
-        envelope.lifecycleStatus.value,
-        envelope.updatedAt.toUtc().toIso8601String(),
-      ],
-    );
+    final stateValues = [
+      envelope.userId,
+      envelope.entityType,
+      envelope.revision,
+      envelope.keyVersion,
+      envelope.lifecycleStatus.value,
+      envelope.updatedAt.toUtc().toIso8601String(),
+    ];
+    if (current == null) {
+      await db.execute(
+        'INSERT INTO e2ee_projection_state('
+        'id, user_id, entity_type, revision, key_version, lifecycle_status, updated_at'
+        ') VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [envelope.id, ...stateValues],
+      );
+    } else {
+      await db.execute(
+        'UPDATE e2ee_projection_state SET '
+        'user_id = ?, entity_type = ?, revision = ?, key_version = ?, '
+        'lifecycle_status = ?, updated_at = ? WHERE id = ?',
+        [...stateValues, envelope.id],
+      );
+    }
     return ProjectionApplyResult.applied(envelope.revision);
   }
 
@@ -95,16 +100,22 @@ class LocalDecryptedProjection {
       throw StateError('Cannot materialize an empty projection for $table/$id');
     }
     final columns = values.keys.toList(growable: false);
-    final placeholders = List.filled(columns.length + 1, '?').join(', ');
-    final assignments = columns
-        .map((column) => '$column = excluded.$column')
-        .join(', ');
-    await db.execute(
-      'INSERT INTO $table(id, ${columns.join(', ')}) '
-      'VALUES ($placeholders) '
-      'ON CONFLICT(id) DO UPDATE SET $assignments',
-      [id, ...columns.map((column) => values[column])],
-    );
+    final row = await db.getOptional('SELECT id FROM $table WHERE id = ?', [
+      id,
+    ]);
+    if (row == null) {
+      final placeholders = List.filled(columns.length + 1, '?').join(', ');
+      await db.execute(
+        'INSERT INTO $table(id, ${columns.join(', ')}) VALUES ($placeholders)',
+        [id, ...columns.map((column) => values[column])],
+      );
+      return;
+    }
+    final assignments = columns.map((column) => '$column = ?').join(', ');
+    await db.execute('UPDATE $table SET $assignments WHERE id = ?', [
+      ...columns.map((column) => values[column]),
+      id,
+    ]);
   }
 }
 

@@ -4,4 +4,18 @@ config:
 streams:
   lifly_encrypted_entities:
     auto_subscribe: true
-    query: SELECT * FROM encrypted_entities WHERE user_id = auth.user_id()
+    query: |
+      SELECT
+        id,
+        user_id,
+        entity_type,
+        revision,
+        lifecycle_status,
+        updated_at,
+        key_version,
+        encryption_version,
+        schema_version,
+        nonce,
+        ciphertext
+      FROM encrypted_entities
+      WHERE user_id = auth.user_id()

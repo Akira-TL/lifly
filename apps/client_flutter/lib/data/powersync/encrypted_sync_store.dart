@@ -203,31 +203,39 @@ class PowerSyncEncryptedSyncStore implements EncryptedSyncStore {
   }
 
   Future<void> _upsertEnvelope(EncryptedEntityEnvelope envelope) async {
+    final existing = await db.getOptional(
+      'SELECT id FROM encrypted_entities WHERE id = ? AND user_id = ?',
+      [envelope.id, envelope.userId],
+    );
+    final values = [
+      envelope.userId,
+      envelope.entityType,
+      envelope.revision,
+      envelope.lifecycleStatus.value,
+      envelope.updatedAt.toUtc().toIso8601String(),
+      envelope.keyVersion,
+      envelope.encryptionVersion,
+      liflyEncryptedEntitySchemaVersion,
+      envelope.nonce,
+      envelope.ciphertext,
+    ];
+    if (existing == null) {
+      await db.execute(
+        'INSERT INTO encrypted_entities('
+        'id, user_id, entity_type, revision, lifecycle_status, updated_at, '
+        'key_version, encryption_version, schema_version, nonce, ciphertext'
+        ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [envelope.id, ...values],
+      );
+      return;
+    }
     await db.execute(
-      'INSERT INTO encrypted_entities('
-      'id, user_id, entity_type, revision, lifecycle_status, updated_at, '
-      'key_version, encryption_version, schema_version, nonce, ciphertext'
-      ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) '
-      'ON CONFLICT(id) DO UPDATE SET '
-      'user_id = excluded.user_id, entity_type = excluded.entity_type, '
-      'revision = excluded.revision, lifecycle_status = excluded.lifecycle_status, '
-      'updated_at = excluded.updated_at, key_version = excluded.key_version, '
-      'encryption_version = excluded.encryption_version, '
-      'schema_version = excluded.schema_version, nonce = excluded.nonce, '
-      'ciphertext = excluded.ciphertext',
-      [
-        envelope.id,
-        envelope.userId,
-        envelope.entityType,
-        envelope.revision,
-        envelope.lifecycleStatus.value,
-        envelope.updatedAt.toUtc().toIso8601String(),
-        envelope.keyVersion,
-        envelope.encryptionVersion,
-        liflyEncryptedEntitySchemaVersion,
-        envelope.nonce,
-        envelope.ciphertext,
-      ],
+      'UPDATE encrypted_entities SET '
+      'user_id = ?, entity_type = ?, revision = ?, lifecycle_status = ?, '
+      'updated_at = ?, key_version = ?, encryption_version = ?, '
+      'schema_version = ?, nonce = ?, ciphertext = ? '
+      'WHERE id = ?',
+      [...values, envelope.id],
     );
   }
 
