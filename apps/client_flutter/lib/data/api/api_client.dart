@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
 
+typedef ApiAccessTokenProvider = Future<String?> Function();
+
 class ApiBinaryResponse {
   final List<int> bytes;
   final Map<String, String> headers;
@@ -12,8 +14,13 @@ class ApiBinaryResponse {
 class ApiClient {
   late final Dio _dio;
   final String baseUrl;
+  ApiAccessTokenProvider? accessTokenProvider;
 
-  ApiClient({this.baseUrl = 'http://127.0.0.1:8210/api/v1', Dio? dio}) {
+  ApiClient({
+    this.baseUrl = 'http://127.0.0.1:8210/api/v1',
+    Dio? dio,
+    this.accessTokenProvider,
+  }) {
     _dio =
         dio ??
         Dio(
@@ -24,6 +31,21 @@ class ApiClient {
             headers: {'Content-Type': 'application/json'},
           ),
         );
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) async {
+          final token = await accessTokenProvider?.call();
+          if (token != null && token.isNotEmpty) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
+          handler.next(options);
+        },
+      ),
+    );
+  }
+
+  void setAccessTokenProvider(ApiAccessTokenProvider? provider) {
+    accessTokenProvider = provider;
   }
 
   Future<Map<String, dynamic>> get(
