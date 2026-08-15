@@ -1,0 +1,36 @@
+# Lifly v0.9.0 demo PowerSync service configuration.
+# The default HS256 key intentionally matches services/api/app/core/config.py.
+# Production integration must replace it with asymmetric JWKS/key rotation.
+replication:
+  connections:
+    - type: postgresql
+      uri: postgresql://lifly:lifly@postgres:5432/lifly
+      sslmode: disable
+
+storage:
+  type: postgresql
+  uri: postgresql://lifly:lifly@postgres:5432/lifly
+  sslmode: disable
+
+port: 8080
+
+sync_config:
+  path: /config/sync-config.yaml
+
+client_auth:
+  audience:
+    - http://localhost:8204
+  jwks:
+    keys:
+      - kty: oct
+        alg: HS256
+        kid: lifly-dev-hs256
+        k: ZGV2LW9ubHktY2hhbmdlLW1l
+
+telemetry:
+  disable_telemetry_sharing: true
+
+system:
+  logging:
+    level: info
+    format: text

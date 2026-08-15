@@ -1,18 +1,2 @@
-memos
-tag_metadata
-memo_classifications
-tasks
-task_reminder_strategies
-reminders
-ledger_transactions
-ledger_accounts
-ledger_categories
-ledger_budgets
-import_batches
-assets
-memo_asset_refs
-audit_logs
-mcp_undo_actions
-mcp_capture_sessions
-mcp_capture_turns
-tombstones
+# v0.9.0 remote sync surface: only opaque encrypted envelopes.
+encrypted_entities
