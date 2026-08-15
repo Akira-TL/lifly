@@ -58,14 +58,14 @@ class DefaultAccountDeviceRuntime implements AccountDeviceRuntime {
 
   DefaultAccountDeviceRuntime(
     ApiClient api, {
-    PakeClientAdapter pake = const UnavailableOpaqueClientAdapter(),
+    PakeClientAdapter? pake,
     SecretStore? secrets,
     DeviceIdentityStore? deviceIdentity,
     DeviceClientProfile? deviceProfile,
     AccountE2eeRuntime? e2ee,
   }) : this._(
          api,
-         pake,
+         pake ?? defaultPakeClientAdapter(),
          secrets ?? FlutterSecureSecretStore(),
          deviceIdentity,
          deviceProfile,
