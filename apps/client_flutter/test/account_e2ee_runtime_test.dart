@@ -83,6 +83,25 @@ void main() {
       if (syncService == null) return;
       addTearDown(syncService.dispose);
 
+      const legacySecret = 'legacy plaintext marker must migrate encrypted';
+      await syncService.db.execute(
+        'INSERT INTO memos('
+        'id, user_id, type, title, content_markdown, source, status, created_at, updated_at, revision'
+        ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          'memo-legacy-runtime',
+          'account-1',
+          'memo',
+          'legacy',
+          legacySecret,
+          'flutter',
+          'active',
+          '2026-08-15T09:00:00.000Z',
+          '2026-08-15T10:00:00.000Z',
+          2,
+        ],
+      );
+
       final secrets = _MemorySecrets();
       final sessions = SecureAuthSessionStore(secrets);
       await sessions.write(_session());
@@ -103,6 +122,11 @@ void main() {
       expect(runtime.isUnlocked, isTrue);
       expect(envelopes.value, isNotNull);
       expect(envelopes.value!.ciphertext, isNotEmpty);
+      final migrated = await syncService.db.getOptional(
+        "SELECT ciphertext FROM encrypted_entities WHERE id = 'memo-legacy-runtime'",
+      );
+      expect(migrated, isNotNull);
+      expect(migrated!['ciphertext'] as String, isNot(contains(legacySecret)));
       expect(
         secrets.values.values.join('|'),
         isNot(contains('access-via-export-key')),

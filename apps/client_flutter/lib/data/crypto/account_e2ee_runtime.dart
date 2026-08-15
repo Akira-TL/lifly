@@ -11,6 +11,7 @@ import 'package:client_flutter/data/local_core/write/encrypted_audit_payload_pro
 import 'package:client_flutter/data/local_core/write/local_core_audit_log_writer.dart';
 import 'package:client_flutter/data/powersync/encrypted_sync_store.dart';
 import 'package:client_flutter/data/powersync/password_key_envelope_service.dart';
+import 'package:client_flutter/data/powersync/plaintext_e2ee_migrator.dart';
 import 'package:client_flutter/data/powersync/sync_service.dart';
 import 'package:client_flutter/domain/entities/asset.dart';
 import 'package:client_flutter/domain/entities/memo.dart';
@@ -98,6 +99,11 @@ class AccountE2eeRuntime
       accountId: accountId,
       keyRing: AccountDataKeyRing(key),
     );
+    await PlaintextE2eeMigrator(
+      db: syncService.db,
+      store: store,
+      accountId: accountId,
+    ).migrateCoreEntities();
     _store = store;
     _assets = PowerSyncAssetE2eeCoordinator(store: store);
   }
