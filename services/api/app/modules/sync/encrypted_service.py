@@ -4,8 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import AuthenticatedSubject
-from app.db.models import EncryptedEntity
-from app.modules.crypto.contracts import EncryptedEntityEnvelope
+from app.db.models import AccountKeyEnvelope, EncryptedEntity
+from app.modules.crypto.contracts import EncryptedEntityEnvelope, PasswordKeyEnvelope
 from app.modules.sync.schemas import (
     EncryptedSyncPushRequest,
     SyncApplyResult,
@@ -100,6 +100,87 @@ async def _apply_envelope(
         operation=operation,
         status="applied",
         revision=envelope.revision,
+    )
+
+
+async def store_password_key_envelope(
+    db: AsyncSession,
+    subject: AuthenticatedSubject,
+    envelope: PasswordKeyEnvelope,
+) -> PasswordKeyEnvelope:
+    """Persist a password-wrapped ADK without receiving password or clear key material."""
+
+    if envelope.account_id != subject.user_id:
+        raise PermissionError("password key envelope account does not match authenticated account")
+
+    existing = await _find_password_key_envelope(
+        db,
+        account_id=subject.user_id,
+        key_version=envelope.key_version,
+    )
+    if existing is None:
+        existing = AccountKeyEnvelope(
+            account_id=subject.user_id,
+            envelope_type="password",
+            key_version=envelope.key_version,
+            encryption_version=envelope.encryption_version,
+            schema_version=envelope.schema_version,
+            nonce=envelope.nonce,
+            ciphertext=envelope.ciphertext,
+        )
+        db.add(existing)
+    else:
+        existing.encryption_version = envelope.encryption_version
+        existing.schema_version = envelope.schema_version
+        existing.nonce = envelope.nonce
+        existing.ciphertext = envelope.ciphertext
+
+    await db.flush()
+    return _password_key_envelope_contract(existing)
+
+
+async def get_password_key_envelope(
+    db: AsyncSession,
+    subject: AuthenticatedSubject,
+    *,
+    key_version: int | None = None,
+) -> PasswordKeyEnvelope | None:
+    existing = await _find_password_key_envelope(
+        db,
+        account_id=subject.user_id,
+        key_version=key_version,
+    )
+    if existing is None:
+        return None
+    return _password_key_envelope_contract(existing)
+
+
+async def _find_password_key_envelope(
+    db: AsyncSession,
+    *,
+    account_id: str,
+    key_version: int | None,
+) -> AccountKeyEnvelope | None:
+    statement = select(AccountKeyEnvelope).where(
+        AccountKeyEnvelope.account_id == account_id,
+        AccountKeyEnvelope.envelope_type == "password",
+    )
+    if key_version is None:
+        statement = statement.order_by(AccountKeyEnvelope.key_version.desc()).limit(1)
+    else:
+        statement = statement.where(AccountKeyEnvelope.key_version == key_version)
+    result = await db.execute(statement)
+    return result.scalar_one_or_none()
+
+
+def _password_key_envelope_contract(model: AccountKeyEnvelope) -> PasswordKeyEnvelope:
+    return PasswordKeyEnvelope(
+        account_id=model.account_id,
+        key_version=model.key_version,
+        encryption_version=model.encryption_version,
+        schema_version=model.schema_version,
+        nonce=model.nonce,
+        ciphertext=model.ciphertext,
     )
 
 

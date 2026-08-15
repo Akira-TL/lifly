@@ -8,9 +8,13 @@ from jose import jwt
 
 from app.core.config import settings
 from app.core.security import AuthenticatedSubject
-from app.db.models import EncryptedEntity
-from app.modules.crypto.contracts import EncryptedEntityEnvelope
-from app.modules.sync.encrypted_service import apply_encrypted_sync_push
+from app.db.models import AccountKeyEnvelope, EncryptedEntity
+from app.modules.crypto.contracts import EncryptedEntityEnvelope, PasswordKeyEnvelope
+from app.modules.sync.encrypted_service import (
+    apply_encrypted_sync_push,
+    get_password_key_envelope,
+    store_password_key_envelope,
+)
 from app.modules.sync.schemas import EncryptedSyncPushRequest
 from app.modules.sync.service import issue_powersync_credentials
 
@@ -183,3 +187,143 @@ def test_powersync_credentials_are_bound_to_account_and_device() -> None:
 def test_powersync_credentials_require_device_identity() -> None:
     with pytest.raises(ValueError, match="device identity"):
         issue_powersync_credentials(AuthenticatedSubject(account_id="account-1"))
+
+
+class FakeKeyEnvelopeSession:
+    def __init__(self) -> None:
+        self.envelopes: dict[tuple[str, int], AccountKeyEnvelope] = {}
+        self.flush_count = 0
+
+    def add(self, item: Any) -> None:
+        if not isinstance(item, AccountKeyEnvelope):
+            raise TypeError(f"Unsupported fake session item: {type(item)!r}")
+        self.envelopes[(item.account_id, item.key_version)] = item
+
+    async def flush(self) -> None:
+        self.flush_count += 1
+
+
+async def fake_find_password_key_envelope(
+    db: FakeKeyEnvelopeSession,
+    *,
+    account_id: str,
+    key_version: int | None,
+) -> AccountKeyEnvelope | None:
+    if key_version is not None:
+        return db.envelopes.get((account_id, key_version))
+    matches = [
+        item
+        for (owner, _), item in db.envelopes.items()
+        if owner == account_id
+    ]
+    if not matches:
+        return None
+    return max(matches, key=lambda item: item.key_version)
+
+
+def _password_envelope(
+    *,
+    account_id: str = "account-1",
+    key_version: int = 1,
+    ciphertext: str = "d3JhcHBlZC1hZGs=",
+) -> PasswordKeyEnvelope:
+    return PasswordKeyEnvelope.model_validate(
+        {
+            "account_id": account_id,
+            "key_version": key_version,
+            "encryption_version": 1,
+            "nonce": "cGFzc3dvcmQtbm9uY2U=",
+            "ciphertext": ciphertext,
+        }
+    )
+
+
+@pytest.mark.anyio
+async def test_password_key_envelope_is_stored_as_opaque_account_ciphertext(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.modules.sync import encrypted_service
+
+    monkeypatch.setattr(
+        encrypted_service,
+        "_find_password_key_envelope",
+        fake_find_password_key_envelope,
+    )
+    session = FakeKeyEnvelopeSession()
+    subject = AuthenticatedSubject(account_id="account-1", device_id="device-1")
+
+    stored = await store_password_key_envelope(  # type: ignore[arg-type]
+        session,
+        subject,
+        _password_envelope(),
+    )
+
+    assert stored.account_id == "account-1"
+    assert stored.key_version == 1
+    assert stored.ciphertext == "d3JhcHBlZC1hZGs="
+    assert not hasattr(session.envelopes[("account-1", 1)], "password")
+    assert not hasattr(session.envelopes[("account-1", 1)], "adk")
+
+
+@pytest.mark.anyio
+async def test_password_key_envelope_rejects_cross_account_write(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.modules.sync import encrypted_service
+
+    monkeypatch.setattr(
+        encrypted_service,
+        "_find_password_key_envelope",
+        fake_find_password_key_envelope,
+    )
+    session = FakeKeyEnvelopeSession()
+    subject = AuthenticatedSubject(account_id="account-1", device_id="device-1")
+
+    with pytest.raises(PermissionError, match="account"):
+        await store_password_key_envelope(  # type: ignore[arg-type]
+            session,
+            subject,
+            _password_envelope(account_id="account-2"),
+        )
+
+    assert session.envelopes == {}
+
+
+@pytest.mark.anyio
+async def test_password_key_envelope_reads_latest_or_requested_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.modules.sync import encrypted_service
+
+    monkeypatch.setattr(
+        encrypted_service,
+        "_find_password_key_envelope",
+        fake_find_password_key_envelope,
+    )
+    session = FakeKeyEnvelopeSession()
+    subject = AuthenticatedSubject(account_id="account-1", device_id="device-1")
+    await store_password_key_envelope(  # type: ignore[arg-type]
+        session,
+        subject,
+        _password_envelope(key_version=1),
+    )
+    await store_password_key_envelope(  # type: ignore[arg-type]
+        session,
+        subject,
+        _password_envelope(key_version=2, ciphertext="djItd3JhcHBlZC1hZGs="),
+    )
+
+    latest = await get_password_key_envelope(  # type: ignore[arg-type]
+        session,
+        subject,
+    )
+    version1 = await get_password_key_envelope(  # type: ignore[arg-type]
+        session,
+        subject,
+        key_version=1,
+    )
+
+    assert latest is not None
+    assert latest.key_version == 2
+    assert version1 is not None
+    assert version1.key_version == 1

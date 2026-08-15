@@ -5,7 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import AuthenticatedSubject, get_authenticated_subject
-from app.modules.sync.encrypted_service import apply_encrypted_sync_push
+from app.modules.crypto.contracts import PasswordKeyEnvelope
+from app.modules.sync.encrypted_service import (
+    apply_encrypted_sync_push,
+    get_password_key_envelope,
+    store_password_key_envelope,
+)
 from app.modules.sync.schemas import (
     EncryptedSyncPushRequest,
     PowerSyncCredentialsResponse,
@@ -51,6 +56,42 @@ async def push_encrypted_changes(
         ) from error
     await db.commit()
     return ApiResponse(data=result.model_dump())
+
+
+@router.put("/key-envelope/password", response_model=ApiResponse)
+async def put_password_key_envelope(
+    envelope: PasswordKeyEnvelope,
+    db: AsyncSession = Depends(get_db),
+    subject: AuthenticatedSubject = Depends(get_authenticated_subject),
+) -> ApiResponse:
+    try:
+        stored = await store_password_key_envelope(db, subject, envelope)
+    except PermissionError as error:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(error),
+        ) from error
+    await db.commit()
+    return ApiResponse(data=stored.model_dump())
+
+
+@router.get("/key-envelope/password", response_model=ApiResponse)
+async def read_password_key_envelope(
+    key_version: int | None = None,
+    db: AsyncSession = Depends(get_db),
+    subject: AuthenticatedSubject = Depends(get_authenticated_subject),
+) -> ApiResponse:
+    envelope = await get_password_key_envelope(
+        db,
+        subject,
+        key_version=key_version,
+    )
+    if envelope is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="password key envelope not found",
+        )
+    return ApiResponse(data=envelope.model_dump())
 
 
 @router.post("/push", response_model=ApiResponse, deprecated=True)
