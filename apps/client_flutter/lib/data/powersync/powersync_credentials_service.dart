@@ -4,6 +4,7 @@ class LiflyPowerSyncCredentials {
   final String endpoint;
   final String token;
   final String userId;
+  final String deviceId;
   final DateTime expiresAt;
   final String mode;
 
@@ -11,6 +12,7 @@ class LiflyPowerSyncCredentials {
     required this.endpoint,
     required this.token,
     required this.userId,
+    required this.deviceId,
     required this.expiresAt,
     required this.mode,
   });
@@ -20,8 +22,9 @@ class LiflyPowerSyncCredentials {
       endpoint: json['endpoint'] as String? ?? '',
       token: json['token'] as String? ?? '',
       userId: json['user_id'] as String? ?? '',
+      deviceId: json['device_id'] as String? ?? '',
       expiresAt: DateTime.parse(json['expires_at'] as String).toUtc(),
-      mode: json['mode'] as String? ?? 'development',
+      mode: json['mode'] as String? ?? 'authenticated',
     );
   }
 

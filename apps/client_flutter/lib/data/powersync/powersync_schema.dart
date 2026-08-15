@@ -1,7 +1,27 @@
 import 'package:powersync/powersync.dart';
 
 const liflyPowerSyncSchema = Schema([
-  Table('memos', [
+  Table('encrypted_entities', [
+    Column.text('user_id'),
+    Column.text('entity_type'),
+    Column.integer('revision'),
+    Column.text('lifecycle_status'),
+    Column.text('updated_at'),
+    Column.integer('key_version'),
+    Column.integer('encryption_version'),
+    Column.integer('schema_version'),
+    Column.text('nonce'),
+    Column.text('ciphertext'),
+  ], trackPreviousValues: TrackPreviousValuesOptions()),
+  Table.localOnly('e2ee_projection_state', [
+    Column.text('user_id'),
+    Column.text('entity_type'),
+    Column.integer('revision'),
+    Column.integer('key_version'),
+    Column.text('lifecycle_status'),
+    Column.text('updated_at'),
+  ]),
+  Table.localOnly('memos', [
     Column.text('user_id'),
     Column.text('type'),
     Column.text('title'),
@@ -16,7 +36,7 @@ const liflyPowerSyncSchema = Schema([
     Column.text('deleted_at'),
     Column.integer('revision'),
   ]),
-  Table('tag_metadata', [
+  Table.localOnly('tag_metadata', [
     Column.text('user_id'),
     Column.text('name'),
     Column.text('kind'),
@@ -27,7 +47,7 @@ const liflyPowerSyncSchema = Schema([
     Column.text('created_at'),
     Column.text('updated_at'),
   ]),
-  Table('memo_classifications', [
+  Table.localOnly('memo_classifications', [
     Column.text('user_id'),
     Column.text('memo_id'),
     Column.text('tag'),
@@ -39,7 +59,7 @@ const liflyPowerSyncSchema = Schema([
     Column.text('created_at'),
     Column.text('updated_at'),
   ]),
-  Table('tasks', [
+  Table.localOnly('tasks', [
     Column.text('user_id'),
     Column.text('title'),
     Column.text('description'),
@@ -56,7 +76,7 @@ const liflyPowerSyncSchema = Schema([
     Column.text('deleted_at'),
     Column.integer('revision'),
   ]),
-  Table('task_reminder_strategies', [
+  Table.localOnly('task_reminder_strategies', [
     Column.text('user_id'),
     Column.text('task_id'),
     Column.text('warning_level'),
@@ -70,7 +90,7 @@ const liflyPowerSyncSchema = Schema([
     Column.text('created_at'),
     Column.text('updated_at'),
   ]),
-  Table('reminders', [
+  Table.localOnly('reminders', [
     Column.text('user_id'),
     Column.text('target_type'),
     Column.text('target_id'),
@@ -92,7 +112,7 @@ const liflyPowerSyncSchema = Schema([
     Column.text('created_at'),
     Column.text('updated_at'),
   ]),
-  Table('ledger_transactions', [
+  Table.localOnly('ledger_transactions', [
     Column.text('user_id'),
     Column.text('account_id'),
     Column.text('category_id'),
@@ -112,7 +132,7 @@ const liflyPowerSyncSchema = Schema([
     Column.text('deleted_at'),
     Column.integer('revision'),
   ]),
-  Table('assets', [
+  Table.localOnly('assets', [
     Column.text('user_id'),
     Column.text('kind'),
     Column.text('asset_type'),
@@ -130,14 +150,14 @@ const liflyPowerSyncSchema = Schema([
     Column.text('created_at'),
     Column.text('updated_at'),
   ]),
-  Table('memo_asset_refs', [
+  Table.localOnly('memo_asset_refs', [
     Column.text('memo_id'),
     Column.text('asset_id'),
     Column.text('ref_type'),
     Column.text('position_hint'),
     Column.text('created_at'),
   ]),
-  Table('audit_logs', [
+  Table.localOnly('audit_logs', [
     Column.text('user_id'),
     Column.text('actor_type'),
     Column.text('actor_id'),
@@ -152,7 +172,7 @@ const liflyPowerSyncSchema = Schema([
     Column.text('request_id'),
     Column.text('created_at'),
   ]),
-  Table('mcp_undo_actions', [
+  Table.localOnly('mcp_undo_actions', [
     Column.text('user_id'),
     Column.text('undo_token'),
     Column.text('entity_type'),
@@ -163,7 +183,7 @@ const liflyPowerSyncSchema = Schema([
     Column.text('used_at'),
     Column.text('created_at'),
   ]),
-  Table('mcp_capture_sessions', [
+  Table.localOnly('mcp_capture_sessions', [
     Column.text('capture_id'),
     Column.text('user_id'),
     Column.text('original_text'),
@@ -181,7 +201,7 @@ const liflyPowerSyncSchema = Schema([
     Column.text('dismissed_at'),
     Column.integer('revision'),
   ]),
-  Table('mcp_capture_turns', [
+  Table.localOnly('mcp_capture_turns', [
     Column.text('user_id'),
     Column.text('capture_id'),
     Column.integer('turn_index'),
@@ -200,7 +220,7 @@ const liflyPowerSyncSchema = Schema([
     Column.text('updated_at'),
     Column.integer('revision'),
   ]),
-  Table('import_batches', [
+  Table.localOnly('import_batches', [
     Column.text('user_id'),
     Column.text('source_provider'),
     Column.text('filename'),
@@ -213,14 +233,14 @@ const liflyPowerSyncSchema = Schema([
     Column.text('committed_at'),
     Column.text('rolled_back_at'),
   ]),
-  Table('tombstones', [
+  Table.localOnly('tombstones', [
     Column.text('user_id'),
     Column.text('entity_type'),
     Column.text('entity_id'),
     Column.text('purged_at'),
     Column.integer('last_revision'),
   ]),
-  Table('ledger_accounts', [
+  Table.localOnly('ledger_accounts', [
     Column.text('user_id'),
     Column.text('name'),
     Column.text('type'),
@@ -230,7 +250,7 @@ const liflyPowerSyncSchema = Schema([
     Column.text('created_at'),
     Column.text('updated_at'),
   ]),
-  Table('ledger_categories', [
+  Table.localOnly('ledger_categories', [
     Column.text('user_id'),
     Column.text('name'),
     Column.text('parent_id'),
@@ -242,7 +262,7 @@ const liflyPowerSyncSchema = Schema([
     Column.text('created_at'),
     Column.text('updated_at'),
   ]),
-  Table('ledger_budgets', [
+  Table.localOnly('ledger_budgets', [
     Column.text('user_id'),
     Column.text('period_type'),
     Column.text('period_key'),

@@ -18,9 +18,10 @@ class FakeConnectionApiClient extends ApiClient {
       'data': {
         'endpoint': 'http://localhost:8204',
         'token': 'token-value',
-        'user_id': 'local-dev',
+        'user_id': 'account-1',
+        'device_id': 'device-1',
         'expires_at': '2026-07-03T10:00:00Z',
-        'mode': 'development',
+        'mode': 'authenticated',
       },
     };
   }
@@ -32,7 +33,7 @@ class FakeConnectSyncService extends SyncService {
   bool disconnected = false;
 
   FakeConnectSyncService()
-      : super(api: ApiClient(baseUrl: 'http://example.invalid/api/v1'));
+    : super(api: ApiClient(baseUrl: 'http://example.invalid/api/v1'));
 
   @override
   Future<void> ensureInitialized() async {
@@ -58,42 +59,55 @@ class FailingConnectSyncService extends FakeConnectSyncService {
 }
 
 void main() {
-  test('PowerSyncConnectionCoordinator connects with fetched credentials', () async {
-    final syncService = FakeConnectSyncService();
-    final coordinator = PowerSyncConnectionCoordinator(
-      credentialsService: PowerSyncCredentialsService(FakeConnectionApiClient()),
-      syncService: syncService,
-    );
+  test(
+    'PowerSyncConnectionCoordinator connects with fetched credentials',
+    () async {
+      final syncService = FakeConnectSyncService();
+      final coordinator = PowerSyncConnectionCoordinator(
+        credentialsService: PowerSyncCredentialsService(
+          FakeConnectionApiClient(),
+        ),
+        syncService: syncService,
+      );
 
-    final diagnostics = await coordinator.connect();
+      final diagnostics = await coordinator.connect();
 
-    expect(syncService.initialized, isTrue);
-    expect(syncService.connected, isTrue);
-    expect(diagnostics.status, 'connected');
-    expect(diagnostics.statusLabel, '已连接');
-    expect(diagnostics.credentials?.userId, 'local-dev');
-    expect(diagnostics.connectedAt, isNotNull);
-  });
+      expect(syncService.initialized, isTrue);
+      expect(syncService.connected, isTrue);
+      expect(diagnostics.status, 'connected');
+      expect(diagnostics.statusLabel, '已连接');
+      expect(diagnostics.credentials?.userId, 'account-1');
+      expect(diagnostics.credentials?.deviceId, 'device-1');
+      expect(diagnostics.connectedAt, isNotNull);
+    },
+  );
 
-  test('PowerSyncConnectionCoordinator disconnects current sync service', () async {
-    final syncService = FakeConnectSyncService();
-    final coordinator = PowerSyncConnectionCoordinator(
-      credentialsService: PowerSyncCredentialsService(FakeConnectionApiClient()),
-      syncService: syncService,
-    );
+  test(
+    'PowerSyncConnectionCoordinator disconnects current sync service',
+    () async {
+      final syncService = FakeConnectSyncService();
+      final coordinator = PowerSyncConnectionCoordinator(
+        credentialsService: PowerSyncCredentialsService(
+          FakeConnectionApiClient(),
+        ),
+        syncService: syncService,
+      );
 
-    await coordinator.connect();
-    final diagnostics = await coordinator.disconnect();
+      await coordinator.connect();
+      final diagnostics = await coordinator.disconnect();
 
-    expect(syncService.disconnected, isTrue);
-    expect(diagnostics.status, 'disconnected');
-    expect(diagnostics.statusLabel, '已断开');
-    expect(diagnostics.disconnectedAt, isNotNull);
-  });
+      expect(syncService.disconnected, isTrue);
+      expect(diagnostics.status, 'disconnected');
+      expect(diagnostics.statusLabel, '已断开');
+      expect(diagnostics.disconnectedAt, isNotNull);
+    },
+  );
 
   test('PowerSyncConnectionCoordinator reports connect failure', () async {
     final coordinator = PowerSyncConnectionCoordinator(
-      credentialsService: PowerSyncCredentialsService(FakeConnectionApiClient()),
+      credentialsService: PowerSyncCredentialsService(
+        FakeConnectionApiClient(),
+      ),
       syncService: FailingConnectSyncService(),
     );
 

@@ -45,13 +45,13 @@ class SyncPushUploadDiagnostics {
   });
 
   const SyncPushUploadDiagnostics.idle()
-      : lastAttemptAt = null,
-        lastSuccessAt = null,
-        lastError = null,
-        uploadedChanges = 0,
-        ignoredChanges = 0,
-        applied = 0,
-        skipped = 0;
+    : lastAttemptAt = null,
+      lastSuccessAt = null,
+      lastError = null,
+      uploadedChanges = 0,
+      ignoredChanges = 0,
+      applied = 0,
+      skipped = 0;
 
   factory SyncPushUploadDiagnostics.success({
     required DateTime at,
@@ -117,12 +117,12 @@ class SyncPushService {
 
   const SyncPushService(this.api);
 
-  Future<SyncPushResult> push(SyncPushRequestPayload request) async {
+  Future<SyncPushResult> push(EncryptedSyncPushRequestPayload request) async {
     if (!request.hasChanges) {
       throw ArgumentError('sync push request must contain at least one change');
     }
 
-    final response = await api.post('/sync/push', data: request.toJson());
+    final response = await api.post('/sync/encrypted', data: request.toJson());
     final data = response['data'] as Map<String, dynamic>?;
     if (data == null) {
       throw StateError('Sync push response missing data');

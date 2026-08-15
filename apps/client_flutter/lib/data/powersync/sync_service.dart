@@ -243,8 +243,6 @@ class _LiflyConnector extends PowerSyncBackendConnector {
     final request = crudMapper.mapBatch(
       batch.crud,
       clientId: _clientIdForBatch(batch.crud),
-      defaultUserId: userId ?? 'local-dev',
-      fallbackNow: attemptedAt,
     );
 
     if (!request.hasChanges) {

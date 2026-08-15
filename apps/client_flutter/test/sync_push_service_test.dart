@@ -1,4 +1,5 @@
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/crypto/encrypted_envelope.dart';
 import 'package:client_flutter/data/powersync/powersync_crud_mapper.dart';
 import 'package:client_flutter/data/powersync/sync_push_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,7 +14,7 @@ class FakeSyncPushApiClient extends ApiClient {
     String path, {
     Map<String, dynamic>? data,
   }) async {
-    expect(path, '/sync/push');
+    expect(path, '/sync/encrypted');
     postedData = data;
     return {
       'success': true,
@@ -35,46 +36,46 @@ class FakeSyncPushApiClient extends ApiClient {
 }
 
 void main() {
-  test('SyncPushService posts mapped payload to sync push endpoint', () async {
-    final api = FakeSyncPushApiClient();
-    final service = SyncPushService(api);
-    final request = SyncPushRequestPayload(
-      clientId: 'lifly-flutter-1-1',
-      ignoredCount: 0,
-      changes: [
-        SyncPushChangePayload(
-          entityType: 'memo',
-          operation: 'upsert',
-          entityId: 'memo-1',
-          userId: 'local-dev',
-          revision: 1,
-          createdAt: DateTime.utc(2026, 7, 2, 9),
-          updatedAt: DateTime.utc(2026, 7, 2, 9),
-          deletedAt: null,
-          source: 'flutter',
-          data: const {
-            'type': 'memo',
-            'content_markdown': 'body',
-            'status': 'active',
-          },
-        ),
-      ],
-    );
+  test(
+    'SyncPushService posts opaque envelopes to encrypted endpoint',
+    () async {
+      final api = FakeSyncPushApiClient();
+      final service = SyncPushService(api);
+      final request = EncryptedSyncPushRequestPayload(
+        clientId: 'device-1',
+        ignoredCount: 0,
+        changes: [
+          EncryptedEntityEnvelope(
+            id: 'memo-1',
+            userId: 'account-1',
+            entityType: 'memo',
+            revision: 1,
+            lifecycleStatus: EncryptedEntityLifecycleStatus.active,
+            updatedAt: DateTime.utc(2026, 8, 15, 10),
+            keyVersion: 1,
+            encryptionVersion: 1,
+            nonce: 'bm9uY2U=',
+            ciphertext: 'Y2lwaGVydGV4dA==',
+          ),
+        ],
+      );
 
-    final result = await service.push(request);
+      final result = await service.push(request);
 
-    expect(result.applied, 1);
-    expect(result.skipped, 0);
-    expect(result.results.single['status'], 'applied');
-    expect(api.postedData, request.toJson());
-  });
+      expect(result.applied, 1);
+      expect(result.skipped, 0);
+      expect(result.results.single['status'], 'applied');
+      expect(api.postedData, request.toJson());
+      expect(api.postedData.toString(), isNot(contains('content_markdown')));
+    },
+  );
 
-  test('SyncPushService rejects empty push payloads', () async {
+  test('SyncPushService rejects empty encrypted payloads', () async {
     final service = SyncPushService(FakeSyncPushApiClient());
-    final request = SyncPushRequestPayload(
-      clientId: 'lifly-flutter-empty',
+    const request = EncryptedSyncPushRequestPayload(
+      clientId: 'device-empty',
       ignoredCount: 1,
-      changes: const [],
+      changes: [],
     );
 
     expect(() => service.push(request), throwsArgumentError);

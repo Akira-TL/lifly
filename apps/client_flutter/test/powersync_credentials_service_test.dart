@@ -16,9 +16,10 @@ class FakeCredentialsApiClient extends ApiClient {
       'data': {
         'endpoint': 'http://localhost:8204',
         'token': 'token-value',
-        'user_id': 'local-dev',
+        'user_id': 'account-1',
+        'device_id': 'device-1',
         'expires_at': '2026-07-03T10:00:00Z',
-        'mode': 'development',
+        'mode': 'authenticated',
       },
     };
   }
@@ -32,8 +33,9 @@ void main() {
 
     expect(credentials.endpoint, 'http://localhost:8204');
     expect(credentials.tokenStatus, '已获取');
-    expect(credentials.userId, 'local-dev');
-    expect(credentials.mode, 'development');
+    expect(credentials.userId, 'account-1');
+    expect(credentials.deviceId, 'device-1');
+    expect(credentials.mode, 'authenticated');
     expect(credentials.expiresAt, DateTime.utc(2026, 7, 3, 10));
   });
 }
