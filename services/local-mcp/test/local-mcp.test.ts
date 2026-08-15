@@ -8,7 +8,12 @@ import {
   LiflyMcpToolNameSchema,
   parseLiflyMcpToolOutput,
 } from "../../../packages/protocol/src/index.js";
-import { createDesktopLocalMcpRuntime, createTestLocalMcpRuntime, LocalMcpServer } from "../src/index.js";
+import {
+  createDesktopLocalMcpRuntime,
+  createTestLocalMcpRuntime,
+  EncryptedAiJobEngine,
+  LocalMcpServer,
+} from "../src/index.js";
 
 function createFakeServer(): LocalMcpServer {
   return new LocalMcpServer(createTestLocalMcpRuntime());
@@ -93,9 +98,92 @@ describe("LocalMcpServer", () => {
     }
   });
 
+  it("executes encrypted jobs and reports background executor capability only when configured", async () => {
+    const runtime = createTestLocalMcpRuntime();
+    runtime.jobs = new EncryptedAiJobEngine({
+      deviceId: "desktop-1",
+      cipher: {
+        async decrypt() {
+          return { opaque: "private request" };
+        },
+        async encrypt() {
+          return {
+            encryption_version: 1,
+            nonce: "result-nonce",
+            ciphertext: "result-ciphertext",
+          };
+        },
+      },
+      executor: {
+        async execute(payload) {
+          return { accepted: payload };
+        },
+      },
+      now: () => new Date("2026-08-15T10:00:00.000Z"),
+      createJobId: () => "job-result-server",
+    });
+    const server = new LocalMcpServer(runtime);
+    const envelope = {
+      protocol_version: 1,
+      job_id: "job-server-1",
+      account_id: "account-1",
+      source_device_id: "phone-1",
+      target_device_id: "desktop-1",
+      message_type: "request",
+      correlation_id: null,
+      idempotency_key: "server-idem-1",
+      expires_at: "2026-08-15T10:10:00.000Z",
+      encryption_version: 1,
+      nonce: "request-nonce",
+      ciphertext: "request-ciphertext",
+    };
+
+    const health = await server.handle({ method: "health" });
+    expect(health.ok).toBe(true);
+    if (health.ok) {
+      expect(health.result).toMatchObject({
+        status: "ok",
+        encrypted_jobs: "ready",
+        capabilities: ["local_mcp", "background_executor"],
+      });
+    }
+
+    const capabilities = await server.handle({ method: "node/capabilities" });
+    expect(capabilities.ok).toBe(true);
+    if (capabilities.ok) {
+      const report = LiflyDeviceCapabilityReportSchema.parse(capabilities.result);
+      expect(report.capabilities).toEqual(["local_mcp", "background_executor"]);
+    }
+
+    const executed = await server.handle({
+      method: "jobs/execute",
+      params: { envelope },
+    });
+    expect(executed.ok).toBe(true);
+    if (executed.ok) {
+      expect(executed.result).toMatchObject({
+        status: "succeeded",
+        job_id: "job-server-1",
+        result_envelope: {
+          correlation_id: "job-server-1",
+          ciphertext: "result-ciphertext",
+        },
+      });
+    }
+
+    const status = await server.handle({
+      method: "jobs/status",
+      params: { job_id: "job-server-1" },
+    });
+    expect(status.ok).toBe(true);
+    if (status.ok) {
+      expect(status.result).toMatchObject({ status: "succeeded", job_id: "job-server-1" });
+    }
+  });
+
   it("reports compute-node capabilities using the shared device contract", async () => {
     const server = createFakeServer();
-    const response = await server.handle({ method: "node/capabilities" } as never);
+    const response = await server.handle({ method: "node/capabilities" });
     expect(response.ok).toBe(true);
     if (response.ok) {
       const report = LiflyDeviceCapabilityReportSchema.parse(response.result);

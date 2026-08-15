@@ -7,6 +7,10 @@ declare module "node:process" {
   export const stdout: { write(chunk: string): boolean };
 }
 
+declare module "node:crypto" {
+  export function randomUUID(): string;
+}
+
 declare module "node:child_process" {
   interface WritablePipe {
     write(chunk: string): boolean;

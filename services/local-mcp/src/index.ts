@@ -6,6 +6,17 @@ import type { LocalMcpRequest } from "./types.js";
 
 export { LocalMcpServer } from "./server.js";
 export { DesktopLocalCoreProcessTransport } from "./desktop-core-transport.js";
+export { EncryptedAiJobEngine, RetryableEncryptedAiJobError } from "./encrypted-job-engine.js";
+export type {
+  DecryptedAiJobExecutionContext,
+  DecryptedAiJobExecutor,
+  EncryptedAiJobCipher,
+  EncryptedAiJobCiphertext,
+  EncryptedAiJobEngineOptions,
+  EncryptedAiJobExecutionOutcome,
+  EncryptedAiJobResultContext,
+  EncryptedAiJobStatus,
+} from "./encrypted-job-engine.js";
 export type { DesktopLocalCoreProcessTransportOptions } from "./desktop-core-transport.js";
 export {
   callLocalMcpTool,

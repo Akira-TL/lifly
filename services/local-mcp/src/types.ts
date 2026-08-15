@@ -7,13 +7,21 @@ export interface LocalMcpToolDefinition {
 
 export interface LocalMcpRequest {
   id?: string | number | null;
-  method: "health" | "node/capabilities" | "tools/list" | "tools/call";
+  method: "health" | "node/capabilities" | "jobs/execute" | "jobs/status" | "tools/list" | "tools/call";
   params?: unknown;
 }
 
 export interface LocalMcpCallParams {
   name: LiflyMcpToolName;
   input?: unknown;
+}
+
+export interface LocalMcpJobExecuteParams {
+  envelope: unknown;
+}
+
+export interface LocalMcpJobStatusParams {
+  job_id: string;
 }
 
 export type LocalMcpResponse =

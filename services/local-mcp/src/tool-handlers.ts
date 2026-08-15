@@ -28,6 +28,7 @@ import {
   type LiflyMcpToolName,
 } from "../../../packages/protocol/src/index.js";
 import { DesktopLocalCoreProcessTransport } from "./desktop-core-transport.js";
+import type { EncryptedAiJobEngine } from "./encrypted-job-engine.js";
 import type { LocalMcpToolDefinition } from "./types.js";
 
 export type LocalMcpBridgeMode = "desktop" | "fake";
@@ -35,6 +36,7 @@ export type LocalMcpBridgeMode = "desktop" | "fake";
 export interface LocalMcpRuntime {
   core: LocalCoreBridge;
   bridgeMode: LocalMcpBridgeMode;
+  jobs?: EncryptedAiJobEngine;
   close?: () => Promise<void> | void;
 }
 
@@ -43,6 +45,7 @@ export interface DesktopLocalMcpRuntimeOptions {
   bridgeArgs?: string[];
   transport?: DesktopLocalCoreTransport | null;
   requestTimeoutMs?: number;
+  jobs?: EncryptedAiJobEngine;
 }
 
 export function createDesktopLocalMcpRuntime(options: DesktopLocalMcpRuntimeOptions = {}): LocalMcpRuntime {
@@ -56,7 +59,7 @@ export function createDesktopLocalMcpRuntime(options: DesktopLocalMcpRuntimeOpti
       })
       : null);
   const core = new DesktopLocalCoreBridge({ bridgePath, transport });
-  return { core, bridgeMode: "desktop", close: () => core.close() };
+  return { core, bridgeMode: "desktop", jobs: options.jobs, close: () => core.close() };
 }
 
 export function createTestLocalMcpRuntime(): LocalMcpRuntime {
@@ -74,10 +77,12 @@ export function listLocalMcpTools(): LocalMcpToolDefinition[] {
   }));
 }
 
-export function localMcpCapabilityReport(): LiflyDeviceCapabilityReport {
+export function localMcpCapabilityReport(runtime?: LocalMcpRuntime): LiflyDeviceCapabilityReport {
+  const capabilities: LiflyDeviceCapabilityReport["capabilities"] = ["local_mcp"];
+  if (runtime?.jobs) capabilities.push("background_executor");
   return {
     protocol_version: LiflyDeviceProtocolVersion,
-    capabilities: ["local_mcp"],
+    capabilities,
     supported_tools: LiflyMcpToolNameSchema.options.filter((name) => name !== "asset_create_upload_url"),
   };
 }
