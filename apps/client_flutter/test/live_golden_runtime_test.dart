@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:client_flutter/data/ai/ai_job_envelope.dart';
+import 'package:client_flutter/data/ai/ai_provider.dart';
 import 'package:client_flutter/data/ai/device_ai_job_cipher.dart';
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/auth/auth_repository.dart';
@@ -36,10 +37,14 @@ class _RecordingRelay implements AiRelayTransport {
 
   final AiRelayTransport inner;
   AiJobEnvelope? submitted;
+  AiJobEnvelope? result;
 
   @override
-  Future<AiJobEnvelope?> readResult(String requestJobId) =>
-      inner.readResult(requestJobId);
+  Future<AiJobEnvelope?> readResult(String requestJobId) async {
+    final value = await inner.readResult(requestJobId);
+    if (value != null) result = value;
+    return value;
+  }
 
   @override
   Future<AiJobEnvelope> submit(AiJobEnvelope envelope) {
@@ -233,11 +238,22 @@ void main() {
 
         expect(relay.submitted, isNotNull);
         expect(relay.submitted!.ciphertext, isNot(contains(marker)));
+        expect(relay.result, isNotNull);
+        final rawResult = await DeviceAiJobCipher(phoneIdentity).decryptJson(
+          relay.result!,
+          remotePublicKey: desktopCompletion.session.device.publicKey,
+        );
+        expect(rawResult['provider'], 'ollama');
+        expect(rawResult['model'], localAiModel);
+        expect(rawResult['fallback_used'], isFalse);
         expect(plan.targetDeviceId, desktopDeviceId);
         expect(plan.actions, isNotEmpty);
         expect(plan.sourceLabel, contains('Golden Desktop'));
-        final actionJson = plan.actions.first.toJson();
-        expect(jsonEncode(actionJson), contains(marker));
+        expect(plan.actions.first, isA<MemoCreateCandidateAction>());
+        final memoAction = plan.actions.first as MemoCreateCandidateAction;
+        final actionJson = memoAction.toJson();
+        final plaintextProbe = memoAction.contentMarkdown;
+        expect(plaintextProbe.trim(), isNotEmpty);
         final bootstrapFile = File(bootstrapPath);
         await bootstrapFile.writeAsString(
           jsonEncode({
@@ -248,7 +264,7 @@ void main() {
                 .replaceAll('=', ''),
             'account_data_key_version': accountDataKey.keyVersion,
             'action': actionJson,
-            'marker': marker,
+            'marker': plaintextProbe,
             'db_path': phoneDbPath,
           }),
           flush: true,
