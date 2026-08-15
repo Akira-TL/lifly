@@ -1,6 +1,7 @@
 import type { DesktopLocalCoreTransport } from "../../../packages/local-core/src/index.js";
 import { HttpAiRelayClient, type AccessTokenProvider } from "./ai-relay-client.js";
 import { LocalCoreComputeNodePlanner } from "./compute-node-planner.js";
+import { ProviderBackedComputeNodePlanner } from "./provider-backed-planner.js";
 import { DeviceAiJobCipher } from "./device-ai-job-cipher.js";
 import { EncryptedAiJobEngine } from "./encrypted-job-engine.js";
 import { EncryptedAiRelayWorker } from "./encrypted-relay-worker.js";
@@ -16,6 +17,8 @@ export interface ComputeNodeRelayRuntimeOptions {
   transport?: DesktopLocalCoreTransport | null;
   requestTimeoutMs?: number;
   maxJobAttempts?: number;
+  providerHelperPath?: string | null;
+  providerHelperArgs?: string[];
   fetch?: typeof fetch;
 }
 
@@ -44,10 +47,18 @@ export function createComputeNodeRelayRuntime(
     privateKeyBytes: options.deviceKey,
     resolvePublicKey: (deviceId) => relay.resolveDevicePublicKey(deviceId),
   });
+  const deterministicPlanner = new LocalCoreComputeNodePlanner(localMcp.core);
+  const executor = options.providerHelperPath
+    ? new ProviderBackedComputeNodePlanner({
+      helperPath: options.providerHelperPath,
+      helperArgs: options.providerHelperArgs,
+      fallback: deterministicPlanner,
+    })
+    : deterministicPlanner;
   const jobs = new EncryptedAiJobEngine({
     deviceId: options.deviceId,
     cipher,
-    executor: new LocalCoreComputeNodePlanner(localMcp.core),
+    executor,
     maxAttempts: options.maxJobAttempts,
   });
   localMcp.jobs = jobs;

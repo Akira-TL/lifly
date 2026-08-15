@@ -20,6 +20,9 @@ if [[ -z "${LIFLY_LOCAL_CORE_BRIDGE_PATH:-}" ]]; then
 fi
 
 mkdir -p "$LOG_DIR"
+export LIFLY_AI_PROVIDER_HELPER_PATH="${LIFLY_AI_PROVIDER_HELPER_PATH:-$PROJECT_ROOT/scripts/ai-provider-worker.sh}"
+export LIFLY_LOCAL_AI_ENDPOINT="${LIFLY_LOCAL_AI_ENDPOINT:-http://127.0.0.1:8205}"
+export LIFLY_LOCAL_AI_MODEL="${LIFLY_LOCAL_AI_MODEL:-${LIFLY_CLOUD_AI_MODEL:-}}"
 cd "$PROJECT_ROOT"
 pnpm --dir services/local-mcp build
 

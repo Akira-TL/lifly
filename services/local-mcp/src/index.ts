@@ -9,6 +9,8 @@ export { DesktopLocalCoreProcessTransport } from "./desktop-core-transport.js";
 export { HttpAiRelayClient } from "./ai-relay-client.js";
 export type { AccessTokenProvider, AiRelayClient, HttpAiRelayClientOptions } from "./ai-relay-client.js";
 export { LocalCoreComputeNodePlanner } from "./compute-node-planner.js";
+export { ProviderBackedComputeNodePlanner } from "./provider-backed-planner.js";
+export type { ProviderBackedPlannerOptions } from "./provider-backed-planner.js";
 export { DeviceAiJobCipher } from "./device-ai-job-cipher.js";
 export type { DeviceAiJobCipherOptions, DevicePublicKeyResolver } from "./device-ai-job-cipher.js";
 export { EncryptedAiRelayWorker } from "./encrypted-relay-worker.js";

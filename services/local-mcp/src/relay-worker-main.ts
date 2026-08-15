@@ -31,6 +31,7 @@ async function main(): Promise<void> {
       "http://127.0.0.1:8210/api/v1",
     tokenProvider: () => credentials.access_token,
     bridgePath,
+    providerHelperPath: process.env.LIFLY_AI_PROVIDER_HELPER_PATH ?? null,
   });
   privateKey.fill(0);
 

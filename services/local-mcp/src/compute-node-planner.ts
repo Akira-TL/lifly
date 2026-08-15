@@ -8,7 +8,7 @@ import type {
   DecryptedAiJobExecutor,
 } from "./encrypted-job-engine.js";
 
-interface ComputeNodePlanRequest {
+export interface ComputeNodePlanRequest {
   schema_version: 1;
   operation: "plan";
   text: string;
@@ -22,7 +22,7 @@ export class LocalCoreComputeNodePlanner implements DecryptedAiJobExecutor {
   ) {}
 
   async execute(payload: unknown, _context: DecryptedAiJobExecutionContext): Promise<unknown> {
-    const request = parsePlanRequest(payload);
+    const request = parseComputeNodePlanRequest(payload);
     if (request.asset_ids.length > 0) {
       throw new Error(
         "Desktop Local MCP capture parser does not yet accept attachment content; encrypted AI Job was not executed",
@@ -43,7 +43,7 @@ export class LocalCoreComputeNodePlanner implements DecryptedAiJobExecutor {
   }
 }
 
-function parsePlanRequest(payload: unknown): ComputeNodePlanRequest {
+export function parseComputeNodePlanRequest(payload: unknown): ComputeNodePlanRequest {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new Error("Encrypted AI Job plaintext must be an object");
   }
