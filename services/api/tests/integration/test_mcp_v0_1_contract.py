@@ -9,12 +9,22 @@ import pytest
 
 
 API_BASE_URL = os.getenv("LIFLY_API_BASE_URL", "http://localhost:8210")
+INTEGRATION_ACCESS_TOKEN = os.getenv("LIFLY_INTEGRATION_ACCESS_TOKEN", "").strip()
 
 
 class LiflyApiClient:
-    def __init__(self, base_url: str) -> None:
+    def __init__(self, base_url: str, *, access_token: str | None = None) -> None:
         self.base_url = base_url.rstrip("/")
-        self._client = httpx.Client(base_url=self.base_url, timeout=10.0)
+        headers = (
+            {"Authorization": f"Bearer {access_token}"}
+            if access_token
+            else None
+        )
+        self._client = httpx.Client(
+            base_url=self.base_url,
+            timeout=10.0,
+            headers=headers,
+        )
 
     def close(self) -> None:
         self._client.close()
@@ -50,6 +60,18 @@ def api() -> Iterator[LiflyApiClient]:
 
 
 @pytest.fixture(scope="session")
+def authenticated_api() -> Iterator[LiflyApiClient]:
+    if not INTEGRATION_ACCESS_TOKEN:
+        pytest.skip(
+            "Set LIFLY_INTEGRATION_ACCESS_TOKEN from a real active v0.9.0 session "
+            "to run live authenticated MCP integration tests."
+        )
+    client = LiflyApiClient(API_BASE_URL, access_token=INTEGRATION_ACCESS_TOKEN)
+    yield client
+    client.close()
+
+
+@pytest.fixture(scope="session")
 def run_id() -> str:
     return str(int(time.time() * 1000))
 
@@ -58,15 +80,15 @@ def test_health_reports_patch_version(api: LiflyApiClient) -> None:
     body = api.request_json("GET", "/api/v1/health")
 
     assert body["status"] == "ok"
-    assert body["version"] == "0.1.0"
+    assert body["version"] == "0.9.0"
     assert body["port"] == 8210
 
 
 def test_mcp_memo_create_and_search_contract(
-    api: LiflyApiClient,
+    authenticated_api: LiflyApiClient,
     run_id: str,
 ) -> None:
-    created = api.request_json(
+    created = authenticated_api.request_json(
         "POST",
         "/api/v1/mcp/memo/create",
         json={
@@ -82,7 +104,7 @@ def test_mcp_memo_create_and_search_contract(
     assert created["undo_token"]
     assert created["memo"]["status"] == "active"
 
-    search = api.request_json(
+    search = authenticated_api.request_json(
         "POST",
         "/api/v1/mcp/memo/search",
         json={"q": f"MCP pytest memo {run_id}", "limit": 5},
@@ -90,7 +112,7 @@ def test_mcp_memo_create_and_search_contract(
 
     assert any(memo["id"] == memo_id for memo in search["memos"])
 
-    api.request_json(
+    authenticated_api.request_json(
         "POST",
         "/api/v1/mcp/memo/create",
         expected_status=422,
@@ -99,10 +121,10 @@ def test_mcp_memo_create_and_search_contract(
 
 
 def test_mcp_expense_create_search_and_summary_contract(
-    api: LiflyApiClient,
+    authenticated_api: LiflyApiClient,
     run_id: str,
 ) -> None:
-    created = api.request_json(
+    created = authenticated_api.request_json(
         "POST",
         "/api/v1/mcp/expense/create",
         json={
@@ -118,14 +140,14 @@ def test_mcp_expense_create_search_and_summary_contract(
     assert transaction_id
     assert created["transaction"]["status"] == "active"
 
-    api.request_json(
+    authenticated_api.request_json(
         "POST",
         "/api/v1/mcp/expense/create",
         expected_status=422,
         json={"amount": 0, "currency": "CNY", "direction": "expense"},
     )
 
-    search = api.request_json(
+    search = authenticated_api.request_json(
         "POST",
         "/api/v1/mcp/expense/search",
         json={"q": f"MCP Pytest Merchant {run_id}", "limit": 5},
@@ -133,7 +155,7 @@ def test_mcp_expense_create_search_and_summary_contract(
 
     assert any(tx["id"] == transaction_id for tx in search["transactions"])
 
-    summary = api.request_json(
+    summary = authenticated_api.request_json(
         "POST",
         "/api/v1/mcp/expense/summary",
         json={"period": "current_month"},
@@ -145,10 +167,10 @@ def test_mcp_expense_create_search_and_summary_contract(
 
 
 def test_mcp_task_create_list_and_complete_contract(
-    api: LiflyApiClient,
+    authenticated_api: LiflyApiClient,
     run_id: str,
 ) -> None:
-    created = api.request_json(
+    created = authenticated_api.request_json(
         "POST",
         "/api/v1/mcp/task/create",
         json={
@@ -162,7 +184,7 @@ def test_mcp_task_create_list_and_complete_contract(
     assert task_id
     assert created["task"]["task_status"] == "todo"
 
-    task_list = api.request_json(
+    task_list = authenticated_api.request_json(
         "POST",
         "/api/v1/mcp/task/list",
         json={"task_status": "todo", "limit": 20},
@@ -170,7 +192,7 @@ def test_mcp_task_create_list_and_complete_contract(
 
     assert any(task["id"] == task_id for task in task_list["tasks"])
 
-    completed = api.request_json(
+    completed = authenticated_api.request_json(
         "POST",
         "/api/v1/mcp/task/complete",
         json={"task_id": task_id},
@@ -179,7 +201,7 @@ def test_mcp_task_create_list_and_complete_contract(
     assert completed["task"]["task_status"] == "done"
     assert completed["task"]["completed_at"] is not None
 
-    api.request_json(
+    authenticated_api.request_json(
         "POST",
         "/api/v1/mcp/task/complete",
         expected_status=422,
@@ -188,10 +210,10 @@ def test_mcp_task_create_list_and_complete_contract(
 
 
 def test_mcp_asset_create_upload_url_and_external_url_contract(
-    api: LiflyApiClient,
+    authenticated_api: LiflyApiClient,
     run_id: str,
 ) -> None:
-    upload = api.request_json(
+    upload = authenticated_api.request_json(
         "POST",
         "/api/v1/mcp/asset/create-upload-url",
         json={
@@ -203,19 +225,20 @@ def test_mcp_asset_create_upload_url_and_external_url_contract(
     )
 
     assert upload["asset_id"]
-    assert upload["storage_key"].startswith("attachments/local-dev/")
+    assert upload["storage_key"].startswith("attachments/")
+    assert "local-dev" not in upload["storage_key"]
     assert upload["upload_url"]
     assert upload["asset"]["kind"] == "internal"
     assert upload["asset"]["sync_status"] == "pending"
 
-    api.request_json(
+    authenticated_api.request_json(
         "POST",
         "/api/v1/mcp/asset/create-upload-url",
         expected_status=422,
         json={"filename": "bad.txt", "asset_type": "invalid"},
     )
 
-    external = api.request_json(
+    external = authenticated_api.request_json(
         "POST",
         "/api/v1/mcp/asset/register-external-url",
         json={
@@ -233,10 +256,10 @@ def test_mcp_asset_create_upload_url_and_external_url_contract(
 
 
 def test_mcp_capture_parse_commit_and_undo_contract(
-    api: LiflyApiClient,
+    authenticated_api: LiflyApiClient,
     run_id: str,
 ) -> None:
-    parsed = api.request_json(
+    parsed = authenticated_api.request_json(
         "POST",
         "/api/v1/mcp/capture/parse",
         json={
@@ -250,7 +273,7 @@ def test_mcp_capture_parse_commit_and_undo_contract(
     assert capture_id
     assert len(parsed["actions"]) >= 1
 
-    committed = api.request_json(
+    committed = authenticated_api.request_json(
         "POST",
         "/api/v1/mcp/capture/commit",
         json={"capture_id": capture_id},
@@ -261,7 +284,7 @@ def test_mcp_capture_parse_commit_and_undo_contract(
     assert committed["committed"] is True
     assert len(committed["created_entities"]) >= 1
 
-    undone = api.request_json(
+    undone = authenticated_api.request_json(
         "POST",
         "/api/v1/mcp/capture/undo",
         json={"undo_token": undo_token},
@@ -270,7 +293,7 @@ def test_mcp_capture_parse_commit_and_undo_contract(
     assert undone["undone"] >= 1
     assert undone["failed_entities"] == []
 
-    repeated = api.request_json(
+    repeated = authenticated_api.request_json(
         "POST",
         "/api/v1/mcp/capture/undo",
         json={"undo_token": undo_token},
