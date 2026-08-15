@@ -52,13 +52,13 @@ class ReminderDispatcher {
       final dispatchToken = reminder.dispatchToken;
       if (dispatchToken == null || dispatchToken.isEmpty) {
         failed += 1;
-        errors.add('Reminder ${reminder.id} was claimed without a dispatch token');
+        errors.add(
+          'Reminder ${reminder.id} was claimed without a dispatch token',
+        );
         continue;
       }
       try {
-        final result = await adapter.deliver(
-          _requestFor(reminder),
-        );
+        final result = await adapter.deliver(_requestFor(reminder));
         if (result.delivered) {
           await localCore.markTaskReminderDelivered({
             'reminder_id': reminder.id,

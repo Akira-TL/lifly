@@ -32,22 +32,22 @@ class ReminderNotificationResult {
   });
 
   const ReminderNotificationResult.delivered({String? externalId})
-      : this._(
-          delivered: true,
-          externalId: externalId,
-          error: null,
-          retryAfterSeconds: null,
-        );
+    : this._(
+        delivered: true,
+        externalId: externalId,
+        error: null,
+        retryAfterSeconds: null,
+      );
 
   const ReminderNotificationResult.failed({
     required String error,
     int? retryAfterSeconds,
   }) : this._(
-          delivered: false,
-          externalId: null,
-          error: error,
-          retryAfterSeconds: retryAfterSeconds,
-        );
+         delivered: false,
+         externalId: null,
+         error: error,
+         retryAfterSeconds: retryAfterSeconds,
+       );
 }
 
 abstract class ReminderNotificationAdapter {
@@ -59,8 +59,5 @@ abstract class ReminderNotificationAdapter {
     ReminderNotificationRequest request,
   );
 
-  Future<void> cancel({
-    required String idempotencyKey,
-    String? externalId,
-  });
+  Future<void> cancel({required String idempotencyKey, String? externalId});
 }

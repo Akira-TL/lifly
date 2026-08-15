@@ -57,34 +57,37 @@ void main() {
     return reminders.single.id;
   }
 
-  test('dispatcher delivers due reminder with stable idempotency key', () async {
-    final core = FakeLocalCoreBridge();
-    final reminderId = await createDueReminder(core);
-    final adapter = _QueueReminderAdapter([
-      const ReminderNotificationResult.delivered(
-        externalId: 'test-notification-1',
-      ),
-    ]);
-    final dispatcher = ReminderDispatcher(
-      localCore: core,
-      adapter: adapter,
-      now: () => now,
-    );
+  test(
+    'dispatcher delivers due reminder with stable idempotency key',
+    () async {
+      final core = FakeLocalCoreBridge();
+      final reminderId = await createDueReminder(core);
+      final adapter = _QueueReminderAdapter([
+        const ReminderNotificationResult.delivered(
+          externalId: 'test-notification-1',
+        ),
+      ]);
+      final dispatcher = ReminderDispatcher(
+        localCore: core,
+        adapter: adapter,
+        now: () => now,
+      );
 
-    final result = await dispatcher.dispatchDue();
-    final delivered = await core.listTaskReminders({
-      'status': 'delivered',
-    }, LocalCoreContext.flutterUser(now: now));
+      final result = await dispatcher.dispatchDue();
+      final delivered = await core.listTaskReminders({
+        'status': 'delivered',
+      }, LocalCoreContext.flutterUser(now: now));
 
-    expect(result.claimed, 1);
-    expect(result.delivered, 1);
-    expect(result.failed, 0);
-    expect(adapter.requests.single.reminderId, reminderId);
-    expect(adapter.requests.single.idempotencyKey, reminderId);
-    expect(adapter.requests.single.title, '提交周报');
-    expect(delivered.single.externalId, 'test-notification-1');
-    expect(delivered.single.attemptCount, 1);
-  });
+      expect(result.claimed, 1);
+      expect(result.delivered, 1);
+      expect(result.failed, 0);
+      expect(adapter.requests.single.reminderId, reminderId);
+      expect(adapter.requests.single.idempotencyKey, reminderId);
+      expect(adapter.requests.single.title, '提交周报');
+      expect(delivered.single.externalId, 'test-notification-1');
+      expect(delivered.single.attemptCount, 1);
+    },
+  );
 
   test('dispatcher records failure then succeeds after manual retry', () async {
     final core = FakeLocalCoreBridge();
