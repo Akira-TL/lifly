@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.modules.account.contracts import AccountIdentity
+from app.modules.devices.contracts import DeviceDescriptor, DeviceEnrollmentRequest
 
 AUTH_PROTOCOL_VERSION = 1
 AUTH_PROTOCOL = "opaque-rfc9807"
@@ -21,6 +22,7 @@ class RegistrationStartRequest(BaseModel):
 class RegistrationFinishRequest(BaseModel):
     flow_id: str = Field(min_length=1)
     client_upload: str = Field(min_length=1)
+    device: DeviceEnrollmentRequest
 
 
 class LoginStartRequest(BaseModel):
@@ -32,6 +34,7 @@ class LoginStartRequest(BaseModel):
 class LoginFinishRequest(BaseModel):
     flow_id: str = Field(min_length=1)
     client_finish: str = Field(min_length=1)
+    device: DeviceEnrollmentRequest
 
 
 class AuthStartResponse(BaseModel):
@@ -49,6 +52,7 @@ class RefreshRequest(BaseModel):
 
 class AuthSessionResponse(BaseModel):
     account: AccountIdentity
+    device: DeviceDescriptor | None = None
     access_token: str
     refresh_token: str
     token_type: Literal["bearer"] = "bearer"

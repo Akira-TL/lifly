@@ -33,6 +33,14 @@ from app.modules.auth.sessions import (
     bearer_token,
     get_session_registry,
 )
+from app.modules.devices.contracts import DeviceDescriptor, DeviceEnrollmentRequest
+from app.modules.devices.repository import (
+    DeviceNotFound,
+    DeviceOwnershipConflict,
+    DeviceRecord,
+    DeviceRepository,
+    get_device_repository,
+)
 
 router = APIRouter()
 
@@ -47,11 +55,32 @@ def _identity(account: AccountRecord) -> AccountIdentity:
     )
 
 
+def _device_descriptor(device: DeviceRecord) -> DeviceDescriptor:
+    return DeviceDescriptor(
+        device_id=device.device_id,
+        account_id=device.account_id,
+        display_name=device.display_name,
+        platform=device.platform,
+        public_key=device.public_key,
+        trust_state=device.trust_state,
+        capability_report=device.capability_report,
+        is_default_compute_node=device.is_default_compute_node,
+        last_seen_at=device.last_seen_at,
+        revoked_at=device.revoked_at,
+        key_version=device.key_version,
+        protocol_version=device.protocol_version,
+    )
+
+
 def _session_response(
-    account: AccountRecord, tokens: SessionTokens
+    account: AccountRecord,
+    tokens: SessionTokens,
+    *,
+    device: DeviceRecord | None = None,
 ) -> AuthSessionResponse:
     return AuthSessionResponse(
         account=_identity(account),
+        device=_device_descriptor(device) if device is not None else None,
         access_token=tokens.access_token,
         refresh_token=tokens.refresh_token,
         access_expires_at=tokens.access_expires_at,
@@ -76,6 +105,26 @@ async def _pake_call(awaitable):
         ) from exc
     except PakeProtocolError as exc:
         raise HTTPException(status_code=502, detail="Password authentication failed") from exc
+
+
+async def _enroll_trusted_device(
+    *,
+    account_id: str,
+    request_device: DeviceEnrollmentRequest,
+    devices: DeviceRepository,
+) -> DeviceRecord:
+    try:
+        return await devices.register_trusted(
+            account_id=account_id,
+            device_id=request_device.device_id,
+            display_name=request_device.display_name,
+            platform=request_device.platform,
+            public_key=request_device.public_key,
+            capability_report=request_device.capability_report,
+            make_default_compute_node=request_device.make_default_compute_node,
+        )
+    except DeviceOwnershipConflict as exc:
+        raise HTTPException(status_code=409, detail="Device id is unavailable") from exc
 
 
 @router.post("/register/start", response_model=AuthStartResponse)
@@ -114,6 +163,7 @@ async def registration_finish(
     pake: PakeServerAdapter = Depends(get_pake_server_adapter),
     flows: AuthFlowStore = Depends(get_auth_flow_store),
     sessions: SessionRegistry = Depends(get_session_registry),
+    devices: DeviceRepository = Depends(get_device_repository),
 ) -> AuthSessionResponse:
     flow = flows.consume_registration(request.flow_id)
     if await accounts.find_by_phone(flow.phone_e164) is not None:
@@ -133,8 +183,13 @@ async def registration_finish(
         )
     except AccountAlreadyExists as exc:
         raise HTTPException(status_code=409, detail="Phone already registered") from exc
-    tokens = sessions.issue(account_id=account.account_id)
-    return _session_response(account, tokens)
+    device = await _enroll_trusted_device(
+        account_id=account.account_id,
+        request_device=request.device,
+        devices=devices,
+    )
+    tokens = sessions.issue(account_id=account.account_id, device_id=device.device_id)
+    return _session_response(account, tokens, device=device)
 
 
 @router.post("/login/start", response_model=AuthStartResponse)
@@ -176,6 +231,7 @@ async def login_finish(
     pake: PakeServerAdapter = Depends(get_pake_server_adapter),
     flows: AuthFlowStore = Depends(get_auth_flow_store),
     sessions: SessionRegistry = Depends(get_session_registry),
+    devices: DeviceRepository = Depends(get_device_repository),
 ) -> AuthSessionResponse:
     flow = flows.consume_login(request.flow_id)
     authenticated = await _pake_call(
@@ -190,8 +246,13 @@ async def login_finish(
     account = await accounts.find_by_id(flow.account_id)
     if account is None or account.account_status != "active":
         raise HTTPException(status_code=401, detail="Invalid phone or password")
-    tokens = sessions.issue(account_id=account.account_id)
-    return _session_response(account, tokens)
+    device = await _enroll_trusted_device(
+        account_id=account.account_id,
+        request_device=request.device,
+        devices=devices,
+    )
+    tokens = sessions.issue(account_id=account.account_id, device_id=device.device_id)
+    return _session_response(account, tokens, device=device)
 
 
 @router.post("/refresh", response_model=AuthSessionResponse)
@@ -199,6 +260,7 @@ async def refresh_session(
     request: RefreshRequest,
     accounts: AccountRepository = Depends(get_account_repository),
     sessions: SessionRegistry = Depends(get_session_registry),
+    devices: DeviceRepository = Depends(get_device_repository),
 ) -> AuthSessionResponse:
     tokens = sessions.refresh(request.refresh_token)
     if tokens is None:
@@ -206,7 +268,15 @@ async def refresh_session(
     account = await accounts.find_by_id(tokens.account_id)
     if account is None or account.account_status != "active":
         raise HTTPException(status_code=401, detail="Invalid refresh token")
-    return _session_response(account, tokens)
+    device = None
+    if tokens.device_id is not None:
+        try:
+            device = await devices.get_for_account(account.account_id, tokens.device_id)
+        except DeviceNotFound as exc:
+            raise HTTPException(status_code=401, detail="Invalid refresh token") from exc
+        if device.trust_state.value != "trusted":
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
+    return _session_response(account, tokens, device=device)
 
 
 @router.post("/revoke", response_model=RevokeResponse)
