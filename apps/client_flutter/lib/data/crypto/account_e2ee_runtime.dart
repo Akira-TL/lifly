@@ -9,6 +9,7 @@ import 'package:client_flutter/data/crypto/encrypted_envelope.dart';
 import 'package:client_flutter/data/crypto/password_key_envelope_cipher.dart';
 import 'package:client_flutter/data/local_core/write/encrypted_audit_payload_protector.dart';
 import 'package:client_flutter/data/local_core/write/local_core_audit_log_writer.dart';
+import 'package:client_flutter/data/local_core/write/local_core_write_handle.dart';
 import 'package:client_flutter/data/powersync/encrypted_sync_store.dart';
 import 'package:client_flutter/data/powersync/password_key_envelope_service.dart';
 import 'package:client_flutter/data/powersync/plaintext_e2ee_migrator.dart';
@@ -84,6 +85,14 @@ class AccountE2eeRuntime
     await _activate(accountId, dataKey);
   }
 
+  Future<void> initializeWithLocalDataKey({
+    required String accountId,
+    required AccountDataKey dataKey,
+  }) async {
+    await _writeLocalKey(accountId, dataKey);
+    await _activate(accountId, dataKey);
+  }
+
   Future<void> destroyLocalKeyForCurrentSession() async {
     final session = await sessions.read();
     if (session != null) {
@@ -106,9 +115,20 @@ class AccountE2eeRuntime
     ).migrateCoreEntities();
     _store = store;
     _assets = PowerSyncAssetE2eeCoordinator(store: store);
+    syncService.setLocalMutationFlusher(flushLocalProjectionToEncryptedSync);
+  }
+
+  Future<void> flushLocalProjectionToEncryptedSync() async {
+    final store = _requireStore();
+    await PlaintextE2eeMigrator(
+      db: syncService.db,
+      store: store,
+      accountId: store.accountId,
+    ).migrateCoreEntities();
   }
 
   void _lock() {
+    syncService.setLocalMutationFlusher(null);
     _assets = null;
     _store = null;
   }
@@ -174,12 +194,16 @@ class AccountE2eeRuntime
 
   @override
   Future<void> protect({
+    required LocalCoreWriteHandle handle,
     required String auditId,
     required String createdAt,
     required LocalCoreAuditLogInput input,
-  }) => EncryptedSyncAuditPayloadProtector(
-    _requireStore(),
-  ).protect(auditId: auditId, createdAt: createdAt, input: input);
+  }) => EncryptedSyncAuditPayloadProtector(_requireStore()).protect(
+    handle: handle,
+    auditId: auditId,
+    createdAt: createdAt,
+    input: input,
+  );
 
   @override
   Future<PreparedAssetUpload> encryptUpload({

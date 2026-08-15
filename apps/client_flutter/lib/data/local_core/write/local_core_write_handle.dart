@@ -59,9 +59,11 @@ class LocalCoreWriteExecutor {
   ) async {
     try {
       await syncService.ensureInitialized();
-      return await syncService.db.writeTransaction((transaction) {
+      final result = await syncService.db.writeTransaction((transaction) {
         return write(PowerSyncLocalCoreWriteHandle(transaction));
       });
+      await syncService.flushLocalMutations();
+      return result;
     } catch (error, stackTrace) {
       throw LocalCoreWriteException(
         message: 'Local Core write transaction failed',

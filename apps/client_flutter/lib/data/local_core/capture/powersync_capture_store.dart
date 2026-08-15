@@ -6,10 +6,36 @@ import 'package:client_flutter/data/local_core/local_core_context.dart';
 import 'package:client_flutter/data/local_core/local_core_models.dart';
 import 'package:client_flutter/data/local_core/memo/powersync_memo_store.dart';
 import 'package:client_flutter/data/local_core/task/powersync_task_store.dart';
+import 'package:client_flutter/data/local_core/write/local_core_write_handle.dart';
 import 'package:client_flutter/data/local_core/write/local_core_write_policy.dart';
 import 'package:client_flutter/data/powersync/sync_service.dart';
+import 'package:flutter/foundation.dart';
 
 part 'powersync_capture_helpers.dart';
+
+String _captureCommitCauseType(Object error) {
+  final cause = error is LocalCoreWriteException ? error.cause : error;
+  return cause.runtimeType.toString();
+}
+
+String _captureCommitErrorClass(Object error) {
+  final cause = error is LocalCoreWriteException ? error.cause : error;
+  final message = cause.toString().toLowerCase();
+  if (message.contains('transaction') ||
+      message.contains('locked') ||
+      message.contains('busy')) {
+    return 'sqlite_write';
+  }
+  if (message.contains('encrypted') ||
+      message.contains('revision') ||
+      message.contains('account e2ee')) {
+    return 'e2ee';
+  }
+  if (cause is FormatException || cause is ArgumentError) return 'validation';
+  if (cause is StateError) return 'state';
+  if (error is LocalCoreWriteException) return 'local_core_write';
+  return 'unknown';
+}
 
 class PowerSyncCaptureStore {
   final SyncService syncService;
@@ -27,7 +53,8 @@ class PowerSyncCaptureStore {
     LocalCaptureAssetContextResolver? assetContextResolver,
     LocalCoreWritePolicy? policy,
   }) : assetContextResolver =
-           assetContextResolver ?? LocalCaptureAssetContextResolver(syncService),
+           assetContextResolver ??
+           LocalCaptureAssetContextResolver(syncService),
        policy = policy ?? LocalCoreWritePolicy();
 
   Future<List<LocalCaptureAssetContext>> listCaptureAssets(
@@ -135,6 +162,7 @@ class PowerSyncCaptureStore {
       await _insertTurn(tx, userTurn, context.userId, session.sourceChannel);
       await _insertTurn(tx, actionTurn, context.userId, session.sourceChannel);
     });
+    await syncService.flushLocalMutations();
 
     return session;
   }
@@ -150,7 +178,9 @@ class PowerSyncCaptureStore {
     final conditions = <String>['user_id = ?'];
     final parameters = <Object?>[context.userId];
     if (status == 'active') {
-      conditions.add("session_status IN ('active', 'parsed', 'committed', 'failed')");
+      conditions.add(
+        "session_status IN ('active', 'parsed', 'committed', 'failed')",
+      );
     } else if (status != 'all') {
       conditions.add('session_status = ?');
       parameters.add(status);
@@ -197,7 +227,9 @@ class PowerSyncCaptureStore {
       context.userId,
     );
     if (session == null) {
-      throw StateError('Capture session not found, dismissed, or expired: $captureId');
+      throw StateError(
+        'Capture session not found, dismissed, or expired: $captureId',
+      );
     }
     final now = context.effectiveNow.toUtc();
     final firstIndex = await _nextTurnIndex(captureId);
@@ -256,6 +288,7 @@ class PowerSyncCaptureStore {
         ],
       );
     });
+    await syncService.flushLocalMutations();
     return (await _getSession(captureId, context.userId, includeTurns: true))!;
   }
 
@@ -278,7 +311,9 @@ class PowerSyncCaptureStore {
       context.userId,
     );
     if (session == null) {
-      throw StateError('Capture session not found, dismissed, or expired: $captureId');
+      throw StateError(
+        'Capture session not found, dismissed, or expired: $captureId',
+      );
     }
     final row = await syncService.db.getOptional(
       'SELECT id, capture_id, turn_index, role, text, asset_ids, asset_context, actions, '
@@ -303,7 +338,8 @@ class PowerSyncCaptureStore {
     revisedActions[actionIndex] = LocalCaptureAction(
       type: _readOptionalString(input, 'action_type') ?? sourceAction.type,
       payload: rawPayload.cast<String, Object?>(),
-      confidence: (input['confidence'] as num?)?.toDouble() ?? sourceAction.confidence,
+      confidence:
+          (input['confidence'] as num?)?.toDouble() ?? sourceAction.confidence,
       rawText: sourceAction.rawText,
     );
     final now = context.effectiveNow.toUtc();
@@ -344,6 +380,7 @@ class PowerSyncCaptureStore {
         ],
       );
     });
+    await syncService.flushLocalMutations();
     return revisedTurn;
   }
 
@@ -353,8 +390,14 @@ class PowerSyncCaptureStore {
   ) async {
     final captureId = _readRequiredString(input, 'capture_id');
     await syncService.ensureInitialized();
-    final session = await _getSession(captureId, context.userId, includeTurns: true);
-    if (session == null) throw StateError('Capture session not found: $captureId');
+    final session = await _getSession(
+      captureId,
+      context.userId,
+      includeTurns: true,
+    );
+    if (session == null) {
+      throw StateError('Capture session not found: $captureId');
+    }
     if (session.sessionStatus != 'dismissed') {
       final now = context.effectiveNow.toUtc();
       final turn = LocalCaptureTurn(
@@ -384,6 +427,7 @@ class PowerSyncCaptureStore {
           ],
         );
       });
+      await syncService.flushLocalMutations();
     }
     return (await _getSession(captureId, context.userId, includeTurns: true))!;
   }
@@ -400,7 +444,9 @@ class PowerSyncCaptureStore {
       context.userId,
     );
     if (session == null) {
-      throw StateError('Capture session not found, dismissed, or expired: $captureId');
+      throw StateError(
+        'Capture session not found, dismissed, or expired: $captureId',
+      );
     }
     final requestedTurnId = _readOptionalString(input, 'turn_id');
     final actionTurn = requestedTurnId == null
@@ -439,7 +485,12 @@ class PowerSyncCaptureStore {
         } else {
           failed.add(LocalCoreEntityRef(type: action.type, id: '$index'));
         }
-      } catch (_) {
+      } catch (error) {
+        debugPrint(
+          '[LIFLY_LOCAL_CORE][capture_commit_failed] '
+          'action_type=${action.type} error_class=${_captureCommitErrorClass(error)} '
+          'cause_type=${_captureCommitCauseType(error)}',
+        );
         failed.add(LocalCoreEntityRef(type: action.type, id: '$index'));
       }
     }
@@ -460,7 +511,9 @@ class PowerSyncCaptureStore {
           created.isEmpty ? (session.committed ? 1 : 0) : 1,
           'active',
           now.toIso8601String(),
-          created.isEmpty ? session.committedAt?.toIso8601String() : now.toIso8601String(),
+          created.isEmpty
+              ? session.committedAt?.toIso8601String()
+              : now.toIso8601String(),
           captureId,
           context.userId,
         ],
@@ -498,6 +551,7 @@ class PowerSyncCaptureStore {
         );
       }
     });
+    await syncService.flushLocalMutations();
 
     return LocalCaptureCommitResult(
       committed: created.isNotEmpty && failed.isEmpty,
@@ -584,7 +638,7 @@ class PowerSyncCaptureStore {
         final turn = LocalCaptureTurn(
           id: policy.nextEntityId('capture_turn'),
           captureId: resolvedCaptureId,
-          turnIndex: await _nextTurnIndex(resolvedCaptureId),
+          turnIndex: await _nextTurnIndexWithHandle(tx, resolvedCaptureId),
           role: 'system',
           text: 'undo',
           actions: const [],
@@ -598,6 +652,7 @@ class PowerSyncCaptureStore {
         await _insertTurn(tx, turn, context.userId, context.sourceChannelName);
       }
     });
+    await syncService.flushLocalMutations();
 
     return LocalCaptureUndoResult(
       undone: undone,
@@ -700,8 +755,11 @@ class PowerSyncCaptureStore {
     return row == null ? null : _turnFromRow(row);
   }
 
-  Future<int> _nextTurnIndex(String captureId) async {
-    final row = await syncService.db.getOptional(
+  Future<int> _nextTurnIndex(String captureId) =>
+      _nextTurnIndexWithHandle(syncService.db, captureId);
+
+  Future<int> _nextTurnIndexWithHandle(dynamic handle, String captureId) async {
+    final row = await handle.getOptional(
       'SELECT max(turn_index) AS max_index FROM mcp_capture_turns WHERE capture_id = ?',
       [captureId],
     );
@@ -779,5 +837,4 @@ class PowerSyncCaptureStore {
       updatedAt: _readRequiredDateTime(row['updated_at']),
     );
   }
-
 }

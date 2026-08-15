@@ -4,6 +4,7 @@ import 'package:client_flutter/data/local_core/write/local_core_write_policy.dar
 
 abstract interface class AuditPayloadProtector {
   Future<void> protect({
+    required LocalCoreWriteHandle handle,
     required String auditId,
     required String createdAt,
     required LocalCoreAuditLogInput input,
@@ -15,6 +16,7 @@ class DiscardSensitiveAuditPayloadProtector implements AuditPayloadProtector {
 
   @override
   Future<void> protect({
+    required LocalCoreWriteHandle handle,
     required String auditId,
     required String createdAt,
     required LocalCoreAuditLogInput input,
@@ -40,6 +42,7 @@ class LocalCoreAuditLogWriter {
     final createdAt = policy.timestampsFor(input.context).createdAtIso;
 
     await payloadProtector.protect(
+      handle: handle,
       auditId: id,
       createdAt: createdAt,
       input: input,

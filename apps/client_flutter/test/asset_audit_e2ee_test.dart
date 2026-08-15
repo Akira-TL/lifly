@@ -49,7 +49,25 @@ void main() {
       expect(entity.payload['before_snapshot'], {'title': 'private old'});
       expect(entity.payload['after_snapshot'], {'title': 'private new'});
 
-      final local = handle.calls.single;
+      final encryptedCall = handle.calls.firstWhere(
+        (call) => call.sql.contains('INSERT INTO encrypted_entities'),
+      );
+      expect(
+        encryptedCall.parameters.join('|'),
+        isNot(contains('private source text')),
+      );
+      expect(
+        encryptedCall.parameters.join('|'),
+        isNot(contains('private old')),
+      );
+      expect(
+        encryptedCall.parameters.join('|'),
+        isNot(contains('private new')),
+      );
+
+      final local = handle.calls.firstWhere(
+        (call) => call.sql.contains('INSERT INTO audit_logs'),
+      );
       expect(local.sql, contains('INSERT INTO audit_logs'));
       expect(local.parameters[7], isNull);
       expect(local.parameters[8], isNull);
@@ -101,9 +119,7 @@ class _RecordingEncryptedSyncStore implements EncryptedSyncStore {
   final List<DecryptedSyncEntity> entities = [];
 
   @override
-  Future<EncryptedEntityEnvelope> putEncryptedEntity(
-    DecryptedSyncEntity entity,
-  ) async {
+  Future<EncryptedEntityEnvelope> sealEntity(DecryptedSyncEntity entity) async {
     entities.add(entity);
     return EncryptedEntityEnvelope(
       id: entity.id,
@@ -118,6 +134,11 @@ class _RecordingEncryptedSyncStore implements EncryptedSyncStore {
       ciphertext: 'Y2lwaGVydGV4dA==',
     );
   }
+
+  @override
+  Future<EncryptedEntityEnvelope> putEncryptedEntity(
+    DecryptedSyncEntity entity,
+  ) => sealEntity(entity);
 
   @override
   Future<ProjectionApplyResult> applyRemoteEnvelope(

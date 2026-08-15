@@ -50,6 +50,8 @@ class KeyRotationResult {
 }
 
 abstract interface class EncryptedSyncStore {
+  Future<EncryptedEntityEnvelope> sealEntity(DecryptedSyncEntity entity);
+
   Future<EncryptedEntityEnvelope> putEncryptedEntity(
     DecryptedSyncEntity entity,
   );
@@ -80,6 +82,28 @@ class PowerSyncEncryptedSyncStore implements EncryptedSyncStore {
        projection = projection ?? LocalDecryptedProjection(db);
 
   @override
+  Future<EncryptedEntityEnvelope> sealEntity(DecryptedSyncEntity entity) async {
+    _requireAccount(entity.userId);
+    if (entity.revision < 1) {
+      throw ArgumentError.value(
+        entity.revision,
+        'revision',
+        'must be positive',
+      );
+    }
+    return cipher.encryptEntity(
+      key: keyRing.current,
+      id: entity.id,
+      userId: accountId,
+      entityType: entity.entityType,
+      revision: entity.revision,
+      lifecycleStatus: entity.lifecycleStatus,
+      updatedAt: entity.updatedAt,
+      payload: entity.payload,
+    );
+  }
+
+  @override
   Future<EncryptedEntityEnvelope> putEncryptedEntity(
     DecryptedSyncEntity entity,
   ) async {
@@ -103,16 +127,7 @@ class PowerSyncEncryptedSyncStore implements EncryptedSyncStore {
       );
     }
 
-    final envelope = await cipher.encryptEntity(
-      key: keyRing.current,
-      id: entity.id,
-      userId: accountId,
-      entityType: entity.entityType,
-      revision: entity.revision,
-      lifecycleStatus: entity.lifecycleStatus,
-      updatedAt: entity.updatedAt,
-      payload: entity.payload,
-    );
+    final envelope = await sealEntity(entity);
     await _upsertEnvelope(envelope);
     await projection.materialize(envelope, entity.payload);
     return envelope;

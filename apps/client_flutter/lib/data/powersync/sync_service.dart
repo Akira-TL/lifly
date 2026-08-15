@@ -9,6 +9,8 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:powersync/powersync.dart';
 
+typedef LocalMutationFlusher = Future<void> Function();
+
 class SyncService {
   final SyncPushService pushService;
   final PowerSyncCrudMapper crudMapper;
@@ -19,6 +21,7 @@ class SyncService {
   PowerSyncInitializationFailure? _lastInitializationFailure;
   SyncPushUploadDiagnostics _uploadDiagnostics =
       const SyncPushUploadDiagnostics.idle();
+  LocalMutationFlusher? _localMutationFlusher;
 
   SyncService({
     ApiClient? api,
@@ -141,6 +144,15 @@ class SyncService {
 
   Future<void> ensureInitialized() => initialize();
 
+  void setLocalMutationFlusher(LocalMutationFlusher? flusher) {
+    _localMutationFlusher = flusher;
+  }
+
+  Future<void> flushLocalMutations() async {
+    final flusher = _localMutationFlusher;
+    if (flusher != null) await flusher();
+  }
+
   Future<String> defaultDatabasePath() async {
     if (kIsWeb) {
       return 'lifly-local-core.db';
@@ -193,6 +205,7 @@ class SyncService {
   }
 
   void dispose() {
+    _localMutationFlusher = null;
     if (!isInitialized) return;
     db.close();
     _db = null;

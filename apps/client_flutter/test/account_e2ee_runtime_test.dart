@@ -136,7 +136,7 @@ void main() {
         syncService: syncService,
         auditPayloadProtector: runtime,
       );
-      await bridge.createMemo(
+      final createdMemo = await bridge.createMemo(
         const {
           'type': 'memo',
           'title': '敏感标题 marker-title',
@@ -148,6 +148,21 @@ void main() {
           userId: 'account-1',
           sourceText: '敏感来源 marker-source',
         ),
+      );
+
+      final encryptedMemo = await syncService.db.getOptional(
+        'SELECT ciphertext FROM encrypted_entities '
+        "WHERE id = ? AND entity_type = 'memo'",
+        [createdMemo.id],
+      );
+      expect(encryptedMemo, isNotNull);
+      expect(
+        encryptedMemo!['ciphertext'] as String,
+        isNot(contains('marker-title')),
+      );
+      expect(
+        encryptedMemo['ciphertext'] as String,
+        isNot(contains('marker-body')),
       );
 
       final audit = await syncService.db.getOptional(
