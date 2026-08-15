@@ -35,6 +35,10 @@ bash -n \
   scripts/dev-restart.sh \
   scripts/compute-node-start.sh \
   scripts/ai-provider-worker.sh \
+  scripts/build-runtime-helpers.sh \
+  scripts/local-core-bridge.sh \
+  scripts/e2ee-commit-smoke.sh \
+  scripts/run-v0.9.0-golden.sh \
   scripts/lib/lifly-ports.sh
 
 compose_render="$(mktemp)"
@@ -60,7 +64,20 @@ for port in \
   grep -Fq "published: \"$port\"" "$compose_render"
 done
 
-echo "[3/7] Python P0 integration contracts"
+echo "[3/7] OPAQUE / Python P0 integration contracts"
+cargo_bin="${LIFLY_CARGO_BIN:-}"
+if [[ -z "$cargo_bin" && -x "$HOME/.cargo/bin/cargo" ]]; then
+  cargo_bin="$HOME/.cargo/bin/cargo"
+fi
+if [[ -z "$cargo_bin" ]]; then
+  cargo_bin="$(command -v cargo || true)"
+fi
+if [[ -z "$cargo_bin" ]]; then
+  echo "FAIL: Cargo is required to verify the OPAQUE runtime helper" >&2
+  exit 1
+fi
+"$cargo_bin" test --manifest-path tools/opaque-helper/Cargo.toml
+
 (
   cd services/api
   uv run pytest -q \
@@ -87,7 +104,7 @@ pnpm --dir packages/protocol test
 pnpm --dir packages/local-core typecheck
 pnpm --dir packages/local-core test
 pnpm --dir services/local-mcp typecheck
-pnpm --dir services/local-mcp test
+env -u LIFLY_LOCAL_CORE_BRIDGE_PATH pnpm --dir services/local-mcp test
 
 echo "[5/7] Flutter P0 integration contracts"
 (
@@ -99,8 +116,10 @@ echo "[5/7] Flutter P0 integration contracts"
     lib/data/crypto/account_e2ee_runtime.dart \
     lib/data/ai/device_ai_job_cipher.dart \
     lib/data/local_core/powersync_local_core_bridge.dart \
+    lib/data/local_core/desktop_local_core_host.dart \
     lib/features/ai_capture/data/compute_node_plan_client.dart \
     lib/features/ai_capture/data/ai_capture_execution_runtime.dart \
+    lib/features/ai_capture/data/external_ai_action_committer.dart \
     lib/features/asset/data/asset_e2ee_sync_adapter.dart
   flutter test \
     test/api_client_auth_session_test.dart \
@@ -115,35 +134,42 @@ echo "[5/7] Flutter P0 integration contracts"
     test/powersync_encrypted_sync_store_test.dart \
     test/powersync_password_key_envelope_service_test.dart \
     test/local_core_write_test.dart \
-    test/powersync_local_core_bridge_test.dart
+    test/powersync_local_core_bridge_test.dart \
+    test/desktop_local_core_host_test.dart \
+    test/external_ai_action_committer_test.dart
 )
 
-echo "[6/7] Golden runtime prerequisites"
-missing=()
-command -v docker >/dev/null 2>&1 || missing+=("docker")
-command -v ollama >/dev/null 2>&1 || missing+=("ollama")
-[[ -n "${LIFLY_OPAQUE_SERVER_HELPER:-}" && -x "${LIFLY_OPAQUE_SERVER_HELPER:-}" ]] \
-  || missing+=("LIFLY_OPAQUE_SERVER_HELPER")
-[[ -n "${LIFLY_OPAQUE_CLIENT_HELPER:-}" && -x "${LIFLY_OPAQUE_CLIENT_HELPER:-}" ]] \
-  || missing+=("LIFLY_OPAQUE_CLIENT_HELPER")
-[[ -n "${LIFLY_LOCAL_CORE_BRIDGE_PATH:-}" && -x "${LIFLY_LOCAL_CORE_BRIDGE_PATH:-}" ]] \
-  || missing+=("LIFLY_LOCAL_CORE_BRIDGE_PATH")
+echo "[6/7] Golden runtime prerequisites / live run"
+default_opaque="$PROJECT_ROOT/build/runtime/lifly-opaque-helper"
+default_bridge="$PROJECT_ROOT/scripts/local-core-bridge.sh"
+resolved_server_helper="${LIFLY_OPAQUE_SERVER_HELPER:-$default_opaque}"
+resolved_client_helper="${LIFLY_OPAQUE_CLIENT_HELPER:-$resolved_server_helper}"
+resolved_bridge="${LIFLY_LOCAL_CORE_BRIDGE_PATH:-$default_bridge}"
 
-installed_model=""
-if command -v ollama >/dev/null 2>&1; then
-  installed_model="$(ollama list 2>/dev/null | awk 'NR==2 {print $1}')"
-fi
-if [[ -z "${LIFLY_LOCAL_AI_MODEL:-}" && -z "$installed_model" ]]; then
-  missing+=("LIFLY_LOCAL_AI_MODEL/or installed Ollama model")
-fi
-
-if ((${#missing[@]} > 0)); then
-  printf 'GOLDEN_RUNTIME=BLOCKED_BY_ENV missing=%s\n' "$(IFS=,; echo "${missing[*]}")"
-  if [[ "${LIFLY_RUN_GOLDEN_RUNTIME:-false}" == "true" ]]; then
-    exit 2
-  fi
+if [[ "${LIFLY_RUN_GOLDEN_RUNTIME:-false}" == "true" ]]; then
+  LIFLY_OPAQUE_SERVER_HELPER="$resolved_server_helper" \
+  LIFLY_OPAQUE_CLIENT_HELPER="$resolved_client_helper" \
+  LIFLY_LOCAL_CORE_BRIDGE_PATH="$resolved_bridge" \
+    bash scripts/run-v0.9.0-golden.sh
 else
-  echo "GOLDEN_RUNTIME=READY"
+  missing=()
+  command -v docker >/dev/null 2>&1 || missing+=("docker")
+  command -v ollama >/dev/null 2>&1 || missing+=("ollama")
+  [[ -x "$resolved_server_helper" ]] || missing+=("LIFLY_OPAQUE_SERVER_HELPER")
+  [[ -x "$resolved_client_helper" ]] || missing+=("LIFLY_OPAQUE_CLIENT_HELPER")
+  [[ -x "$resolved_bridge" ]] || missing+=("LIFLY_LOCAL_CORE_BRIDGE_PATH")
+  installed_model=""
+  if command -v ollama >/dev/null 2>&1; then
+    installed_model="$(ollama list 2>/dev/null | awk 'NR==2 {print $1}')"
+  fi
+  if [[ -z "${LIFLY_LOCAL_AI_MODEL:-}" && -z "$installed_model" ]]; then
+    missing+=("LIFLY_LOCAL_AI_MODEL/or installed Ollama model")
+  fi
+  if ((${#missing[@]} > 0)); then
+    printf 'GOLDEN_RUNTIME=BLOCKED_BY_ENV missing=%s\n' "$(IFS=,; echo "${missing[*]}")"
+  else
+    echo "GOLDEN_RUNTIME=READY"
+  fi
 fi
 
 echo "[7/7] Gate result"

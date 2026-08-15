@@ -15,6 +15,10 @@ mkdir -p "$LOG_DIR"
 
 LIFLY_ENABLE_POWERSYNC="${LIFLY_ENABLE_POWERSYNC:-true}"
 LIFLY_ENABLE_OLLAMA="${LIFLY_ENABLE_OLLAMA:-true}"
+DEFAULT_OPAQUE_HELPER="$PROJECT_ROOT/build/runtime/lifly-opaque-helper"
+if [[ -z "${LIFLY_OPAQUE_SERVER_HELPER:-}" && -x "$DEFAULT_OPAQUE_HELPER" ]]; then
+  export LIFLY_OPAQUE_SERVER_HELPER="$DEFAULT_OPAQUE_HELPER"
+fi
 
 echo "=== 启动 Lifly Dev ==="
 echo "[1/4] 启动共享基础设施 (PostgreSQL/Redis/MinIO)..."
@@ -97,6 +101,8 @@ if [[ ! -f "$API_PID_FILE" ]]; then
     LIFLY_CLOUD_AI_PROVIDER="${LIFLY_CLOUD_AI_PROVIDER:-ollama}" \
     LIFLY_CLOUD_AI_ENDPOINT="${LIFLY_CLOUD_AI_ENDPOINT:-http://127.0.0.1:$LIFLY_COMMON_OLLAMA_PORT}" \
     LIFLY_CLOUD_AI_MODEL="${LIFLY_CLOUD_AI_MODEL:-}" \
+    LIFLY_OPAQUE_SERVER_HELPER="${LIFLY_OPAQUE_SERVER_HELPER:-}" \
+    LIFLY_OPAQUE_SERVER_SETUP_PATH="${LIFLY_OPAQUE_SERVER_SETUP_PATH:-}" \
     uv run fastapi dev app/main.py --port "$LIFLY_API_PORT" --host 127.0.0.1 \
     >"$API_LOG_FILE" 2>&1 < /dev/null &
   API_PID=$!
