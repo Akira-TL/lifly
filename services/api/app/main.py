@@ -23,6 +23,11 @@ from app.modules.search.router import router as search_router
 from app.modules.sync.router import router as sync_router
 from app.modules.plugins.router import router as plugins_router
 from app.modules.mcp.cloud_server import cloud_mcp
+from app.modules.account.router import router as account_router
+from app.modules.devices.router import router as devices_router
+from app.modules.crypto.router import router as crypto_router
+from app.modules.ai.router import router as ai_router
+from app.modules.ai_relay.router import router as ai_relay_router
 
 
 @asynccontextmanager
@@ -58,6 +63,11 @@ app.add_middleware(
 )
 
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(account_router, prefix="/api/v1/account", tags=["account"])
+app.include_router(devices_router, prefix="/api/v1/devices", tags=["devices"])
+app.include_router(crypto_router, prefix="/api/v1/crypto", tags=["crypto"])
+app.include_router(ai_router, prefix="/api/v1/ai", tags=["ai"])
+app.include_router(ai_relay_router, prefix="/api/v1/ai/relay", tags=["ai-relay"])
 app.include_router(memo_router, prefix="/api/v1/memos", tags=["memos"])
 app.include_router(ledger_router, prefix="/api/v1/ledger", tags=["ledger"])
 app.include_router(task_router, prefix="/api/v1/tasks", tags=["tasks"])

@@ -7,11 +7,13 @@ requires-python = ">=3.12"
 dependencies = [
     "asyncpg>=0.31.0",
     "bcrypt==4.0.1",
+    "cryptography>=49.0.0",
     "fastapi[standard]>=0.138.0",
     "httpx>=0.28.1",
     "mcp>=1.0.0",
     "minio>=7.2.20",
     "passlib[bcrypt]>=1.7.4",
+    "phonenumbers>=9.0.37",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",
     "python-dotenv>=1.2.2",

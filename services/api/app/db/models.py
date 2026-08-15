@@ -8,11 +8,14 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -415,7 +418,179 @@ class Tombstone(Base):
     last_revision: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
-# ─── User ───────────────────────────────────────────────────────────────────
+# ─── v0.9.0 Account / Device / E2EE / AI Relay contracts ───────────────────
+
+ACCOUNT_SCHEMA_VERSION = 1
+DEVICE_PROTOCOL_VERSION = 1
+ENCRYPTED_ENTITY_SCHEMA_VERSION = 1
+AI_JOB_PROTOCOL_VERSION = 1
+
+
+class Account(Base, TimestampMixin):
+    """Cloud identity root.
+
+    v0.9.0 keeps legacy business ``user_id`` values equal to ``Account.id``.
+    Account authentication must never imply access to E2EE data keys.
+    """
+
+    __tablename__ = "accounts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    phone_e164: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, index=True)
+    display_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    account_status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    plan: Mapped[str] = mapped_column(String(32), nullable=False, default="demo")
+    schema_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=ACCOUNT_SCHEMA_VERSION
+    )
+
+
+class AccountAuthCredential(Base, TimestampMixin):
+    """Opaque authentication record; never a plaintext or replayable password equivalent."""
+
+    __tablename__ = "account_auth_credentials"
+
+    account_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("accounts.id"), primary_key=True
+    )
+    protocol: Mapped[str] = mapped_column(String(32), nullable=False, default="opaque")
+    protocol_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    credential_record: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class AccountKeyEnvelope(Base, TimestampMixin):
+    """Server-blind wrapper around account key material, encoded as text-safe ciphertext."""
+
+    __tablename__ = "account_key_envelopes"
+    __table_args__ = (
+        UniqueConstraint(
+            "account_id",
+            "envelope_type",
+            "key_version",
+            name="uq_account_key_envelope_version",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    account_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("accounts.id"), nullable=False, index=True
+    )
+    envelope_type: Mapped[str] = mapped_column(
+        String(24), nullable=False, default="password"
+    )
+    key_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    encryption_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    nonce: Mapped[str] = mapped_column(Text, nullable=False)
+    ciphertext: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class Device(Base, TimestampMixin):
+    """Account-owned routing identity. Private keys never enter this table."""
+
+    __tablename__ = "devices"
+    __table_args__ = (
+        Index(
+            "uq_devices_default_compute_node_per_account",
+            "account_id",
+            unique=True,
+            postgresql_where=text("is_default_compute_node IS TRUE"),
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    account_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("accounts.id"), nullable=False, index=True
+    )
+    display_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    platform: Mapped[str] = mapped_column(String(32), nullable=False)
+    public_key: Mapped[str] = mapped_column(Text, nullable=False)
+    trust_state: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    capabilities: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    is_default_compute_node: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    key_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    protocol_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=DEVICE_PROTOCOL_VERSION
+    )
+
+
+class EncryptedEntity(Base, TimestampMixin):
+    """Cloud-blind synchronized business entity envelope.
+
+    ``user_id`` is the legacy business partition key and is canonically equal to
+    the authenticated ``account_id`` for v0.9.0. It is never client-authoritative.
+    """
+
+    __tablename__ = "encrypted_entities"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("accounts.id"), nullable=False, index=True
+    )
+    entity_type: Mapped[str] = mapped_column(String(48), nullable=False, index=True)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    lifecycle_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="active"
+    )
+    key_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    encryption_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    schema_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=ENCRYPTED_ENTITY_SCHEMA_VERSION
+    )
+    nonce: Mapped[str] = mapped_column(Text, nullable=False)
+    ciphertext: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class AiJob(Base, TimestampMixin):
+    """Encrypted device-to-device relay message; payload remains opaque to cloud."""
+
+    __tablename__ = "ai_jobs"
+    __table_args__ = (
+        UniqueConstraint(
+            "account_id",
+            "source_device_id",
+            "idempotency_key",
+            name="uq_ai_job_idempotency",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    account_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("accounts.id"), nullable=False, index=True
+    )
+    source_device_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("devices.id"), nullable=False, index=True
+    )
+    target_device_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("devices.id"), nullable=False, index=True
+    )
+    message_type: Mapped[str] = mapped_column(String(16), nullable=False, default="request")
+    correlation_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    delivery_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="queued", index=True
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    delivered_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    protocol_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=AI_JOB_PROTOCOL_VERSION
+    )
+    encryption_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    nonce: Mapped[str] = mapped_column(Text, nullable=False)
+    ciphertext: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+# ─── Legacy v0.8.x User/Auth compatibility ──────────────────────────────────
 
 class User(Base):
     __tablename__ = "users"
