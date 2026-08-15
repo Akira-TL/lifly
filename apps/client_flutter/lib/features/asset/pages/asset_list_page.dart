@@ -10,14 +10,16 @@ import 'package:client_flutter/shared/widgets/asset_card.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
 
 class AssetListPage extends StatefulWidget {
-  const AssetListPage({super.key});
+  const AssetListPage({super.key, this.repository});
+
+  final AssetRepository? repository;
 
   @override
   State<AssetListPage> createState() => _AssetListPageState();
 }
 
 class _AssetListPageState extends State<AssetListPage> {
-  late final AssetRepository _repo;
+  AssetRepository? _repo;
   final AssetFilePicker _filePicker = const FileSelectorAssetFilePicker();
   List<Asset> _assets = [];
   bool _loading = true;
@@ -27,10 +29,7 @@ class _AssetListPageState extends State<AssetListPage> {
   @override
   void initState() {
     super.initState();
-    _repo = AssetRepository(
-      context.read<ApiClient>(),
-      e2ee: context.read<AccountE2eeRuntime>(),
-    );
+    _repo = widget.repository;
     _load();
   }
 
@@ -40,7 +39,16 @@ class _AssetListPageState extends State<AssetListPage> {
       _error = null;
     });
     try {
-      final assets = await _repo.list();
+      final repo = _resolveRepository();
+      if (repo == null) {
+        if (!mounted) return;
+        setState(() {
+          _error = '附件 E2EE 尚未解锁；不会回退到明文附件存储。';
+          _loading = false;
+        });
+        return;
+      }
+      final assets = await repo.list();
       if (!mounted) return;
       setState(() {
         _assets = assets;
@@ -66,7 +74,7 @@ class _AssetListPageState extends State<AssetListPage> {
       body: _buildBody(),
       floatingActionButton: FloatingActionButton(
         heroTag: 'asset-create-fab',
-        onPressed: () => _showAddSheet(context),
+        onPressed: _repo == null ? null : () => _showAddSheet(context),
         child: const Icon(Icons.add),
       ),
     );
@@ -83,7 +91,7 @@ class _AssetListPageState extends State<AssetListPage> {
       emptyTitle: '还没有附件',
       emptySubtitle: '上传文件或登记外部链接，正文之外的数据也能统一管理。',
       emptyActionLabel: '添加附件',
-      onEmptyAction: () => _showAddSheet(context),
+      onEmptyAction: _repo == null ? null : () => _showAddSheet(context),
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
@@ -96,7 +104,23 @@ class _AssetListPageState extends State<AssetListPage> {
     );
   }
 
+  AssetRepository? _resolveRepository() {
+    final existing = _repo;
+    if (existing != null) return existing;
+    AccountE2eeRuntime? e2ee;
+    try {
+      e2ee = context.read<AccountE2eeRuntime>();
+    } on ProviderNotFoundException {
+      return null;
+    }
+    if (!e2ee.isUnlocked) return null;
+    final resolved = AssetRepository(context.read<ApiClient>(), e2ee: e2ee);
+    _repo = resolved;
+    return resolved;
+  }
+
   void _showAddSheet(BuildContext context) {
+    if (_repo == null) return;
     showModalBottomSheet(
       context: context,
       builder: (ctx) => SafeArea(
@@ -136,7 +160,7 @@ class _AssetListPageState extends State<AssetListPage> {
       _error = null;
     });
     try {
-      final asset = await _repo.uploadBytes(
+      final asset = await _repo!.uploadBytes(
         filename: selected.name,
         bytes: selected.bytes,
         mimeType: selected.mimeType,
@@ -173,7 +197,7 @@ class _AssetListPageState extends State<AssetListPage> {
     if (draft == null) return;
 
     try {
-      await _repo.registerExternalUrl(
+      await _repo!.registerExternalUrl(
         externalUrl: draft.url,
         title: draft.title.isEmpty ? null : draft.title,
       );

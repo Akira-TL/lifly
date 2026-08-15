@@ -1,4 +1,6 @@
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/repositories/asset_repository.dart';
+import 'package:client_flutter/domain/entities/asset.dart';
 import 'package:client_flutter/features/asset/pages/asset_list_page.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
 import 'package:flutter/material.dart';
@@ -51,10 +53,51 @@ class _AssetApiClient extends ApiClient {
   }
 }
 
-Widget _host(ApiClient api) {
+class _AssetTestRepository extends AssetRepository {
+  _AssetTestRepository(this.client) : super(client);
+
+  final _AssetApiClient client;
+
+  @override
+  Future<List<Asset>> list({
+    int limit = 20,
+    int offset = 0,
+    String? kind,
+    String? assetType,
+  }) async {
+    if (client.fail) throw StateError('offline');
+    return const [];
+  }
+
+  @override
+  Future<Asset> registerExternalUrl({
+    required String externalUrl,
+    String? externalProvider,
+    String assetType = 'link',
+    String? title,
+    String? previewUrl,
+  }) async {
+    if (client.failPosts) throw StateError('storage gateway leaked');
+    return Asset(
+      id: 'asset-link-1',
+      userId: 'account-1',
+      kind: 'external',
+      assetType: assetType,
+      status: 'active',
+      externalUrl: externalUrl,
+      title: title,
+      createdAt: DateTime.utc(2026, 8, 15),
+      updatedAt: DateTime.utc(2026, 8, 15),
+    );
+  }
+}
+
+Widget _host(_AssetApiClient api) {
   return Provider<ApiClient>.value(
     value: api,
-    child: const MaterialApp(home: AssetListPage()),
+    child: MaterialApp(
+      home: AssetListPage(repository: _AssetTestRepository(api)),
+    ),
   );
 }
 
