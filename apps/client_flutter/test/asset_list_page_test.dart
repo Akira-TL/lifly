@@ -7,8 +7,9 @@ import 'package:provider/provider.dart';
 
 class _AssetApiClient extends ApiClient {
   bool fail;
+  bool failPosts;
 
-  _AssetApiClient({this.fail = false})
+  _AssetApiClient({this.fail = false, this.failPosts = false})
     : super(baseUrl: 'http://example.invalid/api/v1');
 
   @override
@@ -24,6 +25,29 @@ class _AssetApiClient extends ApiClient {
       };
     }
     return {'success': true, 'data': <String, dynamic>{}};
+  }
+
+  @override
+  Future<Map<String, dynamic>> post(
+    String path, {
+    Map<String, dynamic>? data,
+  }) async {
+    if (failPosts) throw StateError('storage gateway leaked');
+    return {
+      'success': true,
+      'data': {
+        'asset': {
+          'id': 'asset-link-1',
+          'kind': 'external_url',
+          'asset_type': 'link',
+          'status': 'active',
+          'external_url': data?['external_url'],
+          'title': data?['title'],
+          'created_at': DateTime.utc(2026, 8, 15).toIso8601String(),
+          'updated_at': DateTime.utc(2026, 8, 15).toIso8601String(),
+        },
+      },
+    };
   }
 }
 
@@ -49,6 +73,34 @@ void main() {
     expect(find.text('添加外链'), findsOneWidget);
   });
 
+  testWidgets('external link validates input and hides submit failures', (
+    tester,
+  ) async {
+    final api = _AssetApiClient(failPosts: true);
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('添加附件'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('添加外链'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.pump();
+    expect(find.text('请输入链接地址'), findsOneWidget);
+
+    final urlField = find.byWidgetPredicate(
+      (widget) => widget is TextField && widget.decoration?.labelText == 'URL',
+    );
+    await tester.enterText(urlField, 'https://example.com/article');
+    await tester.pump();
+    expect(find.text('请输入链接地址'), findsNothing);
+    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('添加外链失败，请稍后重试'), findsOneWidget);
+    expect(find.textContaining('storage gateway leaked'), findsNothing);
+  });
+
   testWidgets('asset library retries through the shared error state', (
     tester,
   ) async {
@@ -57,7 +109,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(ErrorState), findsOneWidget);
-    expect(find.textContaining('附件加载失败'), findsOneWidget);
+    expect(find.text('加载附件失败，请稍后重试'), findsOneWidget);
+    expect(find.textContaining('offline'), findsNothing);
 
     api.fail = false;
     await tester.tap(find.text('重试'));

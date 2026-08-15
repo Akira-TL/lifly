@@ -3,6 +3,7 @@ import 'package:client_flutter/features/ai_capture/models/ai_capture_models.dart
 import 'package:client_flutter/features/ai_capture/widgets/ai_capture_asset_picker.dart';
 import 'package:client_flutter/features/ai_capture/widgets/ai_capture_session_panel.dart';
 import 'package:client_flutter/features/ai_capture/widgets/ai_capture_turn_card.dart';
+import 'package:client_flutter/shared/errors/user_facing_error.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -332,8 +333,16 @@ class _AiCapturePageState extends State<AiCapturePage> {
     });
     try {
       await action();
-    } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+    } catch (error, stackTrace) {
+      if (mounted) {
+        setState(
+          () => _error = userFacingFailure(
+            action: 'AI 操作',
+            error: error,
+            stackTrace: stackTrace,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }

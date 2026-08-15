@@ -4,6 +4,7 @@ import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/repositories/asset_repository.dart';
 import 'package:client_flutter/domain/entities/asset.dart';
 import 'package:client_flutter/features/asset/data/asset_file_picker.dart';
+import 'package:client_flutter/shared/errors/user_facing_error.dart';
 import 'package:client_flutter/shared/widgets/asset_card.dart';
 import 'package:client_flutter/shared/widgets/async_content.dart';
 
@@ -36,13 +37,19 @@ class _AssetListPageState extends State<AssetListPage> {
     });
     try {
       final assets = await _repo.list();
+      if (!mounted) return;
       setState(() {
         _assets = assets;
         _loading = false;
       });
-    } catch (error) {
+    } catch (error, stackTrace) {
+      if (!mounted) return;
       setState(() {
-        _error = '附件加载失败：$error';
+        _error = userFacingFailure(
+          action: '加载附件',
+          error: error,
+          stackTrace: stackTrace,
+        );
         _loading = false;
       });
     }
@@ -136,57 +143,55 @@ class _AssetListPageState extends State<AssetListPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('已上传 ${asset.displayName}')));
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('上传失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingFailure(
+              action: '上传附件',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
   }
 
-  void _showExternalLinkDialog() {
-    final urlCtl = TextEditingController();
-    final titleCtl = TextEditingController();
-    showDialog(
+  Future<void> _showExternalLinkDialog() async {
+    final draft = await showDialog<_ExternalLinkDraft>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('添加外链'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleCtl,
-              decoration: const InputDecoration(labelText: '标题'),
-            ),
-            TextField(
-              controller: urlCtl,
-              decoration: const InputDecoration(labelText: 'URL'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              if (urlCtl.text.isNotEmpty) {
-                await _repo.registerExternalUrl(
-                  externalUrl: urlCtl.text,
-                  title: titleCtl.text.isNotEmpty ? titleCtl.text : null,
-                );
-                _load();
-              }
-            },
-            child: const Text('保存'),
-          ),
-        ],
-      ),
+      builder: (_) => const _ExternalLinkDialog(),
     );
+    if (draft == null) return;
+
+    try {
+      await _repo.registerExternalUrl(
+        externalUrl: draft.url,
+        title: draft.title.isEmpty ? null : draft.title,
+      );
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('外链已添加')));
+    } catch (error, stackTrace) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingFailure(
+              action: '添加外链',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+          ),
+        ),
+      );
+    }
   }
 
   void _showDetail(Asset asset) {
@@ -211,6 +216,75 @@ class _AssetListPageState extends State<AssetListPage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ExternalLinkDraft {
+  const _ExternalLinkDraft({required this.url, required this.title});
+
+  final String url;
+  final String title;
+}
+
+class _ExternalLinkDialog extends StatefulWidget {
+  const _ExternalLinkDialog();
+
+  @override
+  State<_ExternalLinkDialog> createState() => _ExternalLinkDialogState();
+}
+
+class _ExternalLinkDialogState extends State<_ExternalLinkDialog> {
+  final _urlController = TextEditingController();
+  final _titleController = TextEditingController();
+  String? _urlError;
+
+  @override
+  void dispose() {
+    _urlController.dispose();
+    _titleController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('添加外链'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _titleController,
+            decoration: const InputDecoration(labelText: '标题'),
+          ),
+          TextField(
+            controller: _urlController,
+            decoration: InputDecoration(labelText: 'URL', errorText: _urlError),
+            onChanged: (_) {
+              if (_urlError != null) setState(() => _urlError = null);
+            },
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('保存')),
+      ],
+    );
+  }
+
+  void _submit() {
+    final url = _urlController.text.trim();
+    if (url.isEmpty) {
+      setState(() => _urlError = '请输入链接地址');
+      return;
+    }
+    Navigator.pop(
+      context,
+      _ExternalLinkDraft(url: url, title: _titleController.text.trim()),
     );
   }
 }
