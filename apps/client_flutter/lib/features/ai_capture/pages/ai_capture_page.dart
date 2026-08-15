@@ -1,14 +1,25 @@
+import 'package:client_flutter/data/ai/ai_provider.dart';
+import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/device/device_contracts.dart';
+import 'package:client_flutter/features/ai_capture/data/ai_capture_execution_runtime.dart';
 import 'package:client_flutter/features/ai_capture/data/ai_capture_service.dart';
+import 'package:client_flutter/features/ai_capture/data/external_ai_action_committer.dart';
 import 'package:client_flutter/features/ai_capture/models/ai_capture_models.dart';
+import 'package:client_flutter/features/ai_capture/models/cloud_ai_models.dart';
 import 'package:client_flutter/features/ai_capture/widgets/ai_capture_asset_picker.dart';
 import 'package:client_flutter/features/ai_capture/widgets/ai_capture_session_panel.dart';
 import 'package:client_flutter/features/ai_capture/widgets/ai_capture_turn_card.dart';
+import 'package:client_flutter/features/ai_capture/widgets/ai_execution_target_bar.dart';
+import 'package:client_flutter/features/ai_capture/widgets/cloud_ai_consent_dialog.dart';
+import 'package:client_flutter/features/ai_capture/widgets/external_ai_plan_panel.dart';
 import 'package:client_flutter/shared/errors/user_facing_error.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 class AiCapturePage extends StatefulWidget {
-  const AiCapturePage({super.key});
+  const AiCapturePage({super.key, this.executionRuntime});
+
+  final AiCaptureExecutionRuntime? executionRuntime;
 
   @override
   State<AiCapturePage> createState() => _AiCapturePageState();
@@ -22,6 +33,16 @@ class _AiCapturePageState extends State<AiCapturePage> {
   List<AiCaptureSession> _sessions = const [];
   List<AiCaptureAssetContext> _assets = const [];
   AiCaptureSession? _session;
+  late AiCaptureExecutionRuntime _executionRuntime;
+  AiExecutionTarget _executionTarget = AiExecutionTarget.existing;
+  List<DeviceDescriptor> _computeNodes = const [];
+  String? _selectedComputeNodeId;
+  String _computeStatusText = '尚未读取 Device Registry。';
+  ExternalAiPlanResult? _externalPlan;
+  final Map<int, ExternalAiActionCommitResult> _externalCommits = {};
+  final Set<int> _externalBusyIndexes = {};
+  AiProviderKind _cloudProvider = AiProviderKind.ollama;
+  String _cloudModel = '';
   String? _error;
   bool _loading = false;
   bool _initialized = false;
@@ -31,6 +52,12 @@ class _AiCapturePageState extends State<AiCapturePage> {
     super.didChangeDependencies();
     if (_initialized) return;
     _initialized = true;
+    final api = context.read<ApiClient?>();
+    _executionRuntime =
+        widget.executionRuntime ??
+        (api == null
+            ? const UnavailableAiCaptureExecutionRuntime()
+            : DefaultAiCaptureExecutionRuntime(api));
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadInitial());
   }
 
@@ -102,10 +129,43 @@ class _AiCapturePageState extends State<AiCapturePage> {
   }
 
   Widget _buildChat(AiCaptureService service) {
+    final selectedComputeNode = _selectedComputeNode();
+    final composerEnabled = switch (_executionTarget) {
+      AiExecutionTarget.existing => service.supportsCapture && !_loading,
+      AiExecutionTarget.computeNode ||
+      AiExecutionTarget.cloudAi => service.supportsCloudCapture && !_loading,
+    };
     return Column(
       children: [
         _ModeNotice(service: service),
+        AiExecutionTargetBar(
+          target: _executionTarget,
+          computeNodes: _computeNodes,
+          selectedComputeNodeId: selectedComputeNode?.deviceId,
+          computeStatusText: _computeStatusText,
+          onTargetChanged: (target) =>
+              setState(() => _executionTarget = target),
+          onComputeNodeChanged: (deviceId) {
+            setState(() {
+              _selectedComputeNodeId = deviceId;
+              _computeStatusText = _computeNodeStatus(_selectedComputeNode());
+            });
+          },
+        ),
         if (_error != null) _ErrorBanner(message: _error!),
+        if (_externalPlan != null)
+          ExternalAiPlanPanel(
+            plan: _externalPlan!,
+            commits: _externalCommits,
+            busyIndexes: _externalBusyIndexes,
+            onCommit: _commitExternalAction,
+            onUndo: _undoExternalAction,
+            onClose: () => setState(() {
+              _externalPlan = null;
+              _externalCommits.clear();
+              _externalBusyIndexes.clear();
+            }),
+          ),
         Expanded(
           child: _session == null
               ? _EmptyConversation(onStart: _focusComposer)
@@ -130,7 +190,7 @@ class _AiCapturePageState extends State<AiCapturePage> {
         if (_loading) const LinearProgressIndicator(minHeight: 2),
         _Composer(
           controller: _textController,
-          enabled: service.supportsCapture && !_loading,
+          enabled: composerEnabled,
           selectedAssets: _assets
               .where((asset) => _selectedAssetIds.contains(asset.assetId))
               .toList(growable: false),
@@ -165,6 +225,7 @@ class _AiCapturePageState extends State<AiCapturePage> {
       });
       _scrollToBottom();
     });
+    await _loadExecutionTargets();
   }
 
   Future<void> _refreshSessions({String? selectCaptureId}) async {
@@ -194,6 +255,17 @@ class _AiCapturePageState extends State<AiCapturePage> {
       return;
     }
     final assetIds = _selectedAssetIds.toList(growable: false);
+    switch (_executionTarget) {
+      case AiExecutionTarget.existing:
+        await _sendExistingMessage(text, assetIds);
+      case AiExecutionTarget.computeNode:
+        await _sendComputeNodeMessage(text, assetIds);
+      case AiExecutionTarget.cloudAi:
+        await _sendCloudAiMessage(text);
+    }
+  }
+
+  Future<void> _sendExistingMessage(String text, List<String> assetIds) async {
     await _run(() async {
       final service = context.read<AiCaptureService>();
       String captureId;
@@ -211,6 +283,80 @@ class _AiCapturePageState extends State<AiCapturePage> {
       _textController.clear();
       _selectedAssetIds.clear();
       await _refreshSessions(selectCaptureId: captureId);
+    });
+  }
+
+  Future<void> _sendComputeNodeMessage(
+    String text,
+    List<String> assetIds,
+  ) async {
+    final target = _selectedComputeNode();
+    if (target == null) {
+      setState(() => _error = '请先选择一个 Trusted Compute Node。');
+      return;
+    }
+    await _run(() async {
+      try {
+        final plan = await _executionRuntime.planOnComputeNode(
+          target: target,
+          text: text,
+          assetIds: assetIds,
+        );
+        if (!mounted) return;
+        setState(() {
+          _externalPlan = plan;
+          _externalCommits.clear();
+          _textController.clear();
+          _selectedAssetIds.clear();
+          _computeStatusText = '${target.displayName} 已返回加密 Job 结果。';
+        });
+      } on ComputeNodeUnavailable catch (error) {
+        if (mounted) {
+          setState(() {
+            _computeStatusText = '${error.message} 不会自动转 Cloud AI。';
+          });
+        }
+        rethrow;
+      }
+    });
+  }
+
+  Future<void> _sendCloudAiMessage(String text) async {
+    final decision = await showCloudAiConsentDialog(
+      context,
+      inputText: text,
+      selectedAssetCount: _selectedAssetIds.length,
+      initialProvider: _cloudProvider,
+      initialModel: _cloudModel,
+    );
+    if (decision == null || !mounted) return;
+    final stamp = DateTime.now().toUtc().microsecondsSinceEpoch;
+    final request = CloudAiInferenceRequest(
+      requestId: 'cloud-$stamp',
+      disclosure: CloudAiDisclosureScope(
+        consentId: 'consent-$stamp',
+        granted: true,
+        provider: decision.provider,
+        model: decision.model,
+        allowedDataTypes: {'capture_input'},
+        reason: '用户本次明确授权 Cloud AI 处理当前输入',
+        includesAttachments: false,
+        includesHistory: false,
+      ),
+      input: AiContextItem(dataType: 'capture_input', content: text),
+    );
+    setState(() {
+      _cloudProvider = decision.provider;
+      _cloudModel = decision.model;
+    });
+    await _run(() async {
+      final plan = await _executionRuntime.planOnCloud(request);
+      if (!mounted) return;
+      setState(() {
+        _externalPlan = plan;
+        _externalCommits.clear();
+        _textController.clear();
+      });
     });
   }
 
@@ -279,6 +425,9 @@ class _AiCapturePageState extends State<AiCapturePage> {
     setState(() {
       _session = null;
       _selectedAssetIds.clear();
+      _externalPlan = null;
+      _externalCommits.clear();
+      _externalBusyIndexes.clear();
       _error = null;
     });
   }
@@ -322,6 +471,93 @@ class _AiCapturePageState extends State<AiCapturePage> {
       _newSession();
     } else {
       await _openSession(selectedId);
+    }
+  }
+
+  Future<void> _loadExecutionTargets() async {
+    try {
+      final snapshot = await _executionRuntime.loadTargets();
+      if (!mounted) return;
+      setState(() {
+        _computeNodes = snapshot.computeNodes;
+        _selectedComputeNodeId =
+            snapshot.defaultComputeNode?.deviceId ??
+            (snapshot.computeNodes.isEmpty
+                ? null
+                : snapshot.computeNodes.first.deviceId);
+        _computeStatusText = _computeNodeStatus(_selectedComputeNode());
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _computeNodes = const [];
+        _selectedComputeNodeId = null;
+        _computeStatusText = 'Device Registry 不可用：$error；不会自动转 Cloud AI。';
+      });
+    }
+  }
+
+  DeviceDescriptor? _selectedComputeNode() {
+    final id = _selectedComputeNodeId;
+    if (id == null) return null;
+    for (final device in _computeNodes) {
+      if (device.deviceId == id) return device;
+    }
+    return null;
+  }
+
+  String _computeNodeStatus(DeviceDescriptor? device) {
+    if (device == null) return '没有可用的 Compute Node。';
+    final lastSeen = device.lastSeenAt;
+    if (lastSeen == null) {
+      return '${device.displayName} 尚未上报 last_seen；当前合同无法判定在线状态。不会自动转 Cloud AI。';
+    }
+    return '${device.displayName} 最近心跳 ${lastSeen.toLocal()}；当前 Device Registry 合同未提供 online 布尔状态。不会自动转 Cloud AI。';
+  }
+
+  Future<void> _commitExternalAction(int index) async {
+    final plan = _externalPlan;
+    if (plan == null || index < 0 || index >= plan.actions.length) return;
+    setState(() => _externalBusyIndexes.add(index));
+    try {
+      final result = await _executionRuntime.commit(plan.actions[index]);
+      if (mounted) setState(() => _externalCommits[index] = result);
+    } catch (error, stackTrace) {
+      if (mounted) {
+        setState(
+          () => _error = userFacingFailure(
+            action: '提交 AI 候选动作',
+            error: error,
+            stackTrace: stackTrace,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _externalBusyIndexes.remove(index));
+    }
+  }
+
+  Future<void> _undoExternalAction(int index) async {
+    final committed = _externalCommits[index];
+    if (committed == null) return;
+    setState(() => _externalBusyIndexes.add(index));
+    try {
+      final result = await _executionRuntime.undo(committed.undoToken);
+      if (mounted && result.undone > 0) {
+        setState(() => _externalCommits.remove(index));
+      }
+    } catch (error, stackTrace) {
+      if (mounted) {
+        setState(
+          () => _error = userFacingFailure(
+            action: '撤销 AI 候选动作',
+            error: error,
+            stackTrace: stackTrace,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _externalBusyIndexes.remove(index));
     }
   }
 
