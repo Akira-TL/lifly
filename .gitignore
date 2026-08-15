@@ -74,3 +74,5 @@ infra/powersync/
 .codegraph/
 
 testdata/
+# ─── Runtime gateway activation ──────────────────────────────────────────────
+infra/gateway/sites-enabled/lifly-https.conf
