@@ -56,6 +56,16 @@ class ApiClient {
     return response.data as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>?> getOptional(
+    String path, {
+    Map<String, dynamic>? params,
+  }) async {
+    final response = await _dio.get(path, queryParameters: params);
+    final data = response.data;
+    if (data == null) return null;
+    return (data as Map).cast<String, dynamic>();
+  }
+
   Future<Map<String, dynamic>> post(
     String path, {
     Map<String, dynamic>? data,

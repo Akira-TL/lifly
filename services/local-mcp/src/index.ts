@@ -6,6 +6,15 @@ import type { LocalMcpRequest } from "./types.js";
 
 export { LocalMcpServer } from "./server.js";
 export { DesktopLocalCoreProcessTransport } from "./desktop-core-transport.js";
+export { HttpAiRelayClient } from "./ai-relay-client.js";
+export type { AccessTokenProvider, AiRelayClient, HttpAiRelayClientOptions } from "./ai-relay-client.js";
+export { LocalCoreComputeNodePlanner } from "./compute-node-planner.js";
+export { DeviceAiJobCipher } from "./device-ai-job-cipher.js";
+export type { DeviceAiJobCipherOptions, DevicePublicKeyResolver } from "./device-ai-job-cipher.js";
+export { EncryptedAiRelayWorker } from "./encrypted-relay-worker.js";
+export type { EncryptedRelayWorkerStatus } from "./encrypted-relay-worker.js";
+export { createComputeNodeRelayRuntime } from "./compute-node-runtime.js";
+export type { ComputeNodeRelayRuntime, ComputeNodeRelayRuntimeOptions } from "./compute-node-runtime.js";
 export { EncryptedAiJobEngine, RetryableEncryptedAiJobError } from "./encrypted-job-engine.js";
 export type {
   DecryptedAiJobExecutionContext,

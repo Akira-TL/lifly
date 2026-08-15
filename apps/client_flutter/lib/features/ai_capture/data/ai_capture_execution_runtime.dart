@@ -1,10 +1,13 @@
 import 'package:client_flutter/data/ai/ai_provider.dart';
+import 'package:client_flutter/data/ai/device_ai_job_cipher.dart';
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/auth/auth_session.dart';
 import 'package:client_flutter/data/auth/secure_secret_store.dart';
 import 'package:client_flutter/data/auth/secure_session_store.dart';
 import 'package:client_flutter/data/device/device_contracts.dart';
+import 'package:client_flutter/data/device/device_identity_store.dart';
 import 'package:client_flutter/data/device/device_repository.dart';
+import 'package:client_flutter/features/ai_capture/data/compute_node_plan_client.dart';
 import 'package:client_flutter/features/ai_capture/data/external_ai_action_committer.dart';
 import 'package:client_flutter/features/ai_capture/data/lifly_cloud_ai_provider.dart';
 import 'package:client_flutter/features/ai_capture/models/cloud_ai_models.dart';
@@ -118,19 +121,30 @@ abstract interface class AiCaptureExecutionRuntime {
 }
 
 class DefaultAiCaptureExecutionRuntime implements AiCaptureExecutionRuntime {
-  DefaultAiCaptureExecutionRuntime(
+  factory DefaultAiCaptureExecutionRuntime(
     ApiClient api, {
-    ComputeNodePlanClient compute = const UnavailableComputeNodePlanClient(),
-  }) : this._(
-         sessions: SecureAuthSessionStore(FlutterSecureSecretStore()),
-         devices: DeviceRepository(ApiClientDeviceTransport(api)),
-         cloud: LiflyCloudAiProvider(transport: ApiCloudAiTransport(api)),
-         committer: ExternalAiActionCommitter(
-           ApiExternalAiActionTransport(api),
-         ),
-         compute: compute,
-         api: api,
-       );
+    AuthSessionStore? sessions,
+    ComputeNodePlanClient? compute,
+  }) {
+    final resolvedSessions =
+        sessions ?? SecureAuthSessionStore(FlutterSecureSecretStore());
+    final resolvedCompute =
+        compute ??
+        RelayComputeNodePlanClient(
+          api: api,
+          cipher: DeviceAiJobCipher(
+            SecureDeviceIdentityStore(FlutterSecureSecretStore()),
+          ),
+        );
+    return DefaultAiCaptureExecutionRuntime._(
+      sessions: resolvedSessions,
+      devices: DeviceRepository(ApiClientDeviceTransport(api)),
+      cloud: LiflyCloudAiProvider(transport: ApiCloudAiTransport(api)),
+      committer: ExternalAiActionCommitter(ApiExternalAiActionTransport(api)),
+      compute: resolvedCompute,
+      api: api,
+    );
+  }
 
   DefaultAiCaptureExecutionRuntime.forTesting({
     required AuthSessionStore sessions,
