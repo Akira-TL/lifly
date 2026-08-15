@@ -1,6 +1,7 @@
 import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
+import 'package:client_flutter/data/crypto/account_e2ee_runtime.dart';
 import 'package:client_flutter/data/repositories/asset_repository.dart';
 import 'package:client_flutter/data/repositories/memo_repository.dart';
 import 'package:client_flutter/domain/entities/memo.dart';
@@ -37,12 +38,14 @@ class _MemoDetailPageState extends State<MemoDetailPage> {
     super.initState();
     final api = context.read<ApiClient>();
     _dataMode = context.read<LiflyDataMode>();
+    final e2ee = context.read<AccountE2eeRuntime>();
     _repo = MemoRepository(
       api,
       localCore: context.read<LocalCoreBridge>(),
       dataMode: _dataMode,
+      assetE2ee: e2ee,
     );
-    _assetRepo = AssetRepository(api);
+    _assetRepo = AssetRepository(api, e2ee: e2ee);
     _memo = widget.initialMemo;
     _assets = widget.initialMemo?.assets ?? const [];
     _load();
@@ -55,10 +58,11 @@ class _MemoDetailPageState extends State<MemoDetailPage> {
     });
     try {
       final memo = await _repo.get(widget.memoId);
+      final assets = await _repo.listAssets(widget.memoId);
       if (!mounted) return;
       setState(() {
         _memo = memo;
-        _assets = memo.assets;
+        _assets = assets;
       });
     } catch (error, stackTrace) {
       if (!mounted) return;

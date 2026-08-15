@@ -5,10 +5,53 @@ import 'package:client_flutter/app/theme/theme_registry.dart';
 import 'package:client_flutter/app/theme/theme_runtime.dart';
 import 'package:client_flutter/app/theme/themes/lifly_test_theme.dart';
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/features/settings/account_device_runtime.dart';
 import 'package:client_flutter/features/settings/settings_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+
+class _StubAccountDeviceRuntime implements AccountDeviceRuntime {
+  @override
+  bool get passwordAuthAvailable => false;
+
+  @override
+  Future<AccountDeviceSnapshot> load() async => const AccountDeviceSnapshot();
+
+  @override
+  Future<AccountDeviceSnapshot> login({
+    required String phone,
+    required String password,
+  }) async => const AccountDeviceSnapshot();
+
+  @override
+  Future<AccountDeviceSnapshot> logout() async => const AccountDeviceSnapshot();
+
+  @override
+  Future<AccountDeviceSnapshot> refreshSession() async =>
+      const AccountDeviceSnapshot();
+
+  @override
+  Future<AccountDeviceSnapshot> register({
+    required String phone,
+    required String password,
+    String? displayName,
+  }) async => const AccountDeviceSnapshot();
+
+  @override
+  Future<AccountDeviceSnapshot> renameDevice(
+    String deviceId,
+    String displayName,
+  ) async => const AccountDeviceSnapshot();
+
+  @override
+  Future<AccountDeviceSnapshot> revokeDevice(String deviceId) async =>
+      const AccountDeviceSnapshot();
+
+  @override
+  Future<AccountDeviceSnapshot> setDefaultComputeNode(String deviceId) async =>
+      const AccountDeviceSnapshot();
+}
 
 class _MemoryThemePreferenceStore implements ThemePreferenceStore {
   @override
@@ -41,6 +84,9 @@ void main() {
             value: ApiClient(baseUrl: 'http://localhost/api/v1'),
           ),
           Provider<LiflyDataMode>.value(value: LiflyDataMode.local),
+          Provider<AccountDeviceRuntime>.value(
+            value: _StubAccountDeviceRuntime(),
+          ),
         ],
         child: const MaterialApp(home: SettingsPage()),
       ),

@@ -3,6 +3,7 @@ import 'package:client_flutter/data/crypto/account_data_key.dart';
 import 'package:client_flutter/data/crypto/encrypted_envelope.dart';
 import 'package:client_flutter/data/repositories/asset_repository.dart';
 import 'package:client_flutter/domain/entities/asset.dart';
+import 'package:client_flutter/domain/entities/memo.dart';
 import 'package:client_flutter/features/asset/data/asset_e2ee_cipher.dart';
 import 'package:client_flutter/features/asset/data/asset_e2ee_sync_adapter.dart';
 import 'package:dio/dio.dart';
@@ -287,6 +288,16 @@ class _FakeAssetE2eeCoordinator implements AssetE2eeCoordinator {
   Future<void> tombstoneMemoAssetRef({
     required String refId,
     required int revision,
+    required DateTime now,
+  }) async {}
+
+  @override
+  Future<List<MemoAssetRef>> listMemoAssetRefs(String memoId) async => const [];
+
+  @override
+  Future<void> removeMemoAssetRef({
+    required String memoId,
+    required String assetId,
     required DateTime now,
   }) async {}
 

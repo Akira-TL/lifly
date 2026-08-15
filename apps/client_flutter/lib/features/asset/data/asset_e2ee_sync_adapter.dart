@@ -4,6 +4,7 @@ import 'package:client_flutter/data/crypto/account_data_key.dart';
 import 'package:client_flutter/data/crypto/encrypted_envelope.dart';
 import 'package:client_flutter/data/powersync/encrypted_sync_store.dart';
 import 'package:client_flutter/domain/entities/asset.dart';
+import 'package:client_flutter/domain/entities/memo.dart';
 import 'package:client_flutter/features/asset/data/asset_e2ee_cipher.dart';
 
 class AssetKeyRotationResult {
@@ -86,6 +87,14 @@ abstract interface class AssetE2eeCoordinator {
   Future<void> tombstoneMemoAssetRef({
     required String refId,
     required int revision,
+    required DateTime now,
+  });
+
+  Future<List<MemoAssetRef>> listMemoAssetRefs(String memoId);
+
+  Future<void> removeMemoAssetRef({
+    required String memoId,
+    required String assetId,
     required DateTime now,
   });
 
@@ -386,6 +395,51 @@ class PowerSyncAssetE2eeCoordinator implements AssetE2eeCoordinator {
     );
     await store.db.execute('DELETE FROM memo_asset_refs WHERE id = ?', [refId]);
     await _recordProjectionState(envelope);
+  }
+
+  @override
+  Future<List<MemoAssetRef>> listMemoAssetRefs(String memoId) async {
+    final rows = await store.db.getAll(
+      'SELECT r.id AS ref_id, r.memo_id, r.asset_id, r.ref_type, r.position_hint, '
+      'a.* FROM memo_asset_refs r JOIN assets a ON a.id = r.asset_id '
+      'WHERE r.memo_id = ? AND a.user_id = ? AND a.status = ? '
+      'ORDER BY r.created_at ASC',
+      [memoId, accountId, 'active'],
+    );
+    return rows
+        .map(
+          (row) => MemoAssetRef(
+            id: row['ref_id'] as String,
+            memoId: row['memo_id'] as String,
+            assetId: row['asset_id'] as String,
+            refType: row['ref_type'] as String? ?? 'attachment',
+            positionHint: row['position_hint'] as String?,
+            asset: _assetFromRow(row),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> removeMemoAssetRef({
+    required String memoId,
+    required String assetId,
+    required DateTime now,
+  }) async {
+    final rows = await store.db.getAll(
+      'SELECT id FROM memo_asset_refs WHERE memo_id = ? AND asset_id = ?',
+      [memoId, assetId],
+    );
+    for (final row in rows) {
+      final refId = row['id'] as String;
+      final state = await _entityState(refId);
+      if (state == null) continue;
+      await tombstoneMemoAssetRef(
+        refId: refId,
+        revision: state.revision + 1,
+        now: now,
+      );
+    }
   }
 
   @override

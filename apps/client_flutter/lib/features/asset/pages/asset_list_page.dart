@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/repositories/asset_repository.dart';
+import 'package:client_flutter/data/crypto/account_e2ee_runtime.dart';
 import 'package:client_flutter/domain/entities/asset.dart';
 import 'package:client_flutter/features/asset/data/asset_file_picker.dart';
 import 'package:client_flutter/shared/errors/user_facing_error.dart';
@@ -26,7 +27,10 @@ class _AssetListPageState extends State<AssetListPage> {
   @override
   void initState() {
     super.initState();
-    _repo = AssetRepository(context.read<ApiClient>());
+    _repo = AssetRepository(
+      context.read<ApiClient>(),
+      e2ee: context.read<AccountE2eeRuntime>(),
+    );
     _load();
   }
 

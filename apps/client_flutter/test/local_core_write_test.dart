@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:client_flutter/data/local_core/local_core_context.dart';
 import 'package:client_flutter/data/local_core/local_core_ids.dart';
 import 'package:client_flutter/data/local_core/write/local_core_audit_log_writer.dart';
@@ -93,10 +91,13 @@ void main() {
       expect(call.parameters[4], 'memo.create');
       expect(call.parameters[5], 'memo');
       expect(call.parameters[6], 'memo_1');
-      expect(call.parameters[7], jsonEncode({'title': 'old'}));
-      expect(call.parameters[8], jsonEncode({'title': 'new'}));
+      expect(call.parameters[7], isNull);
+      expect(call.parameters[8], isNull);
       expect(call.parameters[9], 'localMcp');
-      expect(call.parameters[10], 'local write test');
+      expect(call.parameters[10], isNull);
+      expect(call.parameters.join('|'), isNot(contains('old')));
+      expect(call.parameters.join('|'), isNot(contains('new')));
+      expect(call.parameters.join('|'), isNot(contains('local write test')));
       expect(call.parameters[11], 'memo_create');
       expect(call.parameters[12], 'request_1');
       expect(call.parameters[13], fixedNow.toIso8601String());

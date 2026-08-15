@@ -9,6 +9,7 @@ import 'package:client_flutter/data/powersync/powersync_credentials_service.dart
 import 'package:client_flutter/data/powersync/sync_push_service.dart';
 import 'package:client_flutter/data/powersync/sync_service.dart';
 import 'package:client_flutter/features/import_export/widgets/import_export_settings_section.dart';
+import 'package:client_flutter/features/settings/account_device_runtime.dart';
 import 'package:client_flutter/features/settings/widgets/account_device_settings_section.dart';
 import 'package:client_flutter/features/settings/widgets/theme_settings_section.dart';
 import 'package:flutter/material.dart';
@@ -220,7 +221,10 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           const ThemeSettingsSection(),
           const SizedBox(height: 12),
-          AccountDeviceSettingsSection(api: api),
+          AccountDeviceSettingsSection(
+            api: api,
+            runtime: context.read<AccountDeviceRuntime>(),
+          ),
           const SizedBox(height: 12),
           _ApiDiagnosticsCard(
             baseUrl: api.baseUrl,
@@ -403,14 +407,8 @@ class _DataModeCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _StatusRow(label: '当前模式', value: dataMode.label),
-            const _StatusRow(
-              label: '本地可用',
-              value: '备忘、任务、记账与 AI 对话',
-            ),
-            const _StatusRow(
-              label: '云端能力',
-              value: '跨端同步、导入与导出',
-            ),
+            const _StatusRow(label: '本地可用', value: '备忘、任务、记账与 AI 对话'),
+            const _StatusRow(label: '云端能力', value: '跨端同步、导入与导出'),
           ],
         ),
       ),
@@ -469,10 +467,7 @@ class _AiAuditSummaryCard extends StatelessWidget {
               Text(error!, style: TextStyle(color: theme.colorScheme.error)),
             ],
             const SizedBox(height: 8),
-            Text(
-              '这里只展示聚合数量，不展示用户输入的原始内容。',
-              style: theme.textTheme.bodySmall,
-            ),
+            Text('这里只展示聚合数量，不展示用户输入的原始内容。', style: theme.textTheme.bodySmall),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: checking ? null : onCheck,
@@ -561,17 +556,10 @@ class _PowerSyncCredentialsCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            _StatusRow(
-              label: '服务地址',
-              value: credentials?.endpoint ?? '未检查',
-            ),
+            _StatusRow(label: '服务地址', value: credentials?.endpoint ?? '未检查'),
             _StatusRow(label: '账户', value: credentials?.userId ?? '未检查'),
-            _StatusRow(
-              label: '授权状态',
-              value: credentials?.tokenStatus ?? '未获取',
-            ),
-            if (expiresAt != null)
-              _StatusRow(label: '授权有效期', value: expiresAt),
+            _StatusRow(label: '授权状态', value: credentials?.tokenStatus ?? '未获取'),
+            if (expiresAt != null) _StatusRow(label: '授权有效期', value: expiresAt),
             _StatusRow(label: '连接状态', value: connectionDiagnostics.statusLabel),
             if (connectedAt != null)
               _StatusRow(label: '连接时间', value: connectedAt),
@@ -692,24 +680,15 @@ class _LocalMcpStatusCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _StatusRow(label: '运行状态', value: localCoreStatus),
-            const _StatusRow(
-              label: '离线可用',
-              value: '备忘、任务、记账与 AI 对话',
-            ),
-            const _StatusRow(
-              label: '恢复联网',
-              value: '连接后继续同步本地变更',
-            ),
+            const _StatusRow(label: '离线可用', value: '备忘、任务、记账与 AI 对话'),
+            const _StatusRow(label: '恢复联网', value: '连接后继续同步本地变更'),
             if (checkedAt != null) _StatusRow(label: '检查时间', value: checkedAt),
             if (error != null) ...[
               const SizedBox(height: 8),
               Text(error!, style: TextStyle(color: theme.colorScheme.error)),
             ],
             const SizedBox(height: 8),
-            Text(
-              '本地模式下可在断网时继续记录，恢复连接后再同步。',
-              style: theme.textTheme.bodySmall,
-            ),
+            Text('本地模式下可在断网时继续记录，恢复连接后再同步。', style: theme.textTheme.bodySmall),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: checking ? null : onCheck,

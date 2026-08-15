@@ -6,19 +6,27 @@ import 'package:client_flutter/data/local_core/local_core_models.dart';
 import 'package:client_flutter/data/local_core/local_home_overview_builder.dart';
 import 'package:client_flutter/data/local_core/memo/powersync_memo_store.dart';
 import 'package:client_flutter/data/local_core/task/powersync_task_store.dart';
+import 'package:client_flutter/data/local_core/write/local_core_audit_log_writer.dart';
 import 'package:client_flutter/data/powersync/sync_service.dart';
 
 class PowerSyncLocalCoreBridge implements LocalCoreBridge {
   final SyncService syncService;
   final String version;
+  final AuditPayloadProtector? auditPayloadProtector;
+  late final LocalCoreAuditLogWriter _auditLogWriter = LocalCoreAuditLogWriter(
+    payloadProtector: auditPayloadProtector,
+  );
   late final PowerSyncExpenseStore _expenseStore = PowerSyncExpenseStore(
     syncService: syncService,
+    auditLogWriter: _auditLogWriter,
   );
   late final PowerSyncMemoStore _memoStore = PowerSyncMemoStore(
     syncService: syncService,
+    auditLogWriter: _auditLogWriter,
   );
   late final PowerSyncTaskStore _taskStore = PowerSyncTaskStore(
     syncService: syncService,
+    auditLogWriter: _auditLogWriter,
   );
   late final PowerSyncCaptureStore _captureStore = PowerSyncCaptureStore(
     syncService: syncService,
@@ -27,7 +35,11 @@ class PowerSyncLocalCoreBridge implements LocalCoreBridge {
     expenseStore: _expenseStore,
   );
 
-  PowerSyncLocalCoreBridge({required this.syncService, this.version = '0.2.5'});
+  PowerSyncLocalCoreBridge({
+    required this.syncService,
+    this.auditPayloadProtector,
+    this.version = '0.2.5',
+  });
 
   @override
   Future<LocalCoreHealth> health() async {

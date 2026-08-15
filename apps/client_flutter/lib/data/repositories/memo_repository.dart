@@ -5,13 +5,26 @@ import 'package:client_flutter/data/local_core/local_core_context.dart';
 import 'package:client_flutter/data/local_core/local_core_models.dart';
 import 'package:client_flutter/data/repositories/paged_result.dart';
 import 'package:client_flutter/domain/entities/memo.dart';
+import 'package:client_flutter/features/asset/data/asset_e2ee_sync_adapter.dart';
+import 'package:uuid/uuid.dart';
 
 class MemoRepository {
   final ApiClient api;
   final LocalCoreBridge? localCore;
   final LiflyDataMode dataMode;
+  final AssetE2eeCoordinator? assetE2ee;
+  final String Function() _newAssetRefId;
+  final DateTime Function() _now;
 
-  MemoRepository(this.api, {this.localCore, this.dataMode = LiflyDataMode.api});
+  MemoRepository(
+    this.api, {
+    this.localCore,
+    this.dataMode = LiflyDataMode.api,
+    this.assetE2ee,
+    String Function()? newAssetRefId,
+    DateTime Function()? now,
+  }) : _newAssetRefId = newAssetRefId ?? const Uuid().v4,
+       _now = now ?? DateTime.now;
 
   bool get _useLocalCore =>
       dataMode == LiflyDataMode.local && localCore != null;
@@ -316,13 +329,13 @@ class MemoRepository {
   }
 
   Future<List<MemoAssetRef>> listAssets(String memoId) async {
-    if (_useLocalCore) return const [];
-
-    final res = await api.get('/memos/$memoId/assets');
-    final items = res['data']['assets'] as List? ?? const [];
-    return items
-        .map((item) => MemoAssetRef.fromJson(item as Map<String, dynamic>))
-        .toList(growable: false);
+    final coordinator = assetE2ee;
+    if (coordinator == null) {
+      throw StateError(
+        'Memo attachment E2EE runtime is not configured; plaintext relation fallback is disabled',
+      );
+    }
+    return coordinator.listMemoAssetRefs(memoId);
   }
 
   Future<List<MemoAssetRef>> bindAsset(
@@ -330,26 +343,34 @@ class MemoRepository {
     String assetId, {
     String refType = 'attachment',
   }) async {
-    if (_useLocalCore) {
-      throw UnsupportedError('本地模式暂不支持附件引用，请连接云端服务后重试。');
+    final coordinator = assetE2ee;
+    if (coordinator == null) {
+      throw StateError(
+        'Memo attachment E2EE runtime is not configured; plaintext relation fallback is disabled',
+      );
     }
-
-    final res = await api.post(
-      '/memos/$memoId/assets',
-      data: {'asset_id': assetId, 'ref_type': refType},
+    await coordinator.syncMemoAssetRef(
+      refId: _newAssetRefId(),
+      memoId: memoId,
+      assetId: assetId,
+      refType: refType,
+      now: _now().toUtc(),
     );
-    final items = res['data']['assets'] as List? ?? const [];
-    return items
-        .map((item) => MemoAssetRef.fromJson(item as Map<String, dynamic>))
-        .toList(growable: false);
+    return coordinator.listMemoAssetRefs(memoId);
   }
 
   Future<void> unbindAsset(String memoId, String assetId) async {
-    if (_useLocalCore) {
-      throw UnsupportedError('本地模式暂不支持附件引用，请连接云端服务后重试。');
+    final coordinator = assetE2ee;
+    if (coordinator == null) {
+      throw StateError(
+        'Memo attachment E2EE runtime is not configured; plaintext relation fallback is disabled',
+      );
     }
-
-    await api.delete('/memos/$memoId/assets/$assetId');
+    await coordinator.removeMemoAssetRef(
+      memoId: memoId,
+      assetId: assetId,
+      now: _now().toUtc(),
+    );
   }
 
   Map<String, dynamic> _classificationToMap(LocalMemoClassification item) {

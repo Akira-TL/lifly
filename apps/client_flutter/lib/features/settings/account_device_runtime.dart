@@ -7,6 +7,7 @@ import 'package:client_flutter/data/auth/secure_session_store.dart';
 import 'package:client_flutter/data/device/device_contracts.dart';
 import 'package:client_flutter/data/device/device_identity_store.dart';
 import 'package:client_flutter/data/device/device_repository.dart';
+import 'package:client_flutter/data/crypto/account_e2ee_runtime.dart';
 import 'package:flutter/foundation.dart';
 
 class AccountDeviceSnapshot {
@@ -52,6 +53,7 @@ class DefaultAccountDeviceRuntime implements AccountDeviceRuntime {
   final AuthSessionStore _sessions;
   final AuthRepository _auth;
   final DeviceRepository _devices;
+  final AccountE2eeRuntime? _e2ee;
   final bool _passwordAuthAvailable;
 
   DefaultAccountDeviceRuntime(
@@ -60,12 +62,14 @@ class DefaultAccountDeviceRuntime implements AccountDeviceRuntime {
     SecretStore? secrets,
     DeviceIdentityStore? deviceIdentity,
     DeviceClientProfile? deviceProfile,
+    AccountE2eeRuntime? e2ee,
   }) : this._(
          api,
          pake,
          secrets ?? FlutterSecureSecretStore(),
          deviceIdentity,
          deviceProfile,
+         e2ee,
        );
 
   DefaultAccountDeviceRuntime._(
@@ -74,7 +78,9 @@ class DefaultAccountDeviceRuntime implements AccountDeviceRuntime {
     SecretStore secrets,
     DeviceIdentityStore? deviceIdentity,
     DeviceClientProfile? deviceProfile,
+    AccountE2eeRuntime? e2ee,
   ) : _sessions = SecureAuthSessionStore(secrets),
+      _e2ee = e2ee,
       _passwordAuthAvailable = pake is! UnavailableOpaqueClientAdapter,
       _devices = DeviceRepository(ApiClientDeviceTransport(api)),
       _auth = AuthRepository(
@@ -105,11 +111,12 @@ class DefaultAccountDeviceRuntime implements AccountDeviceRuntime {
     String? displayName,
   }) async {
     _requirePasswordAuth();
-    await _auth.register(
+    final completion = await _auth.register(
       phone: phone,
       password: password,
       displayName: displayName,
     );
+    await _e2ee?.initializeAfterRegistration(completion);
     return load();
   }
 
@@ -119,7 +126,8 @@ class DefaultAccountDeviceRuntime implements AccountDeviceRuntime {
     required String password,
   }) async {
     _requirePasswordAuth();
-    await _auth.login(phone: phone, password: password);
+    final completion = await _auth.login(phone: phone, password: password);
+    await _e2ee?.initializeAfterLogin(completion);
     return load();
   }
 
@@ -131,6 +139,7 @@ class DefaultAccountDeviceRuntime implements AccountDeviceRuntime {
 
   @override
   Future<AccountDeviceSnapshot> logout() async {
+    await _e2ee?.destroyLocalKeyForCurrentSession();
     await _auth.revoke();
     return const AccountDeviceSnapshot();
   }

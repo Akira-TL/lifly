@@ -21,15 +21,18 @@ import 'package:client_flutter/app/theme/themes/lifly_test_theme.dart';
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/auth/secure_secret_store.dart';
 import 'package:client_flutter/data/auth/secure_session_store.dart';
+import 'package:client_flutter/data/crypto/account_e2ee_runtime.dart';
 import 'package:client_flutter/data/local_core/fake_local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/powersync_local_core_bridge.dart';
+import 'package:client_flutter/data/powersync/password_key_envelope_service.dart';
 import 'package:client_flutter/data/powersync/powersync_connection_coordinator.dart';
 import 'package:client_flutter/data/powersync/powersync_credentials_service.dart';
 import 'package:client_flutter/data/powersync/sync_service.dart';
 import 'package:client_flutter/features/ai_capture/data/ai_capture_service.dart';
+import 'package:client_flutter/features/settings/account_device_runtime.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   StartupMetrics.markDartEntrypoint();
   final useVisualFixtures = kDebugMode && AppConfig.visualFixtures;
@@ -38,6 +41,19 @@ void main() {
   final api = ApiClient(
     baseUrl: AppConfig.apiBaseUrl,
     accessTokenProvider: sessions.readAccessToken,
+  );
+  final syncService = SyncService(api: api);
+  final e2ee = AccountE2eeRuntime(
+    syncService: syncService,
+    sessions: sessions,
+    secrets: secrets,
+    passwordEnvelopes: PasswordKeyEnvelopeService(api),
+  );
+  await e2ee.restoreFromSession();
+  final accountDeviceRuntime = DefaultAccountDeviceRuntime(
+    api,
+    secrets: secrets,
+    e2ee: e2ee,
   );
   runApp(
     MultiProvider(
@@ -75,10 +91,9 @@ void main() {
         Provider<SecretStore>.value(value: secrets),
         Provider<AuthSessionStore>.value(value: sessions),
         Provider<ApiClient>.value(value: api),
-        Provider<SyncService>(
-          create: (context) => SyncService(api: context.read<ApiClient>()),
-          dispose: (_, service) => service.dispose(),
-        ),
+        Provider<SyncService>.value(value: syncService),
+        Provider<AccountE2eeRuntime>.value(value: e2ee),
+        Provider<AccountDeviceRuntime>.value(value: accountDeviceRuntime),
         Provider<PowerSyncConnectionCoordinator>(
           create: (context) => PowerSyncConnectionCoordinator(
             credentialsService: PowerSyncCredentialsService(
@@ -87,14 +102,17 @@ void main() {
             syncService: context.read<SyncService>(),
           ),
         ),
-        ProxyProvider<SyncService, LocalCoreBridge>(
-          update: (_, syncService, previous) {
+        ProxyProvider2<SyncService, AccountE2eeRuntime, LocalCoreBridge>(
+          update: (_, syncService, e2eeRuntime, previous) {
             if (useVisualFixtures) {
               return previous is VisualFixtureLocalCoreBridge
                   ? previous
                   : VisualFixtureLocalCoreBridge();
             }
-            return PowerSyncLocalCoreBridge(syncService: syncService);
+            return PowerSyncLocalCoreBridge(
+              syncService: syncService,
+              auditPayloadProtector: e2eeRuntime,
+            );
           },
         ),
         ProxyProvider3<
