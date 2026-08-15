@@ -1,7 +1,48 @@
 import { describe, expect, it } from "vitest";
-import { FakeLocalCoreBridge, localMcpContext } from "../src/index.js";
+import { DesktopLocalCoreBridge, FakeLocalCoreBridge, localMcpContext } from "../src/index.js";
 
 const context = localMcpContext("test_tool");
+
+describe("DesktopLocalCoreBridge", () => {
+  it("delegates health and business calls through the configured desktop transport", async () => {
+    const calls: Array<{ method: string; input: unknown }> = [];
+    const transport = {
+      async invoke(request: { method: string; input: unknown }) {
+        calls.push({ method: request.method, input: request.input });
+        if (request.method === "health") {
+          return {
+            status: "ok",
+            mode: "desktop_bridge",
+            version: "desktop-host.test",
+            runtime: "desktop",
+            detail: "fixture transport",
+          };
+        }
+        if (request.method === "memo_create") {
+          return {
+            id: "desktop_memo_1",
+            type: "memo",
+            title: null,
+            content_markdown: "delegated",
+            tags: [],
+            status: "active",
+            revision: 1,
+            created_at: "2026-08-15T10:00:00.000Z",
+            updated_at: "2026-08-15T10:00:00.000Z",
+          };
+        }
+        throw new Error(`Unexpected method: ${request.method}`);
+      },
+    };
+    const core = new DesktopLocalCoreBridge({ transport });
+
+    await expect(core.health()).resolves.toMatchObject({ status: "ok", version: "desktop-host.test" });
+    await expect(
+      core.createMemo({ type: "memo", content_markdown: "delegated" }, context),
+    ).resolves.toMatchObject({ id: "desktop_memo_1", content_markdown: "delegated" });
+    expect(calls.map((call) => call.method)).toEqual(["health", "memo_create"]);
+  });
+});
 
 describe("FakeLocalCoreBridge", () => {
   it("reports fake health", async () => {
