@@ -21,17 +21,13 @@ from app.modules.assets.service import (
     asset_to_response,
     build_encrypted_upload_intent_payload,
     create_encrypted_asset_upload_record,
-    create_internal_asset_upload_record,
     encrypted_asset_object_has_valid_header,
     purge_encrypted_asset_object,
-    register_external_asset_record,
     write_asset_audit,
 )
 from app.modules.auth.sessions import get_active_subject
 from app.schemas.common import (
     ApiResponse,
-    AssetCreateUploadUrl,
-    AssetRegisterExternalUrl,
     AssetUploadCompleteRequest,
     AssetUpdate,
     PaginatedResponse,
@@ -90,45 +86,19 @@ async def create_e2ee_upload_url(
 
 
 @router.post("/create-upload-url", response_model=ApiResponse, deprecated=True)
-async def create_upload_url(
-    data: AssetCreateUploadUrl,
-    db: AsyncSession = Depends(get_db),
-    subject: AuthenticatedSubject = Depends(get_active_subject),
-) -> ApiResponse:
-    asset, upload_url = await create_internal_asset_upload_record(
-        db,
-        data,
-        user_id=subject.account_id,
-        actor_type="user",
-        source_channel="api",
-        request_id=subject.device_id,
+async def create_upload_url() -> ApiResponse:
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Plaintext attachment upload intents are disabled; use /assets/e2ee/create-upload-url",
     )
-    await db.commit()
-    await db.refresh(asset)
-    return ApiResponse(data=build_encrypted_upload_intent_payload(asset, upload_url))
 
 
 @router.post("/register-external-url", response_model=ApiResponse, deprecated=True)
-async def register_external_url(
-    data: AssetRegisterExternalUrl,
-    db: AsyncSession = Depends(get_db),
-    subject: AuthenticatedSubject = Depends(get_active_subject),
-) -> ApiResponse:
-    try:
-        await register_external_asset_record(
-            db,
-            data,
-            user_id=subject.account_id,
-            actor_type="user",
-            source_channel="api",
-            request_id=subject.device_id,
-        )
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail=str(exc),
-        ) from exc
-    raise AssertionError("plaintext external asset registration must remain disabled")
+async def register_external_url() -> ApiResponse:
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Plaintext external asset registration is disabled; sync the URL inside an encrypted asset entity",
+    )
 
 
 @router.post("/e2ee/{asset_id}/upload-complete", response_model=ApiResponse)

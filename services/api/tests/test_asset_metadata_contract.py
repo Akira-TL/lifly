@@ -154,8 +154,8 @@ def test_asset_rest_handlers_fail_closed_around_sensitive_metadata() -> None:
 
     assert ASSET_CREATE_UPLOAD_AUDIT_ACTION in service_source
     assert ASSET_REGISTER_EXTERNAL_AUDIT_ACTION in service_source
-    assert "build_encrypted_upload_intent_payload" in create_source
-    assert "subject.account_id" in create_source
+    assert "HTTP_410_GONE" in create_source
+    assert "/assets/e2ee/create-upload-url" in create_source
     assert "HTTP_410_GONE" in external_source
     assert "HTTP_410_GONE" in update_source
     assert "encrypted_asset_object_has_valid_header" in complete_source
