@@ -69,7 +69,7 @@ class AiJobEnvelope {
     'message_type': messageType.value,
     if (correlationId != null) 'correlation_id': correlationId,
     'idempotency_key': idempotencyKey,
-    'expires_at': expiresAt.toUtc().toIso8601String(),
+    'expires_at': _canonicalUtcMilliseconds(expiresAt).toIso8601String(),
     'encryption_version': encryptionVersion,
     'nonce': nonce,
     'ciphertext': ciphertext,
@@ -95,6 +95,12 @@ DateTime _requiredAwareDateTime(Map<String, dynamic> json, String key) {
   }
   return parsed;
 }
+
+DateTime _canonicalUtcMilliseconds(DateTime value) =>
+    DateTime.fromMillisecondsSinceEpoch(
+      value.toUtc().millisecondsSinceEpoch,
+      isUtc: true,
+    );
 
 int _requiredPositiveInt(Map<String, dynamic> json, String key) {
   final value = json[key];

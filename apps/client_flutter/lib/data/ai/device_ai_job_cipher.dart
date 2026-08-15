@@ -45,7 +45,7 @@ class DeviceAiJobCipher {
         'Device identity ${identity.deviceId} cannot encrypt as $sourceDeviceId',
       );
     }
-    final normalizedExpiry = expiresAt.toUtc();
+    final normalizedExpiry = _canonicalUtcMilliseconds(expiresAt);
     final context = _context(
       accountId: accountId,
       sourceDeviceId: sourceDeviceId,
@@ -176,7 +176,7 @@ class DeviceAiJobCipher {
     correlationId,
     jobId,
     idempotencyKey,
-    expiresAt.toUtc().toIso8601String(),
+    _canonicalUtcMilliseconds(expiresAt).toIso8601String(),
     liflyAiJobProtocolVersion,
     encryptionVersion,
   ];
@@ -187,6 +187,12 @@ class DeviceAiJobCipher {
 
 String _encodeBase64Url(List<int> bytes) =>
     base64Url.encode(bytes).replaceFirst(RegExp(r'=+$'), '');
+
+DateTime _canonicalUtcMilliseconds(DateTime value) =>
+    DateTime.fromMillisecondsSinceEpoch(
+      value.toUtc().millisecondsSinceEpoch,
+      isUtc: true,
+    );
 
 List<int> _decodeBase64Url(String value) {
   final padding = (4 - value.length % 4) % 4;

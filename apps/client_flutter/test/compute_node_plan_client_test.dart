@@ -166,6 +166,44 @@ void main() {
   );
 
   test(
+    'device AI job canonicalizes expiry to UTC milliseconds across runtimes',
+    () async {
+      const desktopPublic = 'zo060cy2M+x7cMF4FKXHbs0CloUFDTRHRboFhw5YfVk=';
+      final cipher = DeviceAiJobCipher(
+        _FixedIdentityStore(
+          deviceId: 'phone-1',
+          publicKey: 'pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk=',
+          privateKeyBytes: List<int>.filled(32, 1),
+        ),
+        nonce: () => List<int>.filled(12, 5),
+      );
+
+      final envelope = await cipher.encryptJson(
+        accountId: 'account-1',
+        sourceDeviceId: 'phone-1',
+        targetDeviceId: 'desktop-1',
+        messageType: AiJobMessageType.request,
+        jobId: 'request-1',
+        idempotencyKey: 'idem-1',
+        expiresAt: DateTime.utc(2026, 8, 15, 13, 0, 0, 123, 456),
+        remotePublicKey: desktopPublic,
+        payload: const {
+          'schema_version': 1,
+          'operation': 'plan',
+          'text': '记一下跨设备',
+          'asset_ids': <String>[],
+        },
+      );
+
+      expect(envelope.expiresAt.toIso8601String(), '2026-08-15T13:00:00.123Z');
+      expect(
+        envelope.ciphertext,
+        '8MHxhIAiGfnmt8zzl9kIkxiAspt_CkZkNpbiHdbQMeLyWtqCO5LEx7nq__dxsyvV5qtu6tjF53FRKMDCGmroeh4k8U8j3Emdo0gJfZwthWWB-fx83lWsYKmkXWuq7x4WE74',
+      );
+    },
+  );
+
+  test(
     'device AI job crypto round trips and binds routing metadata as AAD',
     () async {
       final phoneStore = SecureDeviceIdentityStore(

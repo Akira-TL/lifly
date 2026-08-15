@@ -71,6 +71,21 @@ describe("DeviceAiJobCipher", () => {
     });
   });
 
+  it("decrypts requests whose wire expiry has microseconds using canonical UTC milliseconds", async () => {
+    const request = encryptRequestForDesktop("2026-08-15T13:00:00.123456Z");
+    const desktopCipher = new DeviceAiJobCipher({
+      deviceId: "desktop-1",
+      privateKeyBytes: desktopPrivate,
+      resolvePublicKey: resolver({ "phone-1": phonePublic }),
+    });
+    const clear = await desktopCipher.decrypt(request) as {
+      schema_version: number;
+      text: string;
+    };
+    expect(clear.schema_version).toBe(1);
+    expect(clear.text).toBe("记一下跨设备");
+  });
+
   it("fails closed when authenticated routing metadata is changed", async () => {
     const request = encryptRequestForDesktop();
     const desktopCipher = new DeviceAiJobCipher({
@@ -84,7 +99,7 @@ describe("DeviceAiJobCipher", () => {
   });
 });
 
-function encryptRequestForDesktop() {
+function encryptRequestForDesktop(wireExpiresAt = expiresAt) {
   const privateKey = x25519PrivateKey(phonePrivate);
   const publicKey = x25519PublicKey(desktopPublic);
   const context = [
@@ -96,7 +111,7 @@ function encryptRequestForDesktop() {
     null,
     "request-1",
     "idem-1",
-    expiresAt,
+    new Date(wireExpiresAt).toISOString(),
     1,
     1,
   ];
@@ -134,7 +149,7 @@ function encryptRequestForDesktop() {
     message_type: "request",
     correlation_id: null,
     idempotency_key: "idem-1",
-    expires_at: expiresAt,
+    expires_at: wireExpiresAt,
     encryption_version: 1,
     nonce: nonce.toString("base64url"),
     ciphertext: Buffer.concat([cipherText, tag]).toString("base64url"),

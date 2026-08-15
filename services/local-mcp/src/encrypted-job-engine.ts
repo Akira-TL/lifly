@@ -40,6 +40,8 @@ export interface EncryptedAiJobResultContext {
 
 export type EncryptedAiJobStatus = "running" | "succeeded" | "failed" | "expired";
 
+export type EncryptedAiJobFailureStage = "decrypt" | "execute" | "encrypt";
+
 export interface EncryptedAiJobExecutionOutcome {
   status: EncryptedAiJobStatus;
   job_id: string;
@@ -47,6 +49,7 @@ export interface EncryptedAiJobExecutionOutcome {
   retryable: boolean;
   deduplicated: boolean;
   result_envelope?: LiflyAiJobEnvelope;
+  failure_stage?: EncryptedAiJobFailureStage;
   error?: string;
 }
 
@@ -183,15 +186,40 @@ export class EncryptedAiJobEngine {
     requestFingerprint: string,
     attempt: number,
   ): Promise<EncryptedAiJobExecutionOutcome> {
+    let plaintext: unknown;
+    try {
+      plaintext = await this.cipher.decrypt(request);
+    } catch (error) {
+      const retryable = this.isExplicitlyRetryable(error)
+        && attempt < this.maxAttempts
+        && !this.isExpired(request);
+      return this.storeFailure(
+        idempotencyKey,
+        request,
+        requestFingerprint,
+        attempt,
+        "decrypt",
+        error,
+        retryable,
+      );
+    }
+
     let resultPayload: unknown;
     try {
-      const plaintext = await this.cipher.decrypt(request);
       resultPayload = await this.executor.execute(plaintext, { request, attempt });
     } catch (error) {
       const retryable = this.isExplicitlyRetryable(error)
         && attempt < this.maxAttempts
         && !this.isExpired(request);
-      return this.storeFailure(idempotencyKey, request, requestFingerprint, attempt, error, retryable);
+      return this.storeFailure(
+        idempotencyKey,
+        request,
+        requestFingerprint,
+        attempt,
+        "execute",
+        error,
+        retryable,
+      );
     }
 
     try {
@@ -209,7 +237,15 @@ export class EncryptedAiJobEngine {
     } catch (error) {
       // Execution has already succeeded. Re-running it to recover an encryption
       // failure could duplicate Local Core side effects, so this phase is terminal.
-      return this.storeFailure(idempotencyKey, request, requestFingerprint, attempt, error, false);
+      return this.storeFailure(
+        idempotencyKey,
+        request,
+        requestFingerprint,
+        attempt,
+        "encrypt",
+        error,
+        false,
+      );
     }
   }
 
@@ -244,6 +280,7 @@ export class EncryptedAiJobEngine {
     request: LiflyAiJobEnvelope,
     requestFingerprint: string,
     attempt: number,
+    failureStage: EncryptedAiJobFailureStage,
     error: unknown,
     retryable: boolean,
   ): EncryptedAiJobExecutionOutcome {
@@ -253,6 +290,7 @@ export class EncryptedAiJobEngine {
       attempt_count: attempt,
       retryable,
       deduplicated: false,
+      failure_stage: failureStage,
       error: this.errorMessage(error),
     };
     if (!retryable) {
