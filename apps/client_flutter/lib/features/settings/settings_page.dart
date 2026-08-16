@@ -44,6 +44,22 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _connectingPowerSync = false;
   bool _disconnectingPowerSync = false;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final coordinator = context.read<PowerSyncConnectionCoordinator>();
+      final connectionDiagnostics = coordinator.refreshDiagnostics();
+      final uploadDiagnostics = context.read<SyncService>().uploadDiagnostics;
+      setState(() {
+        _connectionDiagnostics = connectionDiagnostics;
+        _uploadDiagnostics = uploadDiagnostics;
+        _powerSyncCredentials ??= connectionDiagnostics.credentials;
+      });
+    });
+  }
+
   Future<void> _checkHealth() async {
     setState(() {
       _checkingHealth = true;
