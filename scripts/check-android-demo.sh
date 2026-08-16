@@ -20,6 +20,7 @@ grep -q 'applicationId = "com.lifly.app"' "$APP_GRADLE" || fail 'applicationId m
 grep -q 'namespace = "com.lifly.app"' "$APP_GRADLE" || fail 'namespace must be com.lifly.app'
 grep -q 'compileSdk = 37' "$APP_GRADLE" || fail 'app must compile against Android API 37'
 grep -q 'compileSdkMinor = 0' "$APP_GRADLE" || fail 'app must compile against Android API 37.0'
+grep -q 'build/native-opaque/android' "$APP_GRADLE" || fail 'Android app must package the native OPAQUE cdylib'
 grep -q 'name == "flutter_secure_storage"' "$ROOT_GRADLE" || fail 'flutter_secure_storage API 37.0 compatibility override is missing'
 grep -q 'android.permission.INTERNET' "$MANIFEST" || fail 'main manifest must declare INTERNET'
 grep -q 'android.permission.POST_NOTIFICATIONS' "$MANIFEST" || fail 'main manifest must declare POST_NOTIFICATIONS'
@@ -36,6 +37,9 @@ if git -C "$ROOT_DIR" ls-files --error-unmatch apps/client_flutter/android/key.p
   fail 'android/key.properties must never be tracked'
 fi
 git -C "$ROOT_DIR" check-ignore -q apps/client_flutter/android/key.properties || fail 'android/key.properties must stay gitignored'
+
+printf '%s\n' '[android-demo] building bundled native OPAQUE runtime'
+bash "$ROOT_DIR/scripts/build-native-opaque.sh" android
 
 cd "$CLIENT_DIR"
 
@@ -54,3 +58,8 @@ flutter test --no-pub test/reminder_*.dart
 
 printf '%s\n' '[android-demo] building Android debug APK'
 flutter build apk --debug --no-pub
+APK="$CLIENT_DIR/build/app/outputs/flutter-apk/app-debug.apk"
+[[ -f "$APK" ]] || fail 'debug APK missing'
+if ! unzip -l "$APK" | grep -q 'lib/arm64-v8a/liblifly_opaque_helper.so'; then
+  fail 'debug APK does not contain the bundled native OPAQUE library'
+fi

@@ -56,10 +56,22 @@ android {
 
     buildTypes {
         release {
-            // Release builds are intentionally unsigned unless android/key.properties exists.
             // The keystore itself is ignored by Git and must never be committed.
+            // Official release tasks are rejected below when signing is absent.
             signingConfig = signingConfigs.findByName("release")
         }
+    }
+}
+
+gradle.taskGraph.whenReady {
+    val releaseRequested = allTasks.any {
+        it.path.startsWith(":app:") && it.name.contains("Release", ignoreCase = true)
+    }
+    if (releaseRequested && !releaseKeystorePropertiesFile.exists()) {
+        throw GradleException(
+            "Android release signing is required. Configure android/key.properties; " +
+                "unsigned release artifacts are not accepted."
+        )
     }
 }
 

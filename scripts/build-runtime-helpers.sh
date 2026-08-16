@@ -19,6 +19,11 @@ if [[ -z "$cargo_bin" ]]; then
 fi
 
 mkdir -p "$PROJECT_ROOT/build/runtime" "$CLIENT_DIR/build/runtime"
+LOCK_FILE="$PROJECT_ROOT/build/.flutter-linux-build.lock"
+exec 9>"$LOCK_FILE"
+if command -v flock >/dev/null 2>&1; then
+  flock 9
+fi
 
 echo "[runtime] testing RFC 9807 OPAQUE helper"
 "$cargo_bin" test --manifest-path "$PROJECT_ROOT/tools/opaque-helper/Cargo.toml"
@@ -40,6 +45,10 @@ build_flutter_bundle() {
   echo "[runtime] building Flutter target $target"
   (
     cd "$CLIENT_DIR"
+    # Flutter reuses one CMake tree for all Linux targets. Remove it before each
+    # helper target so an earlier main-app/helper install prefix cannot leak into
+    # this bundle. The shared flock above prevents concurrent Desktop builds.
+    rm -rf build/linux
     set +e
     flutter build linux --release --target "$target" >"$build_log" 2>&1
     rc=$?
