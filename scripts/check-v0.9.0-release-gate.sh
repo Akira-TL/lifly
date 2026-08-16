@@ -29,6 +29,9 @@ grep -Fq 'Depends(get_active_subject)' services/api/app/modules/ai/router.py
 grep -Fq 'SqlAlchemySessionRegistry' services/api/app/modules/auth/sessions.py
 grep -Fq 'SqlAlchemyAuthFlowStore' services/api/app/modules/auth/flows.py
 grep -Fq 'CREATE PUBLICATION powersync FOR TABLE public.encrypted_entities' services/api/app/core/schema_compat.py
+grep -Fq 'lifly_opaque_client_invoke_json' tools/opaque-helper/src/lib.rs
+grep -Fq "ffi: ^2.2.0" apps/client_flutter/pubspec.yaml
+grep -Fq 'build/native-opaque/android' apps/client_flutter/android/app/build.gradle.kts
 test -s apps/client_flutter/web/sqlite3mc.wasm
 test -s packages/protocol/test-vectors/device-ai-job-v1.json
 
@@ -68,6 +71,13 @@ bash -n \
   scripts/compute-node-start.sh \
   scripts/ai-provider-worker.sh \
   scripts/build-runtime-helpers.sh \
+  scripts/build-native-opaque.sh \
+  scripts/opaque-native-smoke.sh \
+  scripts/desktop-release-build.sh \
+  scripts/android-release-build.sh \
+  scripts/build-compute-node-companion.sh \
+  scripts/assemble-desktop-demo-bundle.sh \
+  scripts/check-v0.9.0-delivery-gate.sh \
   scripts/local-core-bridge.sh \
   scripts/e2ee-commit-smoke.sh \
   scripts/sqlcipher-smoke.sh \
@@ -114,6 +124,7 @@ if [[ -z "$cargo_bin" ]]; then
   exit 1
 fi
 "$cargo_bin" test --manifest-path tools/opaque-helper/Cargo.toml
+bash scripts/opaque-native-smoke.sh
 bash scripts/auth-runtime-smoke.sh
 bash scripts/relay-runtime-smoke.sh
 
@@ -155,6 +166,7 @@ echo "[5/8] Flutter P0 integration contracts"
     lib/data/api/api_client.dart \
     lib/data/auth/account_runtime_state.dart \
     lib/data/auth/pake_client_adapter.dart \
+    lib/data/auth/opaque_client_helper_platform_io.dart \
     lib/data/crypto/account_e2ee_runtime.dart \
     lib/data/crypto/secure_local_database_key_provider.dart \
     lib/data/ai/device_ai_job_cipher.dart \
