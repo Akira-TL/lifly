@@ -100,10 +100,12 @@ Future<void> main() async {
         ),
         Provider<LiflyDataMode>.value(value: dataMode),
         Provider<SecretStore>.value(value: secrets),
-        Provider<AuthSessionStore>.value(value: sessions),
+        Provider<AuthSessionStore>.value(
+          value: DelegatingAuthSessionStore(sessions),
+        ),
         Provider<ApiClient>.value(value: api),
         Provider<SyncService>.value(value: syncService),
-        Provider<AccountE2eeRuntime>.value(value: e2ee),
+        ChangeNotifierProvider<AccountE2eeRuntime>.value(value: e2ee),
         Provider<AccountDeviceRuntime>.value(value: accountDeviceRuntime),
         Provider<PowerSyncConnectionCoordinator>.value(value: syncCoordinator),
         ProxyProvider2<SyncService, AccountE2eeRuntime, LocalCoreBridge>(

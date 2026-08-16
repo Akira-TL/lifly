@@ -23,6 +23,10 @@ grep -Fq 'plaintextE2eeCoreMigrationId' apps/client_flutter/lib/data/powersync/p
 grep -Fq "Table.localOnly('e2ee_migration_state'" apps/client_flutter/lib/data/powersync/powersync_schema.dart
 grep -Fq 'PowerSyncSQLCipherOpenFactory' apps/client_flutter/lib/data/powersync/sync_service.dart
 grep -Fq 'powersync_sqlcipher:' apps/client_flutter/pubspec.yaml
+if rg -n 'Provider<(AuthSessionStore|AccountE2eeRuntime)>\.value\(value: (sessions|e2ee)\)' apps/client_flutter/lib/main.dart; then
+  echo "FAIL: Listenable auth/E2EE runtime injected through plain Provider" >&2
+  exit 1
+fi
 grep -Fq 'auditPayloadProtector: e2eeRuntime' apps/client_flutter/lib/main.dart
 grep -Fq 'captureIngestCandidates' apps/client_flutter/lib/features/ai_capture/data/external_ai_action_committer.dart
 grep -Fq 'Depends(get_active_subject)' services/api/app/modules/ai/router.py
@@ -182,6 +186,7 @@ echo "[5/8] Flutter P0 integration contracts"
     test/api_client_auth_session_test.dart \
     test/auth_repository_test.dart \
     test/auth_session_store_test.dart \
+    test/auth_session_provider_test.dart \
     test/account_device_runtime_test.dart \
     test/device_settings_section_test.dart \
     test/session_gate_test.dart \

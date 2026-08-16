@@ -14,6 +14,28 @@ abstract interface class AuthSessionStore {
   Future<void> clear();
 }
 
+/// Non-listenable interface view for dependency injection sites that only need
+/// session persistence operations. The concrete secure store remains a
+/// ChangeNotifier for SessionGate, while ordinary Provider consumers receive
+/// this facade and therefore cannot accidentally subscribe to notifier state.
+class DelegatingAuthSessionStore implements AuthSessionStore {
+  final AuthSessionStore _delegate;
+
+  const DelegatingAuthSessionStore(this._delegate);
+
+  @override
+  Future<AuthSession?> read() => _delegate.read();
+
+  @override
+  Future<String?> readAccessToken() => _delegate.readAccessToken();
+
+  @override
+  Future<void> write(AuthSession session) => _delegate.write(session);
+
+  @override
+  Future<void> clear() => _delegate.clear();
+}
+
 class SecureAuthSessionStore extends ChangeNotifier
     implements AuthSessionStore {
   static const _sessionKey = 'lifly.auth.session.v1';
