@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
 from fastapi import Depends
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +27,10 @@ class AiRelayStore(Protocol):
     async def get_request(
         self, *, account_id: str, job_id: str
     ) -> AiJobEnvelope | None: ...
+
+    async def delivery_status(self, *, account_id: str, job_id: str) -> str | None: ...
+
+    async def mark_failed(self, *, account_id: str, job_id: str) -> None: ...
 
     async def submit_result(
         self, *, request: AiJobEnvelope, result: AiJobEnvelope
@@ -83,38 +87,50 @@ class SqlAlchemyAiRelayStore:
     async def next_for_target(
         self, *, account_id: str, target_device_id: str, now: datetime
     ) -> AiJobEnvelope | None:
+        base_scope = (
+            AiJob.account_id == account_id,
+            AiJob.target_device_id == target_device_id,
+            AiJob.message_type == AiJobMessageType.REQUEST.value,
+        )
+        await self._db.execute(
+            update(AiJob)
+            .where(
+                *base_scope,
+                AiJob.delivery_status.in_(("queued", "delivered")),
+                AiJob.expires_at <= now,
+            )
+            .values(delivery_status="expired")
+        )
         result = await self._db.execute(
             select(AiJob)
             .where(
-                AiJob.account_id == account_id,
-                AiJob.target_device_id == target_device_id,
-                AiJob.message_type == AiJobMessageType.REQUEST.value,
-                AiJob.delivery_status.in_(("queued", "delivered")),
+                *base_scope,
+                AiJob.expires_at > now,
+                or_(
+                    AiJob.delivery_status == "queued",
+                    and_(
+                        AiJob.delivery_status == "delivered",
+                        or_(
+                            AiJob.next_attempt_at.is_(None),
+                            AiJob.next_attempt_at <= now,
+                        ),
+                    ),
+                ),
             )
             .order_by(AiJob.created_at, AiJob.id)
+            .limit(1)
+            .with_for_update(skip_locked=True)
         )
-        changed = False
-        for model in result.scalars().all():
-            if _as_utc(model.expires_at) <= now:
-                model.delivery_status = "expired"
-                changed = True
-                continue
-            delivered_at = _as_utc(model.delivered_at) if model.delivered_at else None
-            if (
-                model.delivery_status == "delivered"
-                and delivered_at is not None
-                and delivered_at + self._delivery_lease > now
-            ):
-                continue
-            model.delivery_status = "delivered"
-            model.delivered_at = now
-            model.next_attempt_at = now + self._delivery_lease
-            model.attempt_count += 1
+        model = result.scalar_one_or_none()
+        if model is None:
             await self._db.commit()
-            return _to_envelope(model)
-        if changed:
-            await self._db.commit()
-        return None
+            return None
+        model.delivery_status = "delivered"
+        model.delivered_at = now
+        model.next_attempt_at = now + self._delivery_lease
+        model.attempt_count += 1
+        await self._db.commit()
+        return _to_envelope(model)
 
     async def get_request(
         self, *, account_id: str, job_id: str
@@ -128,6 +144,34 @@ class SqlAlchemyAiRelayStore:
         )
         model = result.scalar_one_or_none()
         return None if model is None else _to_envelope(model)
+
+    async def delivery_status(self, *, account_id: str, job_id: str) -> str | None:
+        result = await self._db.execute(
+            select(AiJob.delivery_status).where(
+                AiJob.id == job_id,
+                AiJob.account_id == account_id,
+                AiJob.message_type == AiJobMessageType.REQUEST.value,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def mark_failed(self, *, account_id: str, job_id: str) -> None:
+        result = await self._db.execute(
+            select(AiJob).where(
+                AiJob.id == job_id,
+                AiJob.account_id == account_id,
+                AiJob.message_type == AiJobMessageType.REQUEST.value,
+            )
+        )
+        model = result.scalar_one_or_none()
+        if model is None:
+            raise AiRelayConflict("AI relay request not found")
+        if model.delivery_status == "completed":
+            raise AiRelayConflict("AI relay request is already completed")
+        if model.delivery_status == "expired":
+            return
+        model.delivery_status = "failed"
+        await self._db.commit()
 
     async def submit_result(
         self, *, request: AiJobEnvelope, result: AiJobEnvelope

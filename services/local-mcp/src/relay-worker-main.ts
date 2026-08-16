@@ -50,18 +50,24 @@ async function main(): Promise<void> {
   stdout.write("Lifly encrypted Compute Node worker started\n");
   try {
     while (true) {
-      const status = await runtime.worker.runOnce();
-      if (status.status === "idle") {
-        await delay(750);
-        continue;
+      try {
+        const status = await runtime.worker.runOnce();
+        if (status.status === "idle") {
+          await delay(750);
+          continue;
+        }
+        stdout.write(
+          `Lifly Compute Node job ${status.outcome.job_id}: ${status.outcome.status}`
+          + ` attempt=${status.outcome.attempt_count}`
+          + ` retryable=${String(status.outcome.retryable)}`
+          + ` failure_stage=${status.outcome.failure_stage ?? "none"}`
+          + ` error_class=${classifyOutcomeError(status.outcome.error)}\n`,
+        );
+      } catch (error) {
+        if (!isRetryableRelayError(error)) throw error;
+        stdout.write("Lifly Compute Node relay temporarily unavailable; retrying\n");
+        await delay(1500);
       }
-      stdout.write(
-        `Lifly Compute Node job ${status.outcome.job_id}: ${status.outcome.status}`
-        + ` attempt=${status.outcome.attempt_count}`
-        + ` retryable=${String(status.outcome.retryable)}`
-        + ` failure_stage=${status.outcome.failure_stage ?? "none"}`
-        + ` error_class=${classifyOutcomeError(status.outcome.error)}\n`,
-      );
     }
   } finally {
     await runtime.localMcp.close?.();
@@ -160,6 +166,14 @@ function classifyOutcomeError(error: string | undefined): string {
     return "relay";
   }
   return "unknown";
+}
+
+function isRetryableRelayError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const match = error.message.match(/Compute Node relay request failed: HTTP (\d{3})/);
+  if (!match) return false;
+  const status = Number(match[1]);
+  return status === 429 || status >= 500;
 }
 
 function delay(milliseconds: number): Promise<void> {

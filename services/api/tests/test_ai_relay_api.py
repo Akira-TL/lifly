@@ -75,6 +75,18 @@ class _MemoryRelayStore(AiRelayStore):
             return None
         return item.envelope
 
+    async def delivery_status(self, *, account_id: str, job_id: str) -> str | None:
+        item = self.items.get(job_id)
+        if item is None or item.envelope.account_id != account_id:
+            return None
+        return item.delivery_status
+
+    async def mark_failed(self, *, account_id: str, job_id: str) -> None:
+        item = self.items.get(job_id)
+        if item is None or item.envelope.account_id != account_id:
+            raise ValueError("AI relay request not found")
+        item.delivery_status = "failed"
+
     async def submit_result(
         self, *, request: AiJobEnvelope, result: AiJobEnvelope
     ) -> AiJobEnvelope:
@@ -225,6 +237,32 @@ def test_authenticated_encrypted_relay_round_trip() -> None:
 
     assert set(store.items) == {"job-request-1", "job-result-1"}
     assert devices.records["desktop-1"].public_key == "desktop-1-public-key"
+
+
+def test_terminal_target_failure_stops_redelivery_and_surfaces_to_requester() -> None:
+    phone, store, _, app = _client("phone-1")
+    assert phone.post("/ai/relay/jobs", json=_request_envelope()).status_code == 200
+
+    app.dependency_overrides[get_active_subject] = lambda: AuthenticatedSubject(
+        account_id="account-1", device_id="desktop-1"
+    )
+    desktop = TestClient(app)
+    delivered = desktop.get("/ai/relay/jobs/next")
+    assert delivered.status_code == 200
+    assert delivered.json()["job_id"] == "job-request-1"
+
+    failed = desktop.post("/ai/relay/jobs/job-request-1/fail")
+    assert failed.status_code == 204
+    assert store.items["job-request-1"].delivery_status == "failed"
+    assert desktop.get("/ai/relay/jobs/next").json() is None
+
+    app.dependency_overrides[get_active_subject] = lambda: AuthenticatedSubject(
+        account_id="account-1", device_id="phone-1"
+    )
+    requester = TestClient(app)
+    result = requester.get("/ai/relay/jobs/job-request-1/result")
+    assert result.status_code == 409
+    assert result.json()["detail"] == "AI relay request failed on target device"
 
 
 def test_relay_rejects_spoofed_account_or_source_device() -> None:

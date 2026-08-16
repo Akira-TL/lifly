@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 
 from app.core.security import AuthenticatedSubject
 from app.modules.ai_relay.contracts import AiJobEnvelope, AiJobMessageType
@@ -118,6 +118,31 @@ async def poll_next_job(
     )
 
 
+@router.post("/jobs/{job_id}/fail", status_code=204)
+async def fail_job(
+    job_id: str,
+    subject: AuthenticatedSubject = Depends(get_active_subject),
+    devices: DeviceRepository = Depends(get_device_repository),
+    store: AiRelayStore = Depends(get_ai_relay_store),
+) -> Response:
+    target_device_id = _require_bound_device(subject)
+    await _trusted_device(
+        devices,
+        account_id=subject.account_id,
+        device_id=target_device_id,
+    )
+    request = await store.get_request(account_id=subject.account_id, job_id=job_id)
+    if request is None:
+        raise HTTPException(status_code=404, detail="AI relay request not found")
+    if request.target_device_id != target_device_id:
+        raise HTTPException(status_code=403, detail="Only the request target may fail this job")
+    try:
+        await store.mark_failed(account_id=subject.account_id, job_id=job_id)
+    except AiRelayConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return Response(status_code=204)
+
+
 @router.post("/results", response_model=AiJobEnvelope)
 async def submit_result(
     envelope: AiJobEnvelope,
@@ -182,6 +207,14 @@ async def read_result(
         raise HTTPException(status_code=404, detail="AI relay request not found")
     if request.source_device_id != requester_device_id:
         raise HTTPException(status_code=403, detail="Only the requester may read this AI result")
+    delivery_status = await store.delivery_status(
+        account_id=subject.account_id,
+        job_id=job_id,
+    )
+    if delivery_status == "failed":
+        raise HTTPException(status_code=409, detail="AI relay request failed on target device")
+    if delivery_status == "expired":
+        raise HTTPException(status_code=410, detail="AI relay request expired")
     return await store.result_for_request(
         account_id=subject.account_id,
         request_job_id=job_id,

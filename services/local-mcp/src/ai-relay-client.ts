@@ -8,6 +8,7 @@ export type AccessTokenProvider = () => Promise<string> | string;
 export interface AiRelayClient {
   nextJob(): Promise<LiflyAiJobEnvelope | null>;
   submitResult(envelope: LiflyAiJobEnvelope): Promise<LiflyAiJobEnvelope>;
+  failJob(jobId: string): Promise<void>;
   resolveDevicePublicKey(deviceId: string): Promise<string>;
 }
 
@@ -21,7 +22,10 @@ export class HttpAiRelayClient implements AiRelayClient {
   private readonly baseUrl: string;
   private readonly accessToken: AccessTokenProvider;
   private readonly fetchImpl: typeof fetch;
-  private readonly publicKeys = new Map<string, string>();
+  private readonly publicKeys = new Map<
+    string,
+    { keyVersion: number; publicKey: string }
+  >();
 
   constructor(options: HttpAiRelayClientOptions) {
     this.baseUrl = options.apiBaseUrl.replace(/\/+$/u, "");
@@ -46,9 +50,16 @@ export class HttpAiRelayClient implements AiRelayClient {
     return LiflyAiJobEnvelopeSchema.parse(await response.json());
   }
 
+  async failJob(jobId: string): Promise<void> {
+    await this.request(`/ai/relay/jobs/${encodeURIComponent(jobId)}/fail`, {
+      method: "POST",
+    });
+  }
+
   async resolveDevicePublicKey(deviceId: string): Promise<string> {
-    const cached = this.publicKeys.get(deviceId);
-    if (cached) return cached;
+    // Device keys are routing/security state, not immutable configuration. Fetch
+    // the current Registry record on every derivation so a long-lived Compute
+    // Node observes rotations and revocations instead of pinning stale key bytes.
     const response = await this.request("/devices", { method: "GET" });
     const payload = (await response.json()) as unknown;
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
@@ -61,23 +72,37 @@ export class HttpAiRelayClient implements AiRelayClient {
     for (const item of devices) {
       if (!item || typeof item !== "object" || Array.isArray(item)) continue;
       const record = item as Record<string, unknown>;
-      const id = record.device_id;
+      if (record.device_id !== deviceId || record.trust_state !== "trusted") continue;
       const publicKey = record.public_key;
-      const trustState = record.trust_state;
+      const keyVersion = record.key_version;
       if (
-        typeof id === "string"
-        && typeof publicKey === "string"
-        && publicKey.length > 0
-        && trustState === "trusted"
+        typeof publicKey !== "string"
+        || publicKey.length === 0
+        || typeof keyVersion !== "number"
+        || !Number.isInteger(keyVersion)
+        || keyVersion < 1
       ) {
-        this.publicKeys.set(id, publicKey);
+        throw new Error(`Trusted device key record is invalid: ${deviceId}`);
       }
+      const cached = this.publicKeys.get(deviceId);
+      if (cached && keyVersion < cached.keyVersion) {
+        throw new Error(
+          `Device Registry key_version moved backwards for ${deviceId}: ${keyVersion} < ${cached.keyVersion}`,
+        );
+      }
+      if (
+        cached
+        && keyVersion === cached.keyVersion
+        && publicKey !== cached.publicKey
+      ) {
+        throw new Error(
+          `Device public key changed without key_version rotation: ${deviceId}`,
+        );
+      }
+      this.publicKeys.set(deviceId, { keyVersion, publicKey });
+      return publicKey;
     }
-    const resolved = this.publicKeys.get(deviceId);
-    if (!resolved) {
-      throw new Error(`Trusted device public key unavailable: ${deviceId}`);
-    }
-    return resolved;
+    throw new Error(`Trusted device public key unavailable: ${deviceId}`);
   }
 
   private async request(path: string, init: RequestInit): Promise<Response> {

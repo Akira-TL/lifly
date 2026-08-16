@@ -20,6 +20,8 @@ export class EncryptedAiRelayWorker {
     const outcome = await this.jobs.execute(request);
     if (outcome.status === "succeeded" && outcome.result_envelope) {
       await this.relay.submitResult(outcome.result_envelope);
+    } else if (outcome.status === "failed" && !outcome.retryable) {
+      await this.relay.failJob(request.job_id);
     }
     return { status: "processed", outcome };
   }
