@@ -1,165 +1,145 @@
-# Lifly GOAI 3–5 分钟 Demo 脚本
+# Lifly GOAI 现场 Demo 脚本
 
-目标：用一条真实、连续、可验证的生活工作流证明 Lifly 不是通用聊天机器人，而是能进入真实生活闭环的 Personal Life Agent。
+这份脚本不是宣传片分镜，而是一条 3–5 分钟能重复跑通的真实产品路径。目标只有一个：让评委看到 Lifly 会把生活里的输入变成可检查、可执行、可撤销的数据，而不是停在聊天回答上。
 
-## Demo 主线
+## 0:00–0:20｜先说人话
 
-### 0:00–0:25｜一句话定位
+画面：Lifly 首页，手机和 Desktop 都已登录。
 
-画面：Lifly 首页 / 手机 + Desktop 同屏。
+可以这样开场：
 
-讲述重点：
+> Lifly 来自 Life + Fly。我们不想让用户为了管理生活，再做一遍重复劳动。消费完不用再补记一笔，想到事情也不用自己去日历里排。能交给 Agent 做的，就让 Agent 做。
 
-> Lifly = Life + Fly。我们不希望用户把更多时间花在“管理生活”上。Lifly 让自己的 Agent、自己的电脑和可选云 AI，在用户授权边界内自动整理、记录和提醒生活。
+这里先别讲 E2EE、MCP、Compute Node。
 
-不要先讲架构名词。
-
-### 0:25–1:05｜自然语言一次生成三种生活数据
+## 0:20–1:00｜一句话，拆成三件事
 
 输入：
 
-> “今天中午食堂花了 28 元，晚上 9 点提醒我改比赛 PPT，顺便记一下今天状态有点焦虑。”
+> 今天中午食堂花了 28 元，晚上 9 点提醒我改比赛 PPT，顺便记一下今天有点焦虑。
 
 展示：
 
-- AI 解析为 `expense_create` / `task_create` / `memo_create` Candidate Actions；
-- 显示执行位置（My PC · Ollama / 本机 / Cloud AI）；
+- Lifly 识别出一笔支出、一个任务和一条备忘；
+- 三项先以 Candidate Actions 出现；
 - 用户检查后确认；
-- 首页、记账、任务、备忘同步发生变化。
+- 首页、记账、任务和备忘里的数据随之变化。
 
-评委要看到：不是回答，而是结构化行动闭环。
+这里评委应该能看明白：AI 不是给了一段建议，而是真的进入了 Lifly 的业务流程。
 
-### 1:05–1:50｜用户自己的 Agent 自动记账
+## 1:00–1:40｜自己的 Agent 也能记账
 
-场景 A：把付款截图发送给自己的 Agent。
+先展示最容易理解的场景：把付款截图发给自己正在用的 Agent。
 
-场景 B：Agent 定时读取用户已经授权的支付相关邮件/账单文件。
+然后说明另一种方式：如果用户已经给 Hermes、OpenClaw 或自建 Agent 邮箱权限，它也可以按计划读取支付通知或账单，再调用 Lifly MCP。
 
-展示逻辑：
+流程可以画得很短：
 
 ```text
-Email / Screenshot / Statement
+截图 / 邮件 / 账单
         ↓
-User's Agent (Hermes / OpenClaw / custom)
+用户自己的 Agent
         ↓
-Lifly Cloud MCP
+Lifly MCP
         ↓
-Ledger Candidate / Import Preview
+账单候选 / 导入预览
         ↓
-Review / Commit
+确认写入
 ```
 
-重点说明：
+要把权限边界说清楚：Lifly 不是偷偷读邮箱，邮箱权限仍在用户自己的 Agent 那边。Lifly 只接收对方主动通过 MCP 送进来的内容。
 
-- 邮箱权限属于用户自己的 Agent，不是 Lifly 静默读取邮箱。
-- Lifly MCP 是受控业务入口。
-- 支付宝 / 微信账单支持专用 parser、preview、duplicate 检测和 rollback。
+## 1:40–2:10｜避免多记一笔
 
-### 1:50–2:20｜重复记账与跨平台资金搬家
-
-先手动存在一条：
+先准备一条已经手动记过的账：
 
 ```text
 午饭 ¥28 · 12:42
 ```
 
-再导入包含相同业务流水的账单，展示被识别为重复候选。
+再导入包含同一笔业务流水的账单，让 Lifly 把它标成重复候选。
 
-随后展示：
+随后展示一笔平台之间的资金搬家：
 
 ```text
-微信 -¥500 → 支付宝 +¥500
+微信 -¥500
+支付宝 +¥500
 ```
 
-识别为 transfer / 中性流水，不把自己的资金搬家重复计入收入/支出。
+这类流水识别为 transfer / 中性交易，不作为新的收入或支出统计。
 
-措辞边界：当前账单导入链已经会和已有 active 账本做业务重复判断；不要宣称所有 AI `expense_create` 入口已经完全复用同一套去重实现。
+这里不要说成“银行级自动对账”。当前已经落地的是账单导入中的业务重复判断，以及 transfer / 中性流水识别；AI 直接 `expense_create` 的全部入口还没有统一复用这套去重链。
 
-### 2:20–2:55｜日程和提醒不需要自己手画
+## 2:10–2:40｜任务和提醒不用自己画日程
 
 输入：
 
-> “周三前把 GOAI 材料交掉。”
+> 周三前把 GOAI 材料交掉。
 
 展示：
 
 - Agent 创建 Task；
-- Lifly 生成 Reminder Strategy；
-- 显示提前准备建议 / warning reason；
-- 用户确认后提醒生效；
-- Android 真实系统通知弹出（若现场稳定）。
+- Lifly 给出 Reminder Strategy；
+- 用户确认提醒；
+- 如果 Android 通知现场稳定，再展示真实系统通知。
 
-核心话术：
+一句话就够：
 
-> 你负责生活，Agent 负责记得。
+> 我只需要告诉它什么时候要做完，剩下的提醒不要再让我自己记。
 
-当前边界：完整 Calendar 生态是后续方向；当前应展示 Task + Reminder Strategy + Reminder Delivery，不宣称 Google/Apple Calendar 已完整接入。
+完整 Google / Apple Calendar 接入还不是当前完成能力，现场只展示已经接通的 Task、Reminder Strategy 和 Reminder Delivery。
 
-### 2:55–3:35｜Personal Compute Node
+## 2:40–3:20｜手机用自己的电脑跑 AI
 
-画面切到 Settings / Devices：
+打开 Settings / Devices，让评委看到同一账号下的 Phone 和 Desktop。
 
-- 同一 Account 下的 Phone / Desktop Device；
-- Desktop Compute Node capabilities；
-- Default Compute Node；
-- Ollama provider。
+说明 Desktop 被设为 Default Compute Node，并显示 Ollama provider。
 
-从手机发起 AI Job：
+然后从手机发起一次 AI 请求：
 
 ```text
 Phone
-  ↓ device-to-device encrypted job
-Cloud Relay (ciphertext only)
+  ↓ 加密任务
+Cloud Relay
   ↓
 Desktop Compute Node
   ↓
 Ollama + Local MCP
-  ↓ encrypted result
+  ↓ 加密结果
 Phone
 ```
 
-强调：自己的电脑不是“远程桌面”，而是自己的 AI 计算节点。
+重点不是“远程控制电脑”，而是用户自己的电脑可以成为 Lifly 的 AI 计算节点。
 
-### 3:35–4:10｜隐私与人类控制
+## 3:20–4:00｜把隐私边界演出来
 
-快速展示：
+有时间就做下面这条：
 
-- E2EE Sync；
-- Cloud relay ciphertext；
-- Candidate Action；
-- Audit；
-- Undo；
-- Cloud AI Selective Disclosure。
+1. 暂时让 Desktop Node offline；
+2. 手机再发起 local AI 请求；
+3. Lifly 显示 unavailable / retry；
+4. 它不会自己改送 Cloud AI；
+5. 用户主动选择 Cloud AI；
+6. 界面显示这次要发送给谁、发送哪些内容、为什么需要发送；
+7. 用户确认后再执行。
 
-建议现场做一次：
+这比单独放一页“我们用了 E2EE”更有说服力。
 
-1. Desktop Node offline；
-2. 手机请求 local AI；
-3. 显示 unavailable / retry，而不是自动切到 Cloud AI；
-4. 用户主动选择 Cloud AI；
-5. 显示本次授权目标、范围、原因；
-6. 再执行。
+最后快速点一下 Audit / Undo，让评委看到 AI 做过的动作还能追溯和撤回。
 
-这是 Lifly 最有技术可信度的差异化演示之一。
+## 收尾
 
-### 4:10–4:30｜收尾
+可以直接说：
 
-> Lifly 不是把 Memo、Ledger、Task 和 AI 放在一个 App 里。它希望让生活数据成为一份持续的个人上下文，让用户自己的 Agent 真正能安全地参与生活。Life, fly.
+> Lifly 想做的不是再加一个生活管理 App，而是把那些本来要自己反复整理、记录和记住的事情交给 Agent。用户保留最后的确认权，也保留自己的数据和计算节点。
 
-## 视频拍摄要求
+## 现场准备
 
-- 全部使用真实产品运行画面，不用 Figma 假操作替代核心链路。
-- 视频中至少出现 Phone + Desktop 两个真实端。
-- 关键步骤加短字幕，不需要长篇旁白。
-- 录制时遮挡手机号、Token、API Key、设备私钥、真实个人账单信息。
-- 推荐 1080p / 30fps / H.264 MP4。
-- 另准备 60–90 秒短版，适合评委快速扫材料。
+- 演示账号只放脱敏数据；
+- 不要在屏幕上露出手机号、Token、API Key 或设备私钥；
+- 本地 Ollama 模型提前加载；
+- 手机和 Desktop 提前确认在同一账号下；
+- Web、API、PowerSync、Compute Node 都先跑一遍 health check；
+- 如果某一段受现场网络影响，就跳过，不要临时改数据库救场。
 
-## Demo 失败时的备份顺序
-
-1. 现场真实运行。
-2. 本地预录完整 Demo 视频。
-3. 每个关键闭环保留独立短片：AI Capture / MCP 记账 / Compute Node / E2EE / Reminder。
-4. 关键技术证据截图 + Golden / Gate 日志。
-
-不要把“现场网络稳定”当作必要前提。
+晋级复赛后再补 `demo-reset.sh` 和 `demo-health.sh`，让每次演示都能从固定状态开始。

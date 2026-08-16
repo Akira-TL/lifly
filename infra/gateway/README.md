@@ -6,7 +6,7 @@
 
 | URL | Upstream | 用途 |
 |---|---:|---|
-| `https://lifly.babelbeast.com/` | `127.0.0.1:8211` | Flutter Web |
+| `https://lifly.babelbeast.com/` | `apps/client_flutter/build/web` | Flutter Web release 静态产物，由 Nginx 直接托管 |
 | `https://lifly.babelbeast.com/api/*` | `127.0.0.1:8210` | FastAPI |
 | `https://lifly.babelbeast.com/mcp` | `127.0.0.1:8210` | Cloud MCP Streamable HTTP |
 
@@ -55,17 +55,27 @@ bash scripts/deploy-nginx.sh apply
 CERTBOT_EMAIL=you@example.com bash scripts/deploy-nginx.sh apply
 ```
 
-## Web 的公网 API Base URL
+## Web 的生产部署
 
-通过域名访问 Flutter Web、且需要 API 模式时，Web 构建/启动必须使用公网同源 API：
+生产根路径不代理 Flutter 的开发 Web Server。正式页面直接来自 release 静态产物：
 
 ```bash
-LIFLY_DATA_MODE=api \
-LIFLY_API_BASE_URL=https://lifly.babelbeast.com/api/v1 \
-bash scripts/dev-web-start.sh
+bash scripts/web-release-build.sh
 ```
 
-不要把浏览器端 API Base URL 配成 `127.0.0.1:8210`，因为那会指向访问者自己的设备。
+该脚本会把 Web 构建到：
+
+```text
+apps/client_flutter/build/web
+```
+
+构建时默认使用公网同源 API：
+
+```text
+https://lifly.babelbeast.com/api/v1
+```
+
+`127.0.0.1:8211` 只用于开发预览，不是生产 Web upstream。不要把浏览器端 API Base URL 配成 `127.0.0.1:8210`，因为那会指向访问者自己的设备。
 
 ## 检查
 

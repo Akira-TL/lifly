@@ -1,136 +1,123 @@
-# Lifly GOAI 开放复用、隐私与合规说明
+# Lifly GOAI 源码开放、隐私与合规说明
 
-## 1. 开放复用方向
+## 1. 源码开放方式
 
-Lifly 当前长期方向是：
+Lifly 不打算允许第三方拿项目代码直接做商业产品，也不打算用 MIT / Apache 这类允许商业复用的宽松许可证。
+
+当前准备采用的方向是：
 
 ```text
-客户端 + MCP + 协议 + 本地模式：开放复用
-官方云同步 / 存储 / 官方 AI 服务：可商业化运营
+第一方源码：PolyForm Noncommercial 1.0.0
+商业使用：需要单独获得 Lifly 著作权方授权
+官方云服务：由 Lifly 自行运营或授权运营
+第三方依赖：继续遵守各自原许可证
 ```
 
-适合开放复用的工程部分包括：
+PolyForm Noncommercial 允许非商业使用、修改和分发，因此别人可以 fork、研究、修改，也可以在非商业前提下继续分享自己的版本。商业目的默认不在授权范围内。
 
-- MCP tool schema；
-- Local MCP；
-- Agent / Candidate Action 业务协议；
-- 本地优先数据模型；
-- 导入导出格式；
-- Personal Compute Node 相关本地组件；
-- 客户端与技术文档（最终范围以许可证收口为准）。
+为了保留原作者信息，正式发布时会在许可证旁加入 Required Notice。fork 或重新分发时，需要把许可证和该 Notice 一并保留。最终 Notice 中的著作权主体名称要在 `LICENSE` 正式落库前确认。
 
-## 2. 当前许可证状态
+需要注意：因为我们限制商业用途，这种方式更准确的称呼是 **source-available / non-commercial**，不属于 OSI 对“Open Source”的定义。比赛材料中直接说明，不把两者混在一起。
 
-**不要在 GOAI 材料中写“已采用某许可证”，除非仓库正式加入对应 LICENSE 并完成依赖/IP 审核。**
+## 2. 为什么这样选
 
-当前候选方向：
+我们希望代码能被看见、研究和改进，也愿意让个人开发者、学生和非商业项目 fork。但如果有人基于 Lifly 做收费 SaaS、付费客户端、商业集成或其他商业产品，需要先拿到单独授权。
 
-- AGPL；
-- Apache / MIT + 官方商业云；
-- 双许可证。
+这和 Lifly 自己未来提供官方云同步、存储或 AI 服务并不冲突：著作权方可以同时提供非商业源码许可和单独的商业许可。
 
-初赛建议表述：
+## 3. 用户数据
 
-> Lifly 采用“核心能力开放复用 + 官方云服务商业化”的长期方向。当前正在完成最终许可证与第三方依赖边界收口；MCP 协议、本地能力、数据迁移与用户可导出原则会优先保持开放和可复现。
+Lifly 的产品边界不建立在“把用户数据锁在云端”上。
 
-如果比赛平台要求必须填写明确 License，应在提交前完成一次独立法律/IP 决策，不要临时随意选择。
-
-## 3. 用户数据所有权
-
-Lifly 产品原则：
+目前的原则是：
 
 - 用户可以导出核心数据；
 - 用户可以删除云端数据；
-- 核心功能应支持本地模式；
-- 不以用户数据锁定作为商业模式；
-- Cloud AI 不获得账户级永久解密能力。
+- 核心能力保留本地运行路径；
+- Cloud AI 不获得账号级长期解密能力。
 
-## 4. 数据授权边界
+## 4. External Agent 的权限
 
-### External Agent
+Hermes、OpenClaw 或自建 Agent 是否能读邮箱、截图或调用第三方工具，由用户自己在对应 Agent 上授权。
 
-Hermes / OpenClaw / 自建 Agent 的邮箱、截图、第三方工具权限由用户自己配置和授权。
+因此材料里不要写“Lifly 会自动读取你的邮箱”。更准确的是：用户已经授权的 Agent 可以读取相关内容，再把用户允许的数据通过 Lifly MCP 送进来。
 
-Lifly 不应宣传成“自动获得用户邮箱权限”；正确表达是：
+## 5. Cloud AI 的权限
 
-> 用户已经授权的 Agent 可以读取相关内容，并通过 Lifly MCP 把明确选择的数据写入 Lifly。
+Cloud AI 只有在用户明确确认 Selective Disclosure 后，才拿到当前任务需要的那部分上下文。
 
-### Cloud AI
+界面和协议应能说明：
 
-Cloud AI 仅在用户明确 Selective Disclosure 后处理当前任务需要的最小上下文。
+- 数据发给谁；
+- 发哪些内容；
+- 为什么要发；
+- 这次授权的范围。
 
-要求：
+Cloud AI 不获得 ADK，也不会因为一次授权得到整个账号的持续解密能力。
 
-- 显示目标 Provider；
-- 显示发送数据范围；
-- 显示原因；
-- 第一版授权可限定为 once；
-- Cloud AI 不获得 ADK；
-- 不形成账户永久明文读取能力。
+## 6. Personal Compute Node
 
-### Personal Compute Node
+用户自己的 Trusted Desktop 可以运行 Ollama、Local MCP 和后台执行器。
 
-用户自己的 Trusted Desktop 可以运行 Ollama / Local MCP / background executor。
+手机或 Web 发往 Desktop 的 AI Job 使用设备间加密；Cloud Relay 负责路由和状态，不持有业务明文的解密能力。
 
-设备间 AI Job 应以加密任务传输；云 relay 不持有解密密钥。
+## 7. 财务数据怎么描述
 
-## 5. 财务数据边界
+Lifly 是个人生活数据和记账工具，不是银行、支付机构、投资顾问或自动交易平台。
 
-Lifly 是个人生活数据与记账管理工具，不应在本次比赛材料中描述为：
-
-- 银行；
-- 支付机构；
-- 投资顾问；
-- 自动交易平台；
-- 银行级账户对账系统。
-
-支付宝 / 微信账单能力当前重点是：
+支付宝 / 微信账单这部分，目前实际做的是：
 
 - 文件解析；
-- 收入/支出/transfer 识别；
-- preview；
+- 收入、支出和 transfer / 中性流水识别；
+- 导入预览；
 - duplicate 检测；
 - 用户确认；
 - rollback。
 
-## 6. AI 执行安全边界
+不要把它包装成银行级账户自动对账。
 
-核心原则：
+## 8. AI 写入为什么要有中间层
+
+Lifly 不让 Provider、MCP 或 Cloud AI 直接把推理结果当成正式业务数据。
 
 ```text
-AI Reasoning
+AI 输出
   ↓
 Candidate Actions
   ↓
-Validate / Review / Confirm
+校验 / 查看 / 确认
   ↓
 Local Core Commit
   ↓
 Audit / Undo
 ```
 
-Provider / MCP / Cloud AI 不应被描述为可以绕过业务边界直接修改正式数据库。
+这条边界同时解决两个问题：模型可能判断错，用户也可能临时改变主意。
 
-## 7. 第三方依赖与模型披露
+## 9. 第三方依赖
 
-最终提交建议附一页简表：
+最终提交包应该从真实依赖文件生成 Third-party Notices，而不是只在 PPT 里列几个熟悉的名字。
 
-| 类型 | 示例 | 用途 | 是否用户可替换/自托管 |
-|---|---|---|---|
-| Local model runtime | Ollama | Personal Compute Node 推理 | 是 |
-| OpenAI-compatible provider | 用户自配 | 可选模型接口 | 是 |
-| PowerSync | 同步基础设施 | 跨端同步 | 视部署配置 |
-| Flutter | 客户端 | Web / Android / Desktop | 开源框架 |
-| PostgreSQL / Redis / MinIO | 服务基础设施 | 元数据、队列、对象存储等 | 可自托管 |
+需要覆盖：
 
-最终版本应以真实 `package.json` / `pyproject.toml` / `pubspec.yaml` / Cargo 依赖为准生成 Third-party Notices，不要仅凭宣传页列依赖。
+- Flutter / Dart；
+- Python / FastAPI 相关依赖；
+- Node / MCP 相关依赖；
+- Rust OPAQUE helper；
+- PowerSync；
+- PostgreSQL / Redis / MinIO；
+- Ollama 以及实际演示模型的许可证和使用说明。
 
-## 8. 比赛材料中的风险提示
+第三方依赖继续遵守各自许可证，Lifly 的非商业许可证只覆盖我们有权许可的第一方代码。
 
-建议在技术页脚或附录明确：
+## 10. 参赛材料里的已知边界
 
-- Demo Security Profile 不等于最终生产级账号恢复/设备审批模型。
-- Recovery Key 尚未作为完成能力宣传。
-- 完整第三方 Calendar 生态属于后续方向。
-- Open-source license 尚在最终收口阶段时应明确披露。
-- 任何真实账单/邮箱演示都使用脱敏或 Demo 数据。
+当前不要宣称：
+
+- Recovery Key 已经完成；
+- 完整 Google / Apple Calendar 生态已经接通；
+- AI 直接记账的所有入口已经统一复用账单导入去重实现；
+- Lifly 完全不依赖云端；
+- Demo Security Profile 已经等同于最终生产安全模型。
+
+真实账单、邮箱和个人信息只使用脱敏数据或专门的 Demo 数据。

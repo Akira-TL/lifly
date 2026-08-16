@@ -1,172 +1,171 @@
 # Lifly GOAI 初赛提交清单
 
-## A. 必交
+## 今天一定要有
 
-### A1. 项目介绍
+### 1. 项目介绍
 
 文件：`01_project_introduction.txt`
 
-内容必须回答：
+已经按报名页使用场景写好，重点是问题、解决方式、当前进展和源码开放边界，不塞过多架构名词。
 
-- 目标用户是谁；
-- 真实痛点是什么；
-- Lifly 如何解决；
-- 为什么不是普通 chatbot；
-- 核心创新与差异；
-- 当前进展；
-- 开放复用方向。
+### 2. Proposal PDF / PPTX
 
-### A2. Proposal PPT / PDF
-
-最终建议同时提供：
+建议文件名：
 
 ```text
 Lifly_GOAI_2026_Proposal.pdf
 Lifly_GOAI_2026_Proposal.pptx
 ```
 
-建议 16–20 页，不要求固定画幅；以 B3 / Living Paper · Life Fly 为视觉母版。
+B3 / Living Paper · Life Fly 继续作为视觉母版。
 
-推荐页面结构：
+内容顺序可以保持在 16–20 页左右：
 
-1. Lifly = Life + Fly / 让 AI 真正参与生活
-2. 用户不应该把生活管理变成第二份工作
-3. 生活信息为什么天然碎片化
-4. Lifly 是什么 / Personal Life Agent
-5. 一句话 → Memo + Ledger + Task
-6. Bring Your Own Agent / Hermes / OpenClaw / MCP
-7. 邮件 / 截图 / 账单自动记账
-8. 手动账本与自动账本的重复判断
-9. 微信 / 支付宝 transfer / duplicate
-10. Agent 自动任务与提醒
-11. One Life Space：Memo / Ledger / Task / Assets / Overview / AI
-12. Personal Compute Node
-13. Local-first + E2EE
-14. Candidate Actions / Audit / Undo
-15. Phone / Web / Desktop / Agent 多端角色
-16. A Day with Lifly
-17. 工程架构与可复现性
-18. GOAI Boundless Agents 对齐 / 未来计划 / 结尾
+1. Lifly = Life + Fly
+2. 为什么生活管理本身也成了负担
+3. Lifly 是什么
+4. 一句话变成 Memo / Ledger / Task
+5. 自己的 Agent 怎么通过 MCP 接进来
+6. 邮件、截图和账单怎么进入 Lifly
+7. 手动账本和导入账单怎么避免重复
+8. 微信 / 支付宝 transfer / 中性流水
+9. Task / Reminder Strategy
+10. Memo / Ledger / Task / Assets / Overview
+11. Personal Compute Node
+12. Local-first / E2EE
+13. Candidate / Audit / Undo
+14. Phone / Web / Desktop / Agent 的分工
+15. 一天里的真实使用方式
+16. 工程架构与可验证证据
+17. 当前进展、开放边界和后续计划
+18. 结尾
 
-## B. 强烈建议随初赛一起交
+不必为了页数硬凑内容。
 
-### B1. 真实 Demo 视频
+### 3. 在线 Web
 
-```text
-Lifly_Demo_3min.mp4
-```
-
-最好 3–5 分钟，至少证明：
-
-- 自然语言生成多种 Candidate Action；
-- External Agent / MCP 工具调用；
-- 一次记账自动化或账单导入；
-- Personal Compute Node / Local AI；
-- 隐私边界或 Audit / Undo；
-- 至少两个端真实运行。
-
-### B2. 构建包
-
-如果上传大小允许：
+提交地址：
 
 ```text
-builds/
-  Lifly-v0.9.0-android-release.apk
-  Lifly-v0.9.0-windows-x64.zip
+https://lifly.babelbeast.com/
 ```
 
-Android 必须是 signed release，并附签名验证记录。
+当前生产 Web 使用 Flutter release 静态产物，由 Nginx 直接托管。提交前再跑一次：
 
-Windows 必须来自真实 Windows host 构建，不用 WSL Linux bundle 冒充 Windows 成品。
+```bash
+bash scripts/web-release-build.sh
+curl -I https://lifly.babelbeast.com/
+curl https://lifly.babelbeast.com/api/v1/health
+```
 
-### B3. 运行说明
+### 4. 项目介绍填入报名系统
+
+不要只把 txt 放 ZIP 里，报名页字段本身也要填完整。
+
+## 有现成成品就一起交
+
+### Android
+
+```text
+Lifly-v0.9.0-android-release.apk
+android-signature.txt
+```
+
+APK 应该是 signed release，并保留 `apksigner` 验证结果。
+
+### Windows
+
+```text
+Lifly-v0.9.0-windows-x64.zip
+```
+
+Windows 包必须来自真实 Windows host 构建，不拿 WSL/Linux bundle 改名。
+
+### 工程说明
+
+平台允许附件较多时，可以附：
 
 ```text
 RUNNING.md
+TECHNICAL_EVIDENCE.md
+OPEN_SOURCE_AND_COMPLIANCE.md
 ```
 
-只写评委真正需要的最短路径：
+## 视频这轮不赶
 
-- 系统要求；
-- 依赖；
-- 配置；
-- 启动；
-- Demo 账号；
-- Ollama 模型；
-- 预期结果；
-- 已知限制。
+初赛的 submission requirements 把 prototype / video 列为 optional，所以今天不为了视频牺牲 PDF、PPT 或生产 Web。
 
-### B4. 技术证据
+赛道同时要求可演示或等价的可验证材料。我们这一轮用在线 Web、可安装构建包和工程证据承担这件事。
+
+如果晋级复赛，Demo / Demo Video 就会变成需要认真补齐的材料。
+
+## License 怎么交代
+
+当前准备采用：
 
 ```text
-TECHNICAL_EVIDENCE.pdf / md
+PolyForm Noncommercial 1.0.0
 ```
 
-建议 3–6 页附录，包含：
+意思是第一方源码可以被查看、fork、修改和非商业分发；商业使用需要另行授权。
 
-- 架构图；
-- MCP tool chain；
-- E2EE ciphertext evidence；
-- Compute Node relay；
-- Candidate → Commit → Audit → Undo；
-- release/golden PASS；
-- Android notification。
-
-## C. 复赛前必须准备，初赛有空间则一起交
-
-### C1. 代码 / Repo
-
-建议：
+比赛材料里的准确说法：
 
 ```text
-SOURCE_REPOSITORY.txt
+Source-available for non-commercial use.
+Commercial use requires separate authorization.
 ```
 
-包含：
+不要写成 MIT / Apache，也不要写“完全开源”。因为商业用途受到限制，它不属于 OSI 定义下的 Open Source。
 
-- Repo URL；
-- 提交 SHA；
-- 对应 v0.9.0 / competition tag；
-- build instructions；
-- sample data；
-- runtime evidence。
+正式 `LICENSE` 落库前还需要确定著作权主体在 Required Notice 中的写法，并核对第三方依赖。
 
-如果暂不公开完整 repo，可明确提交可验证源码快照及开放计划；但要注意 GOAI 的开放复用评分，不建议只交完全不可验证的闭源二进制。
+## One-pager
 
-### C2. Open Source Plan / LICENSE
+One-pager 就是一页项目摘要，通常是一张 A4 或一页大画布。
 
-至少提供：
+它适合放：
+
+- 一句话定位；
+- 用户问题；
+- 一张产品 / Agent 流程图；
+- 三四个最重要的产品画面；
+- 为什么和普通聊天机器人不同；
+- Demo / Repo 链接或二维码；
+- 联系方式。
+
+它不是初赛必交项。GOAI 总决赛会要求 one-page project summary，晋级以后再做。
+
+## demo-reset
+
+`demo-reset.sh` 是内部演示工具。
+
+它把专门的 Demo 账号恢复到一个固定起点，例如：
 
 ```text
-OPEN_SOURCE_PLAN.md
+清掉上一轮演示新建的数据
+清掉 pending candidate / 临时 AI Job
+恢复固定示例 Memo / Ledger / Task
+恢复默认 Compute Node / Demo 设置
 ```
 
-最好在复赛前完成最终 License 决策和 Third-party Notices。
+这样同一条演示可以连续跑很多次，不会被上一次留下的数据干扰。
 
-### C3. Demo reset / health
+它绝对不能碰真实用户数据。初赛不用补，复赛做现场 Demo 前再实现。
 
-当前计划中建议但仓库尚缺：
+## 复赛再补的东西
 
-```text
-scripts/demo-reset.sh
-scripts/demo-health.sh
-scripts/check-v0.9.1-roadshow-gate.sh
-```
+- `demo-reset.sh`
+- `demo-health.sh`
+- `check-v0.9.1-roadshow-gate.sh`
+- Demo 视频或备用录屏
+- 最终 Third-party Notices
+- 更完整的 RUNNING.md
+- One-pager
+- 答辩 FAQ
+- 一套可重复导入的脱敏 Demo Dataset
 
-这些不是今天提交的必要条件，但复赛/现场演示非常值得补。
-
-## D. 可选加分材料
-
-- `Lifly_Demo_90s.mp4`：评委快速观看版。
-- `ONE_PAGER.pdf`：一页项目摘要，后续决赛官方也会要求 one-page project summary，可提前准备。
-- `ARCHITECTURE.png/svg`：一张可单独传播的架构图。
-- `PRIVACY_MODEL.pdf`：隐私 / E2EE / Selective Disclosure 一页图。
-- `MCP_INTEGRATION.md`：给 Hermes / OpenClaw / 自建 Agent 的接入示例。
-- `SAMPLE_DATA/`：脱敏支付宝/微信账单、Demo screenshots、示例自然语言输入。
-- `CHANGELOG.md`：从早期版本到 v0.9.0 的关键工程演进。
-- `TEAM.md`：团队简介、分工与联系方式；报名系统如果已有完整团队信息则不是必须。
-
-## E. 推荐最终 ZIP 结构
+## 推荐提交目录
 
 ```text
 Lifly_GOAI_2026_Preliminary/
@@ -174,55 +173,22 @@ Lifly_GOAI_2026_Preliminary/
 ├── 01_Project_Introduction.txt
 ├── 02_Lifly_GOAI_Proposal.pdf
 ├── 03_Lifly_GOAI_Proposal.pptx
-├── 04_Demo/
-│   ├── Lifly_Demo_3min.mp4
-│   └── Lifly_Demo_90s.mp4                 # optional
-├── 05_Builds/
+├── 04_Builds/
 │   ├── android/
 │   │   ├── Lifly-v0.9.0-release.apk
 │   │   └── signature.txt
 │   └── windows/
 │       └── Lifly-v0.9.0-windows-x64.zip
-├── 06_Engineering/
+├── 05_Engineering/
 │   ├── RUNNING.md
 │   ├── TECHNICAL_EVIDENCE.md
-│   ├── ARCHITECTURE.pdf
 │   └── evidence/
-│       ├── release-gate.log
-│       ├── delivery-gate.log
-│       ├── golden-runtime.log
-│       └── screenshots/
-├── 07_Open_Source/
-│   ├── OPEN_SOURCE_PLAN.md
-│   ├── THIRD_PARTY_NOTICES.md
-│   └── LICENSE                            # when finalized
-└── 08_Links/
-    ├── source_repository.txt
-    └── web_demo.txt                       # only after Web root is verified
+├── 06_License/
+│   ├── OPEN_SOURCE_AND_COMPLIANCE.md
+│   └── THIRD_PARTY_NOTICES.md
+└── 07_Links/
+    ├── web_demo.txt
+    └── source_repository.txt
 ```
 
-## F. 当前优先级
-
-### P0 — 今天提交前
-
-1. 最终 B3 内容定稿。
-2. 生成稳定 PDF。
-3. 生成同内容 PPTX。
-4. 录制 3–5 分钟真实 Demo。
-5. Android signed release APK。
-6. Windows Demo ZIP / EXE bundle。
-7. 把 `01_project_introduction.txt` 填入报名页面。
-
-### P1 — 有剩余时间就补
-
-8. Technical Evidence 3–6 页。
-9. Android 签名验证 / release gate / golden log。
-10. Repo / source snapshot 链接。
-11. Open Source Plan。
-
-### P2 — 晋级后
-
-12. Web 公开 Demo 首页。
-13. demo-reset / demo-health / roadshow gate。
-14. 最终 LICENSE / Third-party Notices。
-15. One-pager / 答辩 FAQ / 现场备份视频。
+如果平台只允许少量文件，就先交项目介绍、Proposal PDF/PPTX 和在线 Web 地址。构建包与工程附件按上传能力再加。

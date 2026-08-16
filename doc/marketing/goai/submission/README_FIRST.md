@@ -1,66 +1,107 @@
 # Lifly × GOAI 2026 初赛提交包
 
-赛道：Boundless Agents / 无界应用  
+赛道：Boundless Agents  
 项目：Lifly  
-版本基线：v0.9.0  
-核心定位：Personal Life Agent / 个人生活执行 Agent
+版本：v0.9.0
 
-## 一句话
+## Lifly 是什么
 
-**Lifly = Life + Fly。让生活更轻，让 AI 真正参与生活。**
+Lifly 来自 Life + Fly。
 
-Lifly 不是另一个聊天机器人，而是一套隐私优先、跨设备、可本地运行的 Personal Life Agent：把备忘、记账、任务提醒、附件与 AI Capture 放进同一份持续的生活上下文，让用户自己的 Agent、自己的电脑和可选云 AI 都可以在明确边界内理解、整理和推进真实生活任务。
+我们做它的原因很简单：生活已经够忙了，不该再花一遍时间整理生活。消费完再开记账软件补一笔，想到事情再切到日历里排时间，收到不同平台的账单再自己对一遍，这些都很琐碎。
 
-## 推荐提交顺序
+Lifly 把备忘、账本、任务、提醒和 AI 放进同一份个人生活数据里。用户可以直接说一句话，也可以把截图、账单或已有 Agent 的处理结果交给 Lifly。AI 先生成候选动作，用户确认后才进入正式数据；需要时还能查看审计记录或撤销。
 
-初赛上传时，优先保证以下四项：
+用户自己的电脑也可以成为 Personal Compute Node，在本机运行 Ollama 和 Local MCP。云端 AI 不是默认接管者，只有用户明确授权时才会拿到当前任务需要的最小信息。
 
-1. `01_project_introduction.txt`：报名页项目介绍，可直接粘贴。
-2. 最终 `Lifly_GOAI_Proposal.pdf`：评委主阅读材料。
-3. 同版 `Lifly_GOAI_Proposal.pptx`：方便后续复赛/答辩继续编辑。
-4. `Lifly_Demo_3min.mp4`：强烈建议提交；用真实设备证明闭环，不以宣传片替代产品演示。
+## 今天提交什么
 
-如果平台允许附加材料，再提供：
+初赛不用把材料做得过重。优先准备：
 
-5. Android signed release APK。
-6. Windows x64 Demo Bundle / EXE ZIP。
-7. Web Demo URL（仅在 Web 首页已稳定部署后提供）。
-8. `RUNNING.md` + `TECHNICAL_EVIDENCE.md`。
-9. 代码仓库链接或源码归档（初赛可选，复赛应准备）。
+1. `01_project_introduction.txt`：报名页项目介绍。
+2. `Lifly_GOAI_2026_Proposal.pdf`：主阅读材料。
+3. `Lifly_GOAI_2026_Proposal.pptx`：和 PDF 同内容，方便后续继续改。
+4. 在线体验地址：`https://lifly.babelbeast.com/`。
+5. Android / Windows 构建包：平台允许附加时一起放进去。
+6. `03_technical_evidence.md`：作为工程证据或附录使用。
 
-## 评委 30 秒应该看到什么
+视频这轮不作为 P0。初赛提交表中原型和视频是可选项；我们用可访问的 Web、构建包和工程证据来证明项目不是概念稿。
 
-- **真实场景**：用户不应该每天逐笔记账、手画日程、反复整理生活信息。
-- **Agent 闭环**：自然语言 / 邮件账单 / 截图 → Agent → Lifly MCP → Candidate Action → 确认 → Memo / Ledger / Task → Reminder / Audit / Undo。
-- **Bring Your Own Agent**：Hermes、OpenClaw 或用户自己的 Agent 可通过 Cloud MCP 使用 Lifly；本地 Agent 可通过 Local MCP 使用同一业务语义。
-- **Personal Compute Node**：用户自己的 Desktop + Ollama 可以成为 AI 计算节点，手机通过加密任务调用。
-- **隐私边界**：Local-first、E2EE Sync、Trusted Devices、Selective Disclosure；本地节点离线不会静默把明文切到 Cloud AI。
-- **可审计执行**：AI 先产生 Candidate Actions，不直接写业务事实；动作可查看、确认、修改、审计和撤销。
+## 评委应该很快看懂的几件事
 
-## 官方初赛与后续准备
+### 生活管理可以少做一遍
 
-GOAI Boundless Agents 初赛核心提交是“项目介绍 + 提案 PPT/PDF”，原型或视频在提交表中列为可选；但赛道核心要求同时强调至少一个可演示、可验证的闭环任务，并要求 runnable demo、视频或等价验证材料。因此本项目按“**PDF/PPT + 真实 Demo 视频 + 可运行构建包**”标准准备，而不是只满足最低上传项。
+用户不需要为了“记录生活”再做一次重复劳动。支付截图、账单文件、自然语言和外部 Agent 都可以成为输入。
 
-复赛如果晋级，还需要更新方案、Demo、运行说明、代码或等价工程材料，因此本目录中的运行说明、技术证据和开源边界应从初赛开始维护，避免二次重做。
+### 自己已经在用的 Agent 可以直接接进来
 
-## 当前提交包尚需生成的二进制/媒体产物
+Hermes、OpenClaw 或自建 Agent 可以通过 Cloud MCP 使用 Lifly；本地 Agent 则可以走 Local MCP。Lifly 不要求用户换掉现有 Agent。
 
-- [ ] 最终 Proposal PDF
-- [ ] 最终 Proposal PPTX
-- [ ] 3–5 分钟真实 Demo 视频 MP4
-- [ ] 60–90 秒短版 Demo（可选，用于快速审阅）
-- [ ] Android signed release APK + `apksigner` 验证记录
-- [ ] Windows x64 Demo Bundle / ZIP（真实 Windows host 构建）
-- [ ] Web Demo 首页部署（当前只确认公网 API health 可用；未将 Web 根路径视为可提交 Demo）
-- [ ] 最终源码仓库 URL / 源码快照
-- [ ] 最终许可证或至少明确的 Open Source Plan
+### 用户自己的电脑可以参与计算
 
-## 不应在材料中宣称
+Desktop 可以注册为 Personal Compute Node。手机把加密任务发给自己的电脑，再由 Ollama / Local MCP 处理。
 
-- Recovery Key 已完成。
-- Lifly 完全不使用云端。
-- AI 只能本地运行。
-- 当前已经完成所有第三方日历生态接入。
-- 当前所有 AI 记账入口均已完全复用账单导入的业务去重链。
-- 已确定最终开源许可证（当前策略仍在 AGPL / Apache/MIT + 商业云 / 双许可证之间收口）。
-- 虚构用户量、收入、融资、奖项或性能数据。
+### AI 没有直接改数据库的特权
+
+AI 输出先成为 Candidate Actions。确认、校验、提交、审计和撤销仍然走 Lifly 的业务边界。
+
+### 隐私边界是可解释的
+
+核心生活数据本地可用，跨端同步使用 E2EE。Personal Compute Node 离线时，不会静默把原本准备在本地处理的明文交给 Cloud AI。
+
+## 在线 Web
+
+生产 Web 使用 Flutter release 静态构建，由 Nginx 直接托管，不依赖 Flutter 开发服务器常驻。
+
+当前地址：
+
+```text
+https://lifly.babelbeast.com/
+```
+
+API：
+
+```text
+https://lifly.babelbeast.com/api/v1
+```
+
+每次部署前都应重新执行 `scripts/web-release-build.sh`，否则 Nginx 指向的 `apps/client_flutter/build/web` 不存在时，根路径会直接返回 404。
+
+## License 方向
+
+我们不打算允许别人拿 Lifly 的代码直接做商业产品。
+
+当前准备采用的方向是 **PolyForm Noncommercial 1.0.0**：允许查看源码、fork、修改和非商业分发；商业使用需要单独获得授权。分发和 fork 需要保留许可证以及项目提供的 Required Notice，用来标明原项目和著作权归属。
+
+这意味着 Lifly 更准确的说法是 **source-available / non-commercial**，而不是 OSI 定义下的“完全开源”。比赛材料里直接说明这一点，不绕词。
+
+最终 `LICENSE` 文件落库前，还要确认著作权主体的正式写法，并完成第三方依赖检查。
+
+## 暂时不要写进宣传材料的内容
+
+以下能力目前不应该说成已经完成：
+
+- Recovery Key；
+- “完全不用云端”；
+- “AI 只能本地运行”；
+- Google / Apple Calendar 等完整第三方日历生态；
+- 所有 AI 记账入口都已经复用同一套账单导入去重逻辑；
+- 银行级跨账户自动对账。
+
+也不要写用户量、营收、融资、性能数字这类没有真实数据支撑的内容。
+
+## One-pager 是什么
+
+One-pager 就是一页项目摘要。它不是缩短版 PPT，而是让一个第一次看到 Lifly 的人，在一页里知道：解决什么问题、产品怎么工作、最特别的地方是什么、现在做到哪里、从哪里体验。
+
+通常一页 A4 或一张大画布就够，可以放一个主流程图、三四个产品截图、Demo / Repo 二维码和联系方式。
+
+这不是今天初赛的必交项。GOAI 在总决赛材料里会要求 one-page project summary，晋级以后再做更合适。
+
+## demo-reset 是什么
+
+`demo-reset.sh` 是给我们自己演示用的，不是产品功能。
+
+它的作用是把专门的 Demo 账号恢复到一个已知状态，例如清掉上一次演示创建的 Memo / Ledger / Task、待处理 Candidate、临时 AI Job，再恢复固定的示例数据。这样一条 Demo 可以连续演很多次，不会因为前一次留下的数据导致下一次出现“已经存在”“金额变了”之类的问题。
+
+它不应该碰真实用户数据，也不是今天初赛要补的东西。复赛需要重复现场演示时再做。

@@ -1,10 +1,10 @@
-# Lifly GOAI 技术与可验证证据清单
+# Lifly GOAI 技术证据
 
-这份材料不是宣传文案，而是给评委快速验证“真的能跑、真的有边界”的工程索引。
+这份材料不负责“讲好听”，只负责让评委能快速确认几件事：项目确实能跑，AI 确实能调用工具，用户数据的边界不是靠口头承诺，出错以后也有办法追踪和撤销。
 
-## 1. 架构证据
+## 1. 先看这几份文档
 
-建议提交包内附 1 张架构图，并在 README 中链接以下正式文档：
+如果评委想继续往下看工程实现，优先给这些入口：
 
 - `doc/architecture/architecture-overview.md`
 - `doc/design/ai-interaction.md`
@@ -13,102 +13,91 @@
 - `doc/architecture/sync-and-offline.md`
 - `CONTEXT.md`
 
-核心链路：
+Lifly 的业务写入大致是：
 
 ```text
 Phone / Web / Desktop / External Agent
         ↓
-Candidate Actions / MCP Tool Contract
+Candidate Actions / MCP Tools
         ↓
-Local Core controlled commit
+业务校验与确认
+        ↓
+Local Core Commit
         ↓
 Audit / Undo
         ↓
 E2EE Sync
 ```
 
-Personal Compute Node：
+Personal Compute Node 的路径是：
 
 ```text
-Requester Device
-  ↓ device-to-device encryption
-Cloud Relay (ciphertext only)
+请求设备
+  ↓ 设备间加密任务
+Cloud Relay
   ↓
 Trusted Desktop Compute Node
   ↓
 Ollama / OpenAI-compatible Provider + Local MCP
   ↓
-Candidate Actions / encrypted result
+候选动作 / 加密结果
 ```
 
-## 2. 模型与 Agent 说明
+## 2. AI 和模型怎么接
 
-当前可披露：
+当前工程里有三类 Provider 路径：
 
-- Local AI：Ollama Provider。
-- OpenAI-compatible Provider：可作为用户自配模型接口。
-- Lifly Cloud AI：显式 Selective Disclosure 后的单次最小上下文推理。
-- Deterministic parser / validator：作为安全验证与 fallback 层。
-- Provider 不直接写业务数据库，只产生结构化候选动作。
+- Ollama：用户自己的 Desktop Node 可以本地运行；
+- OpenAI-compatible：用户可以自行配置兼容接口；
+- Lifly Cloud AI：只有经过本次 Selective Disclosure 后才处理必要上下文。
 
-Demo 默认推荐使用仓库 Golden 脚本指定的本地 Ollama 模型；提交材料中应写实际录制时使用的模型名称和版本，不要只写“Ollama”。
+另外保留 deterministic parser / validator 作为兜底和校验层。
 
-## 3. MCP / Tool Calling 证据
+无论使用哪个 Provider，模型都不直接获得“改数据库”的能力。AI 先返回结构化候选动作，业务层再决定它能不能提交。
 
-Cloud MCP 与 Local MCP 使用同一业务语义边界。
+提交材料里如果提到具体模型，要写实际演示时使用的模型名称和版本，不只写“Ollama”。
 
-对外重点说明：
+## 3. MCP 怎么证明
 
-- Hermes / OpenClaw / 自建 Agent 可通过 MCP 调 Lifly。
-- 外部 Agent 必须经过受控 MCP 工具，不直接接数据库。
-- 关键写入包含 memo / ledger / task / capture 等生活动作。
-- MCP 认证、Tool schema、Candidate Action、Audit / Undo 都有工程合同。
+Cloud MCP 和 Local MCP 使用同一套业务语义。
 
-建议附：
+可给评委看的证据包括：
 
-- MCP tool list 截图或 JSON；
-- 一次 Hermes/OpenClaw 调用 Lifly MCP 的真实日志；
-- 一次 `task_create` 或 `expense_create` 的 request → result；
-- 一次失败/重复投递的幂等证据。
+- MCP tool list；
+- Hermes / OpenClaw / 自建 Agent 的一次真实调用日志；
+- 一次 `task_create`、`expense_create` 或 capture 的 request / result；
+- 一次重复投递或失败场景，证明工具边界不是只处理 happy path。
 
-## 4. E2EE / Privacy 证据
+外部 Agent 不直接连数据库。它拿到的是 Lifly 暴露出来的工具。
 
-必须避免只写“我们采用 E2EE”。建议提供 4 个可验证证据：
+## 4. E2EE 不要只写在 PPT 上
 
-### A. 云数据库明文不可见
+最有用的是下面几类证据。
 
-创建测试 Memo / Expense / Task 后，查询服务端存储，展示 ciphertext envelope；搜索测试正文/金额/任务文本得不到业务明文。
+### 云端看不到业务正文
 
-### B. AI relay 只看到密文
+创建一条专门用于验证的 Memo / Expense / Task，同步后直接查服务端存储。应该能看到 encrypted envelope，但查不到测试正文、金额描述或任务内容的业务明文。
 
-展示 relay 记录中存在：
+### AI Relay 看不到 Job 正文
 
-- target device
-- status
-- ciphertext / envelope metadata
+Relay 需要知道目标设备、任务状态和密文 envelope，但不应该持有 Job 的解密密钥或业务明文。
 
-但不存在 Job 明文。
+### Cloud AI 需要本次授权
 
-### C. Cloud AI 明确授权
+Selective Disclosure 页面应显示：
 
-展示 Selective Disclosure UI：
+- 发给哪个 Provider；
+- 这次要发送哪些数据；
+- 为什么需要；
+- 授权只针对当前任务。
 
-- provider / target
-- data scope
-- reason
-- once authorization
+Cloud AI 不获得 ADK，也不会因此得到账号级长期解密能力。
 
-Cloud AI 不获得 ADK，也不获得账户永久解密能力。
+### 本地节点离线时不偷偷换云端
 
-### D. No silent fallback
+Default Compute Node 下线以后，本地请求应该返回 unavailable / retry。只有用户主动改选 Cloud AI 并确认发送范围后，才走云端路径。
 
-Default Compute Node 离线：
-
-- local request 返回 unavailable / retry；
-- 不自动把明文发给 Cloud AI；
-- 只有用户主动授权后才走 Cloud AI。
-
-## 5. Release / Test Evidence
+## 5. 可以直接引用的工程脚本
 
 仓库已有：
 
@@ -116,10 +105,11 @@ Default Compute Node 离线：
 - `scripts/check-v0.9.0-delivery-gate.sh`
 - `scripts/run-v0.9.0-golden.sh`
 - `scripts/android-release-build.sh`
+- `scripts/web-release-build.sh`
 - `scripts/windows-release-build.ps1`
 - `scripts/assemble-desktop-demo-bundle.sh`
 
-建议提交时生成一个 `evidence/` 目录：
+如果要给评委附日志，不需要把所有测试输出都塞进去。保留和参赛主线直接相关的几份即可：
 
 ```text
 evidence/
@@ -131,41 +121,31 @@ evidence/
   server-ciphertext-proof.txt
   relay-ciphertext-proof.txt
   screenshots/
-    device-registry.png
-    candidate-actions.png
-    cloud-ai-disclosure.png
-    android-reminder.png
-    encrypted-sync.png
 ```
 
-不要只附测试数量；优先附和比赛主叙事直接相关的 PASS 证据。
+## 6. 当前已经确认的交付状态
 
-## 6. 当前交付事实与缺口
+- 项目版本基线是 v0.9.0；
+- 仓库里已有 Linux Desktop / Compute Node Demo 构建目录和 release / delivery 脚本；
+- Web release 已通过 `scripts/web-release-build.sh` 生成；
+- `https://lifly.babelbeast.com/` 当前可以返回 Lifly Web 首页；
+- `https://lifly.babelbeast.com/api/v1/health` 当前返回 v0.9.0 health OK；
+- 最终 APK、Windows ZIP、PDF、PPTX 仍需要整理到正式提交目录；
+- `scripts/demo-reset.sh`、`scripts/demo-health.sh`、`scripts/check-v0.9.1-roadshow-gate.sh` 目前还没有，这些留到复赛演示稳定性阶段再补。
 
-截至本次材料盘点：
+## 7. 最短运行说明应该写什么
 
-- 项目版本基线为 v0.9.0。
-- 仓库内存在 Linux Desktop / Compute Node Demo build 目录与 delivery/release 脚本。
-- 未在项目提交目录中发现最终 APK / Windows ZIP / PDF / PPTX / MP4 成品。
-- 公网 API `https://lifly.babelbeast.com/api/v1/health` 当前返回 v0.9.0 health OK。
-- 公网根路径当前不是可用 Web Demo 首页，因此不要把 `https://lifly.babelbeast.com/` 直接提交为在线体验地址，除非先完成 Web 部署与复查。
-- `scripts/demo-reset.sh`、`scripts/demo-health.sh`、`scripts/check-v0.9.1-roadshow-gate.sh` 当前尚未存在；它们不是初赛硬性材料，但对复赛/现场稳定演示很有价值。
-
-## 7. 最小可复现说明应包含
-
-即使初赛不强制源码，建议准备：
+不要把整套开发文档直接甩给评委。`RUNNING.md` 只需要回答：
 
 ```text
-Platform requirements
-Docker / Node / pnpm / Python uv / Flutter / Ollama
-Environment variables
-Startup scripts
-Demo account preparation
-Expected ports
-Expected model
-Health checks
-Golden demo command
-Known host-specific limitations
+需要什么系统和依赖
+怎么填环境变量
+怎么启动
+Demo 用哪个账号
+Ollama 用哪个模型
+各服务应该看到什么 health
+怎么跑 Golden Demo
+有哪些已知的宿主机限制
 ```
 
-复现说明必须写“可运行路径”，不要让评委自己从完整开发文档中猜启动方式。
+评委应该照着几步命令就能知道入口在哪里，而不是先研究整个 monorepo。
