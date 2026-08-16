@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lifly — Living Paper / Life Fly</title>
+  <meta name="description" content="Lifly GOAI 宣传册视觉提案 B3 — Living Paper / Life Fly" />
+  <style>
+    :root{
+      --paper:#f2eee4;--paper-2:#e5dfd2;--paper-3:#fbf8f1;--ink:#171813;--soft:#6f7069;
+      --sage:#61715d;--sage-dark:#243029;--brick:#b45d45;--red:#a34436;--line:rgba(23,24,19,.18);
+      --pad:clamp(28px,4.55vw,82px);
+    }
+    *{box-sizing:border-box}
+    html{background:#d8d1c3;scroll-behavior:smooth;scroll-snap-type:y proximity}
+    body{margin:0;background:var(--paper);color:var(--ink);font-family:"Aptos","Segoe UI Variable","PingFang SC","Microsoft YaHei",sans-serif;overflow-x:hidden}
+    body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:30;opacity:.075;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.30'/%3E%3C/svg%3E");mix-blend-mode:multiply}
+    .nav{position:fixed;z-index:20;right:28px;top:24px;display:flex;align-items:center;gap:14px;padding:9px 10px 9px 16px;background:rgba(242,238,228,.9);border:1px solid rgba(23,24,19,.12);box-shadow:0 14px 50px rgba(60,48,33,.07);backdrop-filter:blur(18px)}
+    .nav b{font-family:"Iowan Old Style","Baskerville","Songti SC",serif;font-size:14px;font-weight:500}.nav span{font-size:11px;color:var(--soft);font-variant-numeric:tabular-nums}.nav button{border:0;background:var(--ink);color:var(--paper);padding:8px 12px;font-weight:750;cursor:pointer}
+    .page{position:relative;min-height:100dvh;padding:var(--pad);display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;scroll-snap-align:start;border-bottom:1px solid rgba(23,24,19,.08)}
+    .page>*{position:relative;z-index:2}.page:after{content:"";position:absolute;inset:18px;border:1px solid rgba(23,24,19,.055);pointer-events:none}
+    .folio,.foot{display:flex;justify-content:space-between;align-items:center;gap:22px;font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:#6b6d66}.folio{padding-top:42px}.foot{border-top:1px solid var(--line);padding-top:12px}.folio .series{font-family:"Iowan Old Style","Baskerville","Songti SC",serif;font-style:italic;text-transform:none;letter-spacing:.02em;font-size:14px;color:var(--sage)}
+    h1,h2,h3,p,blockquote{margin:0}h1,h2,.serif{font-family:"Iowan Old Style","Baskerville","Songti SC","STSong",serif}
+    h1{font-size:clamp(64px,9.7vw,166px);line-height:.84;letter-spacing:-.065em;font-weight:500;max-width:1320px}h2{font-size:clamp(43px,6.25vw,104px);line-height:.96;letter-spacing:-.048em;font-weight:500;max-width:1280px}h3{font-size:clamp(22px,2.1vw,36px);line-height:1.16;letter-spacing:-.03em}p{font-size:clamp(16px,1.34vw,22px);line-height:1.68;color:var(--soft);max-width:840px}
+    .lede{font-family:"Iowan Old Style","Baskerville","Songti SC",serif;font-size:clamp(24px,2.45vw,43px);line-height:1.36;color:var(--ink);max-width:1060px}.sage{color:var(--sage)}.brick{color:var(--brick)}.red{color:var(--red)}
+    .label{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--sage);font-weight:800}.rule{height:1px;background:var(--line)}.stamp{display:inline-grid;place-items:center;border:1px solid var(--brick);color:var(--brick);padding:8px 11px;font-size:10px;letter-spacing:.15em;text-transform:uppercase;transform:rotate(-2deg)}
+    .reveal{opacity:0;transform:translateY(20px);transition:opacity .85s cubic-bezier(.2,.75,.15,1),transform .85s cubic-bezier(.2,.75,.15,1)}.reveal.on{opacity:1;transform:none}
+
+    /* 01 */
+    .hero .brandword{position:absolute;right:-.03em;bottom:-.12em;font-family:"Iowan Old Style","Baskerville",serif;font-size:clamp(150px,27vw,500px);line-height:.65;letter-spacing:-.09em;color:rgba(97,113,93,.08);z-index:0;white-space:nowrap}.hero .mast{display:grid;grid-template-columns:1.25fr .75fr;gap:7vw;align-items:end}.hero .manifesto{border-left:1px solid var(--line);padding-left:28px}.hero .manifesto p{font-size:17px;max-width:440px}.hero .eng{margin-top:22px;font-family:"Iowan Old Style","Baskerville",serif;font-style:italic;font-size:clamp(22px,2.3vw,39px)}
+
+    /* 02 */
+    .loose{position:relative;min-height:540px}.slip{position:absolute;width:min(27vw,390px);padding:24px 26px;background:var(--paper-3);border-top:2px solid var(--ink);box-shadow:0 24px 60px rgba(45,36,26,.055);font-family:"Iowan Old Style","Baskerville","Songti SC",serif;font-size:clamp(28px,3.1vw,54px);line-height:1}.slip small{display:block;margin-top:16px;font-family:"Aptos","Segoe UI Variable",sans-serif;font-size:12px;line-height:1.45;color:var(--soft)}.slip.a{left:2%;top:9%;transform:rotate(-3deg)}.slip.b{right:6%;top:0;transform:rotate(2deg)}.slip.c{left:31%;bottom:2%;transform:rotate(1deg)}.slip.d{right:2%;bottom:10%;transform:rotate(-2deg);background:var(--sage);color:#f7f4eb;border-color:var(--sage)}.slip.d small{color:#dbe0d7}.thread{position:absolute;height:2px;background:var(--brick);left:18%;right:12%;top:49%;transform:rotate(-7deg)}.thread:before,.thread:after{content:"";position:absolute;width:10px;height:10px;border-radius:50%;background:var(--brick);top:-4px}.thread:before{left:0}.thread:after{right:0}
+
+    /* 03 */
+    .manifest-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.manifest-grid article{padding:32px 34px 36px 0;border-bottom:1px solid var(--line)}.manifest-grid article:nth-child(even){padding-left:34px;border-left:1px solid var(--line)}.manifest-grid article:nth-child(n+3){border-bottom:0}.manifest-grid .num{font-family:"Iowan Old Style",serif;font-style:italic;font-size:18px;color:var(--brick)}.manifest-grid h3{margin:26px 0 10px}.manifest-grid p{font-size:16px}
+
+    /* 04 */
+    .quote-sheet{display:grid;grid-template-columns:1fr 300px;gap:5vw;align-items:end}.bigquote{font-family:"Iowan Old Style","Baskerville","Songti SC",serif;font-size:clamp(38px,5.25vw,86px);line-height:1.08;letter-spacing:-.045em;max-width:1180px}.annotations{display:grid;gap:14px}.anno{border-top:1px solid var(--line);padding-top:12px}.anno b{display:block;color:var(--brick);font-size:12px;letter-spacing:.11em}.anno span{display:block;margin-top:6px;font-size:14px;color:var(--soft);line-height:1.5}
+
+    /* 05 own agent */
+    .agent-spread{display:grid;grid-template-columns:.78fr 1.22fr;gap:6vw;align-items:center}.agent-list{border-top:1px solid var(--line)}.agent-name{display:grid;grid-template-columns:62px 1fr auto;gap:18px;align-items:baseline;padding:22px 0;border-bottom:1px solid var(--line)}.agent-name i{font-family:"Iowan Old Style",serif;font-size:17px;color:var(--brick)}.agent-name strong{font-family:"Iowan Old Style",serif;font-size:clamp(30px,3vw,50px);font-weight:500}.agent-name span{font-size:11px;letter-spacing:.12em;color:var(--soft)}
+    .mcp-sheet{position:relative;min-height:500px;background:var(--sage-dark);color:#eff3ec;padding:38px;box-shadow:22px 24px 0 rgba(180,93,69,.15)}.mcp-sheet .label{color:#cdd8ca}.mcp-sheet h3{font-family:"Iowan Old Style",serif;font-size:clamp(42px,4.5vw,74px);font-weight:500;max-width:620px}.mcp-sheet p{color:#c6d0c4;margin-top:18px;font-size:15px}.mcp-port{position:absolute;left:38px;right:38px;bottom:36px;display:grid;grid-template-columns:1fr auto 1fr;gap:16px;align-items:center}.mcp-port span{height:1px;background:#8fa08b}.mcp-port b{font-size:11px;letter-spacing:.12em;color:#e4c3b9}.mcp-tools{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}.mcp-tools em{font-style:normal;font-family:"Cascadia Mono",monospace;font-size:11px;border:1px solid rgba(255,255,255,.16);padding:8px 9px;color:#dfe8dc}
+
+    /* 06 automation */
+    .auto-stage{display:grid;grid-template-columns:.88fr 1.08fr .82fr;gap:24px;align-items:center}.source-column{display:grid;gap:14px}.paper-slip{background:var(--paper-3);border-top:3px solid var(--brick);padding:20px 22px;box-shadow:0 16px 34px rgba(45,36,26,.055)}.paper-slip:nth-child(2){transform:rotate(1.2deg);border-top-color:var(--sage)}.paper-slip:nth-child(3){transform:rotate(-1deg);border-top-color:var(--ink)}.paper-slip b{font-size:11px;letter-spacing:.12em;color:var(--sage)}.paper-slip strong{display:block;font-family:"Iowan Old Style",serif;font-size:24px;font-weight:500;margin-top:12px}.paper-slip small{display:block;color:var(--soft);margin-top:7px;line-height:1.5}
+    .agent-machine{min-height:500px;background:#1e251f;color:#eff3ec;padding:32px;display:flex;flex-direction:column;justify-content:space-between}.agent-machine .label{color:#d4dfd0}.agent-machine h3{font-family:"Iowan Old Style",serif;font-size:clamp(42px,4.2vw,70px);font-weight:500}.agent-machine p{color:#c5cec3;font-size:15px}.run{border-top:1px solid rgba(255,255,255,.18);padding-top:16px;font-family:"Cascadia Mono",monospace;font-size:12px;line-height:1.75;color:#d6ded4}.run .ok{color:#d8b7ac}.run .cursor{display:inline-block;width:8px;height:14px;background:#d4dfd0;vertical-align:-2px;animation:blink 1.2s steps(1) infinite}@keyframes blink{50%{opacity:0}}
+    .ledger-output{border-left:1px solid var(--line);padding-left:24px}.ledger-output .amount{font-family:"Iowan Old Style",serif;font-size:clamp(48px,5vw,82px);font-weight:500}.ledger-output dl{margin:24px 0 0}.ledger-output dt{font-size:10px;letter-spacing:.14em;color:var(--sage);text-transform:uppercase;margin-top:16px}.ledger-output dd{margin:5px 0 0;font-size:15px}.ledger-output .note{margin-top:26px;border-left:3px solid var(--brick);padding-left:14px;font-size:12px;line-height:1.6;color:var(--soft)}
+
+    /* 07 reconcile */
+    .reconcile{display:grid;grid-template-columns:1fr .78fr;gap:6vw;align-items:center}.match-sheet{position:relative;background:var(--paper-3);padding:38px;border:1px solid var(--line);min-height:500px}.tx{display:grid;grid-template-columns:100px 1fr auto;gap:20px;padding:24px 0;border-bottom:1px solid var(--line);align-items:center}.tx:last-of-type{border-bottom:0}.tx .provider{font-size:11px;letter-spacing:.1em;font-weight:800;color:var(--sage)}.tx strong{font-family:"Iowan Old Style",serif;font-size:28px;font-weight:500}.tx .money{font-family:"Iowan Old Style",serif;font-size:30px}.tx small{display:block;color:var(--soft);margin-top:4px}.match-mark{position:absolute;right:26px;top:188px;color:var(--brick);font-family:"Iowan Old Style",serif;font-style:italic;font-size:28px;transform:rotate(-6deg)}.match-mark:before{content:"";position:absolute;width:180px;height:2px;background:var(--brick);right:100%;top:22px;transform:rotate(-8deg);transform-origin:right}.neutral{margin-top:20px;padding:16px 18px;background:rgba(97,113,93,.1);font-size:13px;line-height:1.6;color:#455244}.dedupe-list{border-top:1px solid var(--line)}.dedupe-list div{padding:18px 0;border-bottom:1px solid var(--line)}.dedupe-list b{display:block;font-family:"Iowan Old Style",serif;font-size:28px;font-weight:500}.dedupe-list span{display:block;margin-top:6px;color:var(--soft);font-size:13px;line-height:1.55}
+
+    /* 08 capture */
+    .capture{display:grid;grid-template-columns:.82fr 1.18fr;gap:6vw;align-items:center}.receipt{background:var(--paper-3);padding:38px 36px;box-shadow:0 24px 65px rgba(54,44,34,.055);transform:rotate(-1.1deg);border-top:5px solid var(--brick)}.receipt .input{font-family:"Iowan Old Style",serif;font-size:clamp(26px,2.8vw,46px);line-height:1.35}.receipt hr{border:0;border-top:1px dashed rgba(23,24,19,.3);margin:32px 0}.rec-row{display:grid;grid-template-columns:86px 1fr auto;gap:12px;padding:12px 0;border-bottom:1px solid rgba(23,24,19,.1);font-size:14px;align-items:baseline}.rec-row b{color:var(--sage);letter-spacing:.1em;font-size:11px}.rec-row em{font-style:normal;color:var(--brick)}
+
+    /* 09 loop */
+    .loop{display:grid;grid-template-columns:1fr minmax(430px,.9fr);gap:7vw;align-items:center}.ring{position:relative;aspect-ratio:1;border-radius:50%;border:1px solid var(--ink);display:grid;place-items:center;max-width:620px;margin:auto}.ring:before,.ring:after{content:"";position:absolute;border-radius:50%;border:1px solid var(--line);inset:12%}.ring:after{inset:26%;border-color:rgba(180,93,69,.4)}.ring .core{font-family:"Iowan Old Style",serif;font-size:clamp(54px,6vw,96px);font-style:italic}.ring .word{position:absolute;background:var(--paper);padding:4px 9px;font-size:12px;letter-spacing:.1em}.ring .w1{top:4%;left:46%}.ring .w2{right:-2%;top:47%}.ring .w3{bottom:3%;left:43%}.ring .w4{left:-2%;top:47%}.ring .w5{right:9%;bottom:17%;color:var(--brick)}
+
+    /* 10 atlas */
+    .atlas{display:grid;grid-template-columns:1.25fr .75fr;gap:7vw}.atlas-main{display:grid;grid-template-columns:repeat(2,1fr);border-top:1px solid var(--line)}.atlas-main article{padding:28px 26px 32px 0;border-bottom:1px solid var(--line)}.atlas-main article:nth-child(even){padding-left:26px;border-left:1px solid var(--line)}.atlas-main strong{font-family:"Iowan Old Style",serif;font-size:clamp(32px,3.1vw,53px);font-weight:500}.atlas-main p{font-size:15px;margin-top:8px}.atlas-aside{background:var(--sage);color:#f6f2e8;padding:34px;display:flex;flex-direction:column;justify-content:space-between;min-height:430px}.atlas-aside .label{color:#dce5da}.atlas-aside h3{font-family:"Iowan Old Style",serif;font-size:clamp(42px,4vw,68px);font-weight:500}.atlas-aside p{color:#e1e6df;font-size:15px}
+
+    /* 11 compute node */
+    .desk{display:grid;grid-template-columns:1.05fr .95fr;gap:6vw;align-items:center}.computer{position:relative;background:#d6d2c6;border:1px solid rgba(23,24,19,.28);padding:18px 18px 34px;box-shadow:20px 24px 0 rgba(97,113,93,.16)}.screen{min-height:350px;background:#1d211c;color:#e9eee4;padding:32px;font-family:"Cascadia Mono","SFMono-Regular",monospace;display:flex;flex-direction:column;justify-content:space-between}.wire{display:grid;grid-template-columns:1fr auto 1fr;gap:18px;align-items:center;margin-top:26px}.wire span{height:1px;background:var(--brick)}.wire b{font-size:11px;letter-spacing:.1em;color:var(--brick)}
+
+    /* 12 privacy */
+    .privacy-page{background:#1f2821;color:#f1eee5}.privacy-page:after{border-color:rgba(255,255,255,.06)}.privacy-page .folio,.privacy-page .foot,.privacy-page p{color:#bbc4b9}.privacy-page .foot{border-color:rgba(255,255,255,.16)}.principles{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid rgba(255,255,255,.2)}.principles article{padding:26px 28px 0 0}.principles article+article{border-left:1px solid rgba(255,255,255,.18);padding-left:28px}.principles b{font-family:"Iowan Old Style",serif;font-size:38px;font-weight:500;color:#d2ddcd}.principles p{font-size:14px;margin-top:14px}.privacy-note{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:24px}.privacy-note p{font-size:14px}
+
+    /* 13 human */
+    .redline{display:grid;grid-template-columns:1fr .9fr;gap:7vw;align-items:center}.draft{background:var(--paper-3);padding:44px;border:1px solid var(--line);position:relative}.draft:before{content:"CANDIDATE";position:absolute;right:22px;top:22px;border:2px solid var(--brick);color:var(--brick);padding:6px 8px;font-size:11px;letter-spacing:.14em;transform:rotate(3deg)}.draft p{font-family:"Iowan Old Style",serif;font-size:clamp(24px,2.5vw,40px);color:var(--ink);line-height:1.45}.strike{text-decoration:line-through;color:#8b8b84}.insert{color:var(--sage);border-bottom:2px solid var(--sage)}.action-flow{margin-top:28px;display:flex;gap:12px;flex-wrap:wrap}.action-flow span{padding:9px 12px;border:1px solid var(--line);font-size:12px}.action-flow span:nth-child(2){background:var(--ink);color:var(--paper)}
+
+    /* 14 devices */
+    .devices{display:grid;grid-template-columns:.75fr 1.4fr .85fr;gap:0;align-items:end;border-bottom:1px solid var(--line)}.role{padding:28px;min-height:310px;border-left:1px solid var(--line);display:flex;flex-direction:column;justify-content:space-between}.role:first-child{border-left:0}.role.desktop{min-height:470px;background:var(--paper-2)}.role .device-name{font-family:"Iowan Old Style",serif;font-size:clamp(40px,4vw,66px)}.role .bar{height:4px;background:var(--sage);width:58%}.role.desktop .bar{width:92%;background:var(--brick)}.role p{font-size:15px}
+
+    /* 15 day flow */
+    .day{display:grid;grid-template-columns:.62fr 1.38fr;gap:6vw}.day-title{font-family:"Iowan Old Style",serif;font-size:clamp(76px,10vw,170px);line-height:.74;letter-spacing:-.07em;color:var(--sage)}.timeline{border-top:1px solid var(--line)}.event{display:grid;grid-template-columns:88px 1fr 120px;gap:24px;padding:20px 0;border-bottom:1px solid var(--line);align-items:baseline}.event time{font-family:"Iowan Old Style",serif;font-style:italic;color:var(--brick);font-size:18px}.event strong{font-family:"Iowan Old Style",serif;font-size:clamp(24px,2.35vw,38px);font-weight:500}.event span{font-size:10px;letter-spacing:.12em;color:var(--sage);text-align:right}.event small{display:block;color:var(--soft);font-family:"Aptos",sans-serif;font-size:13px;margin-top:6px;line-height:1.5}
+
+    /* 16 */
+    .fit{display:grid;grid-template-columns:1fr .88fr;gap:6vw;align-items:end}.eras{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.era{padding:26px 28px 32px 0;min-height:260px}.era+.era{border-left:1px solid var(--line);padding-left:28px}.era .date{font-size:10px;letter-spacing:.15em;color:var(--soft)}.era h3{font-family:"Iowan Old Style",serif;font-size:clamp(31px,3.3vw,54px);font-weight:500;margin-top:48px}.era.now{background:var(--brick);color:#fbf5ec;padding-right:28px}.era.now .date,.era.now p{color:#f0d8cf}.goai-note{background:var(--sage-dark);color:#eef2eb;padding:32px;min-height:430px;display:flex;flex-direction:column;justify-content:space-between}.goai-note .label{color:#d3ddcf}.goai-note h3{font-family:"Iowan Old Style",serif;font-size:clamp(40px,4.4vw,72px);font-weight:500}.goai-note p{color:#c7d0c5;font-size:14px}.criteria{display:grid;gap:9px}.criteria span{display:flex;justify-content:space-between;gap:20px;padding-top:9px;border-top:1px solid rgba(255,255,255,.16);font-size:12px}.criteria b{font-weight:600}.criteria em{font-style:normal;color:#d9b4a9}
+
+    /* 17 */
+    .back{background:var(--paper-2)}.back .center{display:grid;place-items:center;text-align:center;flex:1}.back h2{font-size:clamp(68px,10vw,168px)}.back .tag{font-family:"Iowan Old Style",serif;font-style:italic;font-size:clamp(25px,2.8vw,48px);margin-top:28px}.back .brandline{display:flex;gap:18px;align-items:center}.markL{width:44px;height:44px;background:var(--sage);color:#f7f3e9;display:grid;place-items:center;font-family:"Iowan Old Style",serif;font-size:28px}
+
+
+    .origin{display:grid;grid-template-columns:1.05fr .95fr;gap:7vw;align-items:center}.origin-word{font-family:"Iowan Old Style","Baskerville",serif;font-size:clamp(110px,17vw,280px);line-height:.7;letter-spacing:-.09em;color:var(--sage)}.origin-word span{display:block;color:var(--brick);margin-left:15%}.origin-note{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:30px 0}.origin-note strong{font-family:"Iowan Old Style","Baskerville","Songti SC",serif;font-size:clamp(32px,3.7vw,62px);font-weight:500;line-height:1.15}.origin-note p{margin-top:20px}.ease-list{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-top:1px solid var(--line);margin-top:34px}.ease-list article{padding:24px 24px 0 0}.ease-list article+article{border-left:1px solid var(--line);padding-left:24px}.ease-list b{font-family:"Iowan Old Style",serif;font-size:30px;font-weight:500}.ease-list p{font-size:14px;margin-top:10px}.compare-ledger{display:grid;grid-template-columns:1fr .85fr;gap:6vw;align-items:center}.ledger-check{background:#faf8f1;border-top:5px solid var(--sage);padding:34px;box-shadow:16px 18px 0 rgba(94,112,91,.12)}.ledger-check .candidate-line,.ledger-check .existing-line{display:grid;grid-template-columns:90px 1fr auto;gap:14px;padding:18px 0;border-bottom:1px solid var(--line);align-items:center}.ledger-check b{font-size:11px;letter-spacing:.12em;color:var(--sage)}.ledger-check strong{font-family:"Iowan Old Style",serif;font-size:24px;font-weight:500}.ledger-check em{font-style:normal;font-size:13px;color:var(--brick)}.same-stamp{display:inline-block;margin-top:22px;border:2px solid var(--brick);color:var(--brick);padding:9px 12px;transform:rotate(-2deg);font-size:11px;letter-spacing:.13em}.reminder-spread{display:grid;grid-template-columns:.9fr 1.1fr;gap:6vw;align-items:center}.reminder-sheet{background:#f9f7ef;border-top:5px solid var(--brick);padding:34px}.agenda-line{display:grid;grid-template-columns:76px 1fr auto;gap:16px;padding:17px 0;border-bottom:1px solid var(--line);align-items:baseline}.agenda-line time{font-family:"Iowan Old Style",serif;font-size:21px;color:var(--brick)}.agenda-line strong{font-size:16px}.agenda-line span{font-size:11px;letter-spacing:.1em;color:var(--sage)}.agent-arrow{margin:28px 0;padding:15px 18px;background:var(--sage);color:#f7f3ea;font-size:13px;display:flex;justify-content:space-between;gap:20px}.agent-arrow b{font-weight:700}.agent-arrow em{font-style:normal;opacity:.8}.reminder-result{border-left:3px solid var(--brick);padding-left:18px}.reminder-result strong{font-family:"Iowan Old Style",serif;font-size:clamp(30px,3vw,52px);font-weight:500}.reminder-result p{font-size:14px;margin-top:10px}.brand-sub{margin-top:18px;font-family:"Iowan Old Style","Baskerville",serif;font-style:italic;font-size:clamp(22px,2.3vw,38px);color:var(--sage)}
+    @media(max-width:820px){
+      .nav{display:none}.page{padding:28px 20px;min-height:auto}.folio{padding-top:8px}.hero{min-height:100dvh}
+      .hero .mast,.quote-sheet,.agent-spread,.auto-stage,.reconcile,.capture,.loop,.atlas,.desk,.redline,.day,.fit,.origin,.compare-ledger,.reminder-spread{grid-template-columns:1fr}
+      .hero .brandword{font-size:48vw}.manifest-grid,.principles,.privacy-note,.eras{grid-template-columns:1fr}.manifest-grid article:nth-child(even),.principles article+article,.era+.era{border-left:0;padding-left:0}.manifest-grid article:nth-child(n+3){border-bottom:1px solid var(--line)}
+      .loose{min-height:720px}.slip{position:relative;inset:auto!important;transform:none!important;width:100%;margin:12px 0}.thread{display:none}
+      .mcp-sheet{min-height:430px}.auto-stage{align-items:stretch}.paper-slip{transform:none!important}.ledger-output{border-left:0;border-top:1px solid var(--line);padding:24px 0 0}.match-mark{display:none}.match-sheet{min-height:auto}
+      .atlas-main{grid-template-columns:1fr}.atlas-main article:nth-child(even){padding-left:0;border-left:0}.receipt,.computer{transform:none}.devices{grid-template-columns:1fr}.role,.role.desktop{min-height:240px;border-left:0;border-top:1px solid var(--line)}
+      .event{grid-template-columns:68px 1fr}.event span{grid-column:2;text-align:left}.ease-list{grid-template-columns:1fr}.ease-list article+article{border-left:0;padding-left:0;border-top:1px solid var(--line);margin-top:18px;padding-top:18px}.foot{margin-top:36px}
+    }
+    .page-body{display:contents}
+    @media print{
+      @page{size:16in 9in;margin:0}
+      html,body{background:var(--paper);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      body:before,.nav{display:none!important}
+      .page{
+        width:16in;height:9in;min-height:9in;
+        display:grid!important;grid-template-rows:auto minmax(0,1fr) auto!important;
+        justify-content:initial!important;align-items:stretch!important;
+        padding:.42in .56in!important;margin:0;
+        page-break-after:always;break-after:page;overflow:hidden
+      }
+      .page:last-of-type{page-break-after:auto;break-after:auto}
+      .folio{padding-top:0}
+      .page-body{
+        display:flex!important;flex-direction:column;justify-content:space-between;
+        min-height:0;overflow:visible;
+        transform:scale(var(--print-scale,1));transform-origin:top center
+      }
+      .page-body>*{position:relative;z-index:2}
+      .hero .brandword{z-index:0}
+      .page:nth-of-type(3) .page-body{--print-scale:.96}
+      .page:nth-of-type(6) .page-body{--print-scale:.84}
+      .page:nth-of-type(7) .page-body{--print-scale:.84}
+      .page:nth-of-type(9) .page-body{--print-scale:.94}
+      .page:nth-of-type(13) .page-body{--print-scale:.86}
+      .page:nth-of-type(18) .page-body{--print-scale:.96}
+      .page:nth-of-type(19) .page-body{--print-scale:.90}
+      .reveal{opacity:1!important;transform:none!important}
+      .cursor{opacity:1!important}
+      .page:after{inset:.14in!important}
+      *{box-shadow:none!important}
+    }
+  </style>
+</head>
+<body>
+  <div class="nav"><b>Lifly / Living Paper · Life Fly</b><span id="counter">01 / 20</span><button onclick="window.print()">导出 PDF</button></div>
+
+  <section class="page hero">
+    <div class="brandword">Lifly</div>
+    <div class="folio"><span class="series">A personal life agent, woven into everyday life.</span><span>GOAI · 2026</span></div>
+    <div class="page-body">
+    <div class="mast reveal">
+      <div><h1>让 AI<br><span class="sage">真正参与生活。</span></h1></div>
+      <div class="manifesto"><span class="label">Personal Life Agent</span><p style="margin-top:20px">一个隐私优先、跨设备、可本地运行的 Personal Life Agent。它不只和你聊天，还能连接你已经在用的 Agent，把生活持续地记录、整理与推进。</p><div class="eng">Your life. Your data. Your AI.</div></div>
+    </div>
+    </div>
+    <div class="foot"><span>Lifly</span><span>01</span></div>
+  </section>
+
+  <section class="page">
+    <div class="folio"><span class="series">Life should move. Management should get lighter.</span><span>02</span></div>
+    <div class="page-body">
+    <div class="origin reveal">
+      <div><div class="origin-word">Life<span>Fly.</span></div><div class="brand-sub">Lifly = Life + Fly</div></div>
+      <div><div class="origin-note"><strong>我们不想让人把更多时间，花在“管理生活”上。</strong><p>记每一笔消费、反复抄日程、手动建提醒、在几个 App 之间搬运信息——这些动作本身不应该成为生活的第二份工作。</p></div><div class="ease-list"><article><b>少记一点</b><p>能由 Agent 从邮件、截图、账单理解的，不必重复手输。</p></article><article><b>少画一点</b><p>任务与提醒由自然语言和 Agent 协助形成，不必每次手工安排。</p></article><article><b>少操心一点</b><p>让系统在合适的时候提醒你，而不是让你记得去看系统。</p></article></div></div>
+    </div>
+    </div>
+    <div class="foot"><span>Life first. Management second.</span><span>02</span></div>
+  </section>
+
+  <section class="page">
+    <div class="folio"><span class="series">The problem is not another missing feature.</span><span>03</span></div>
+    <div class="page-body">
+    <div class="reveal"><h2>我们已经有很多工具。<br><span class="brick">却没有一条完整的生活主线。</span></h2></div>
+    <div class="loose reveal">
+      <div class="thread"></div>
+      <div class="slip a">备忘<small>想法在这里，和消费、任务彼此断开。</small></div>
+      <div class="slip b">记账<small>数字被留下，却很少和当天发生的事连起来。</small></div>
+      <div class="slip c">任务<small>AI 给出建议以后，仍然要自己去另一个 App 执行。</small></div>
+      <div class="slip d">Lifly<small>把理解、记录、执行与回溯接成同一条流。</small></div>
+    </div>
+    </div>
+    <div class="foot"><span>From scattered apps to one personal system</span><span>03</span></div>
+  </section>
+
+  <section class="page">
+    <div class="folio"><span class="series">Life keeps happening after the chat ends.</span><span>04</span></div>
+    <div class="page-body">
+    <div class="reveal"><h2>生活，是持续发生的数据流。</h2><p class="lede" style="margin-top:26px">真正的问题不是缺一个功能，而是缺一个能够持续理解生活、又不越过边界的智能体。</p></div>
+    <div class="manifest-grid reveal">
+      <article><span class="num">I</span><h3>信息分散</h3><p>备忘、账单、任务、提醒、附件被不同产品拆开。</p></article>
+      <article><span class="num">II</span><h3>上下文断裂</h3><p>每次打开 AI，过去发生过什么往往需要重新说明。</p></article>
+      <article><span class="num">III</span><h3>执行不闭环</h3><p>“应该去做”离真正创建、提醒、追踪还有一整段距离。</p></article>
+      <article><span class="num">IV</span><h3>隐私无边界</h3><p>越了解一个人，越需要清楚知道数据到底去了哪里。</p></article>
+    </div>
+    </div>
+    <div class="foot"><span>Continuous life / discontinuous software</span><span>04</span></div>
+  </section>
+
+  <section class="page">
+    <div class="folio"><span class="series">One sentence can contain a whole afternoon.</span><span>05</span></div>
+    <div class="page-body">
+    <div class="quote-sheet reveal">
+      <blockquote class="bigquote">“明天下午三点提醒我交电费，刚刚买咖啡花了 <span class="brick">32 元</span>，顺便记一下今天状态有点累。”</blockquote>
+      <div class="annotations"><div class="anno"><b>TASK</b><span>交电费 · 明天 15:00</span></div><div class="anno"><b>LEDGER</b><span>咖啡 · ¥32</span></div><div class="anno"><b>MEMO</b><span>今天状态有点累</span></div></div>
+    </div>
+    <div class="reveal"><p class="lede">Lifly 先理解，再形成结构化 Candidate Actions；用户确认后，才由本地执行边界正式写入。</p></div>
+    </div>
+    <div class="foot"><span>Natural language → structured life data</span><span>05</span></div>
+  </section>
+
+  <section class="page">
+    <div class="folio"><span class="series">Keep the agent you already use.</span><span>06</span></div>
+    <div class="page-body">
+    <div class="agent-spread reveal">
+      <div><h2>你不需要换掉<br>自己的 <span class="sage">Agent。</span></h2><p class="lede" style="margin-top:28px">让它调用 Lifly 就好。</p><div class="agent-list" style="margin-top:36px"><div class="agent-name"><i>01</i><strong>Hermes</strong><span>ONLINE / MCP</span></div><div class="agent-name"><i>02</i><strong>OpenClaw</strong><span>ONLINE / MCP</span></div><div class="agent-name"><i>03</i><strong>Your Agent</strong><span>BOT / AUTOMATION</span></div></div></div>
+      <div class="mcp-sheet"><div><span class="label">LIFLY CLOUD MCP</span><h3 style="margin-top:16px">把生活数据能力，变成 Agent 可以调用的工具。</h3><p>外部 Agent 在用户授权下调用 Lifly 工具：创建备忘、记录账单、创建任务、搜索、整理与继续执行。Cloud MCP 与 Local MCP 共享同一套业务语义。</p><div class="mcp-tools"><em>memo_create</em><em>expense_create</em><em>task_create</em><em>search</em><em>capture_parse</em></div></div><div class="mcp-port"><span></span><b>YOUR AGENT → MCP → LIFLY</b><span></span></div></div>
+    </div>
+    </div>
+    <div class="foot"><span>Bring your own agent</span><span>06</span></div>
+  </section>
+
+  <section class="page">
+    <div class="folio"><span class="series">The cheapest automation is often the one you already have.</span><span>07</span></div>
+    <div class="page-body">
+    <div class="reveal"><h2>消费发生一次。<br><span class="sage">记录不该再发生一次。</span></h2><p class="lede" style="margin-top:24px">让自己的 Agent 看邮件、看账单、看截图，然后调用 Lifly；用户不必每天逐笔补记。</p></div>
+    <div class="auto-stage reveal">
+      <div class="source-column"><div class="paper-slip"><b>EMAIL</b><strong>支付通知 / 月账单</strong><small>如果你的 Agent 已有邮箱权限，它可以按计划读取相关邮件或导出账单。</small></div><div class="paper-slip"><b>SCREENSHOT</b><strong>付款截图</strong><small>直接把支付宝、微信或其他支付页面截图发给自己的 Agent。</small></div><div class="paper-slip"><b>FILE</b><strong>支付宝 / 微信账单</strong><small>CSV / XLSX 进入 Lifly 的预览、去重、确认、回滚流程。</small></div></div>
+      <div class="agent-machine"><div><span class="label">YOUR AGENT</span><h3 style="margin-top:15px">自动理解，<br>自动整理。</h3><p style="margin-top:18px">邮箱由你的 Agent 读取；Lifly 只接收通过 MCP 明确传入的内容。Agent 负责看懂来源，Lifly 负责把数据送进受控生活数据边界，并在可用的导入路径上先与已有账本比对。</p></div><div class="run">07:30 check payment mails<br>12:42 parse screenshot<br>18:10 call Lifly MCP<br><span class="ok">→ expense candidate ready</span> <span class="cursor"></span></div></div>
+      <div class="ledger-output"><span class="label">LEDGER CANDIDATE</span><div class="amount" style="margin-top:20px">¥ 28.00</div><dl><dt>Merchant</dt><dd>午饭</dd><dt>Source</dt><dd>WeChat / screenshot</dd><dt>Category</dt><dd>餐饮</dd><dt>Status</dt><dd>先比对已有记录，再决定新增</dd></dl><div class="note">不是让 Lifly 偷偷读邮箱。是让用户自己选择的 Agent 把已经获得授权的信息送进 Lifly。</div></div>
+    </div>
+    </div>
+    <div class="foot"><span>Email / screenshot / statement → your agent → Lifly MCP</span><span>07</span></div>
+  </section>
+
+  <section class="page">
+    <div class="folio"><span class="series">Automation should remember what you already recorded.</span><span>08</span></div>
+    <div class="page-body">
+    <div class="compare-ledger reveal">
+      <div><h2>自动记账之前，<br><span class="brick">先问一句：这笔是不是已经记过？</span></h2><p class="lede" style="margin-top:26px">手动记录和 Agent 自动记录，不应该变成两套互相不知道的数据。</p><p style="margin-top:22px">当前账单导入路径会把新流水与已有 active 账本按方向、金额、发生时间、商户等业务字段比对；所以之前手动记过的交易，也可以在导入时被识别成重复候选。</p><div class="note"><p>统一原则：不管来自手动、账单导入还是未来更完整的 AI 记账入口，正式写入前都应该尽可能复用同一套账本去重语义。</p></div></div>
+      <div class="ledger-check"><span class="label">BEFORE COMMIT</span><div class="existing-line" style="margin-top:18px"><b>已有记录</b><strong>午饭 · ¥28</strong><em>手动 · 12:42</em></div><div class="candidate-line"><b>Agent 候选</b><strong>午饭 · ¥28</strong><em>截图 · 12:42</em></div><div class="same-stamp">POSSIBLE DUPLICATE · REVIEW</div><p style="margin-top:22px;font-size:14px">同一时间、同一金额、同一商户，不应因为入口不同再记一次。</p></div>
+    </div>
+    </div>
+    <div class="foot"><span>Manual + import + agent should share one ledger truth</span><span>08</span></div>
+  </section>
+
+  <section class="page">
+    <div class="folio"><span class="series">Money moving between accounts is not new spending.</span><span>09</span></div>
+    <div class="page-body">
+    <div class="reconcile reveal">
+      <div class="match-sheet"><span class="label">RECONCILIATION PREVIEW</span><div class="tx" style="margin-top:22px"><div class="provider">WECHAT</div><div><strong>转账到支付宝</strong><small>18:03 · 中性 / transfer</small></div><div class="money">−¥500</div></div><div class="tx"><div class="provider">ALIPAY</div><div><strong>账户转入</strong><small>18:04 · 中性 / transfer</small></div><div class="money">+¥500</div></div><div class="match-mark">same money, moved once</div><div class="neutral">识别为 transfer / 中性流水后，不把“资金从一个平台搬到另一个平台”误算成新的消费或收入。疑似重复项进入预览，而不是直接污染账本。</div></div>
+      <div><h2>跨平台账单，<br><span class="brick">不要把同一笔钱算两次。</span></h2><p style="margin-top:24px">除了避免“同一笔消费记两次”，Lifly 还要避免把“自己的钱从 A 搬到 B”误算成一笔新消费或收入。</p><div class="dedupe-list" style="margin-top:30px"><div><b>先识别“资金搬家”</b><span>转账、提现、充值、信用卡还款等中性交易不会直接记成普通收支。</span></div><div><b>再检查“是不是同一笔”</b><span>external transaction id、时间、金额、商户、来源、文件 hash + row index 等共同参与重复判断。</span></div><div><b>最后才确认入账</b><span>preview → skip / edit → confirm；批次仍可回滚。</span></div></div></div>
+    </div>
+    </div>
+    <div class="foot"><span>Transfer-aware / duplicate-aware / reviewable</span><span>09</span></div>
+  </section>
+
+  <section class="page">
+    <div class="folio"><span class="series">Sometimes the fastest input is still one sentence.</span><span>10</span></div>
+    <div class="page-body">
+    <div class="capture reveal">
+      <div class="receipt"><div class="label">LIFLY CAPTURE / INPUT</div><div class="input" style="margin-top:22px">周五出差，记得带电脑充电器；今天午饭 28 元；下周前完成 GOAI 提交材料。</div><hr><div class="rec-row"><b>MEMO</b><span>周五出差 · 带电脑充电器</span><em>✓</em></div><div class="rec-row"><b>LEDGER</b><span>午饭</span><em>¥28</em></div><div class="rec-row"><b>TASK</b><span>完成 GOAI 提交材料</span><em>下周前</em></div><div style="margin-top:24px;font-size:11px;color:var(--soft)">Candidate Actions · 可检查 / 可修改 / 可确认</div></div>
+      <div><h2>最自然的记录方式，<br><span class="sage">是直接说出来。</span></h2><p class="lede" style="margin-top:28px">不用先决定打开备忘、记账还是任务。先表达，Lifly 再整理。</p></div>
+    </div>
+    </div>
+    <div class="foot"><span>Speak first. Structure follows.</span><span>10</span></div>
+  </section>
+
+  <section class="page">
+    <div class="folio"><span class="series">A schedule is useful only when it comes back at the right moment.</span><span>11</span></div>
+    <div class="page-body">
+    <div class="reminder-spread reveal">
+      <div><h2>日程不该靠你<br><span class="sage">一格一格画出来。</span></h2><p class="lede" style="margin-top:26px">告诉 Agent 要做什么、什么时候要完成；它把自然语言变成任务，并生成提醒建议。</p><div class="reminder-result" style="margin-top:34px"><strong>你负责生活。<br>Agent 负责记得。</strong><p>真正的价值不是“多一个日历页面”，而是让需要发生的事，在合适的时间重新找到你。</p></div></div>
+      <div class="reminder-sheet"><span class="label">FROM INTENT TO REMINDER</span><div class="agenda-line" style="margin-top:18px"><time>MON</time><strong>“周三前把 GOAI 材料交掉。”</strong><span>NATURAL INPUT</span></div><div class="agent-arrow"><b>Agent → task_create → Reminder Strategy</b><em>suggested</em></div><div class="agenda-line"><time>TUE</time><strong>建议提前准备最终 PDF / PPT</strong><span>WARNING</span></div><div class="agenda-line"><time>WED</time><strong>提交截止前提醒</strong><span>REMINDER</span></div><p style="margin-top:22px;font-size:14px">当前边界：AI/规则先生成 TaskReminderStrategy；用户确认后才更新生效提醒时间并进入 Reminder 派发。完整 Calendar 视图仍是后续方向。</p></div>
+    </div>
+    </div>
+    <div class="foot"><span>Intent → task → suggested strategy → confirmed reminder</span><span>11</span></div>
+  </section>
+
+  <section class="page">
+    <div class="folio"><span class="series">A useful agent must finish the loop.</span><span>12</span></div>
+    <div class="page-body">
+    <div class="loop reveal"><div><h2>从回答，<br><span class="sage">走向闭环。</span></h2><p class="lede" style="margin-top:28px">理解 → 规划 → 执行 → 记录 → 回溯。每一步都留下可继续、可检查的生活上下文。</p></div><div class="ring"><div class="core">Lifly</div><span class="word w1">理解</span><span class="word w2">规划</span><span class="word w3">执行</span><span class="word w4">记录</span><span class="word w5">回溯</span></div></div>
+    </div>
+    <div class="foot"><span>Understand → Plan → Act → Record → Recall</span><span>12</span></div>
+  </section>
+
+  <section class="page">
+    <div class="folio"><span class="series">One life, not six isolated products.</span><span>13</span></div>
+    <div class="page-body">
+    <div class="atlas reveal"><div><h2>不是功能集合。<br>是一份持续生长的<span class="brick">生活档案。</span></h2><div class="atlas-main" style="margin-top:34px"><article><strong>Memo</strong><p>想法、日记、清单、随手记录</p></article><article><strong>Ledger</strong><p>收入支出、导入、去重、消费视图</p></article><article><strong>Task</strong><p>任务、提醒、预警、持续推进</p></article><article><strong>Assets</strong><p>票据、截图、附件与辅助资料</p></article><article><strong>Overview</strong><p>今天、近期与整体生活状态</p></article><article><strong>AI Capture</strong><p>自然语言与 Agent 自动化的统一入口</p></article></div></div><aside class="atlas-aside"><span class="label">ONE LIFE SPACE</span><h3>AI 不是第七个功能。<br>它是连接这一切的理解与行动层。</h3><p>同一套结构化数据，被手机、Web、Desktop、自己的 Agent 与本地模型共同使用。</p></aside></div>
+    </div>
+    <div class="foot"><span>Memo · Ledger · Task · Assets · Overview · AI</span><span>13</span></div>
+  </section>
+
+  <section class="page">
+    <div class="folio"><span class="series">Your computer can become part of the agent system.</span><span>14</span></div>
+    <div class="page-body">
+    <div class="desk reveal"><div class="computer"><div class="screen"><div><span style="color:#9caf95">lifly@my-pc</span>:~$ compute-node<br><br>trusted device ........ ready<br>local mcp ............. ready<br>ollama ................. ready<br>encrypted relay ....... listening</div><div>request from PHONE → decrypt locally → plan → encrypt result <span class="cursor"></span></div></div></div><div><span class="label">PERSONAL COMPUTE NODE</span><h2 style="margin-top:18px">你的电脑，<br><span class="brick">也可以是你的 AI 节点。</span></h2><p class="lede" style="margin-top:26px">手机与 Web 通过设备间加密任务调用你自己的电脑；本地模型、Ollama、Local MCP 与个人工具在自己的设备上完成推理与执行。</p><div class="wire"><span></span><b>ENCRYPTED JOB</b><span></span></div></div></div>
+    </div>
+    <div class="foot"><span>Phone / Web → encrypted job → your computer</span><span>14</span></div>
+  </section>
+
+  <section class="page privacy-page">
+    <div class="folio"><span class="series">Privacy is an architectural choice, not a checkbox.</span><span>15</span></div>
+    <div class="page-body">
+    <div class="reveal"><h2>AI 可以理解你的生活。<br><span style="color:#c7d7c2">但不意味着它必须拥有你的生活。</span></h2></div>
+    <div class="principles reveal"><article><b>Local-first</b><p>核心生活数据在自己的设备上保持可用。</p></article><article><b>E2EE Sync</b><p>跨设备同步以端到端加密为边界。</p></article><article><b>Trusted Devices</b><p>设备身份与信任状态决定解密和任务路由。</p></article><article><b>Selective Disclosure</b><p>Cloud AI 只有在明确授权后，才获得当前任务所需的最小明文上下文。</p></article></div>
+    <div class="privacy-note reveal"><p><strong style="color:#f1eee5">自己的 Agent 自动读邮箱 ≠ Lifly 自动读邮箱。</strong><br>邮件权限仍属于用户选择的外部 Agent；Lifly 只接收它通过 MCP 主动传入的数据。</p><p><strong style="color:#f1eee5">本地节点离线 ≠ 自动切云端。</strong><br>Personal Compute Node 不可用时显示 unavailable / retry，不静默把明文转给 Cloud AI。</p></div>
+    </div>
+    <div class="foot"><span>Privacy by architecture</span><span>15</span></div>
+  </section>
+
+  <section class="page">
+    <div class="folio"><span class="series">Power without a boundary is not trust.</span><span>16</span></div>
+    <div class="page-body">
+    <div class="redline reveal"><div><h2>更好的 AI，<br>不是更擅自。<br><span class="brick">而是更值得信任。</span></h2><p class="lede" style="margin-top:26px">AI 的推理结果先是 Candidate Action，不是业务事实。用户可以查看、修改、确认，也可以在执行后审计与撤销。</p></div><div class="draft"><p>创建任务：<br><span class="strike">今天 15:00</span><br><span class="insert">明天 15:00</span> 交电费。</p><div class="action-flow"><span>查看 / 修改</span><span>确认执行</span><span>撤销</span></div></div></div>
+    </div>
+    <div class="foot"><span>Candidate → Commit → Audit → Undo</span><span>16</span></div>
+  </section>
+
+  <section class="page">
+    <div class="folio"><span class="series">Different devices, different roles, one life.</span><span>17</span></div>
+    <div class="page-body">
+    <div class="reveal"><h2>多端，不只是同步。<br><span class="sage">是角色化协作。</span></h2></div>
+    <div class="devices reveal"><div class="role"><span class="label">PHONE</span><div><div class="device-name">随时捕捉</div><p style="margin-top:12px">自然语言、截图、即时提醒。</p></div><div class="bar"></div></div><div class="role desktop"><span class="label">DESKTOP / COMPUTE NODE</span><div><div class="device-name">深度管理 + 本地 AI</div><p style="margin-top:12px">完整生活数据、批量处理、Local MCP、Ollama、后台执行。</p></div><div class="bar"></div></div><div class="role"><span class="label">WEB + AGENT</span><div><div class="device-name">随处连接</div><p style="margin-top:12px">Web 轻量访问；Hermes / OpenClaw / 自建 Agent 通过 Cloud MCP 接入。</p></div><div class="bar"></div></div></div>
+    </div>
+    <div class="foot"><span>Phone · Web · Desktop · Your Agent</span><span>17</span></div>
+  </section>
+
+  <section class="page">
+    <div class="folio"><span class="series">An agent earns its place by quietly reducing friction.</span><span>18</span></div>
+    <div class="page-body">
+    <div class="day reveal"><div><div class="day-title">A DAY<br>WITH<br>LIFLY</div><p style="margin-top:28px">不是为了演示 Agent，而是让它自然地消失进日常工作流。</p></div><div class="timeline"><div class="event"><time>07:30</time><div><strong>自己的 Agent 自动检查支付账单邮件。</strong><small>识别 2 条新消费，并先和已有账本记录做比对后再进入候选流程。</small></div><span>EMAIL → MCP</span></div><div class="event"><time>12:42</time><div><strong>把午饭付款截图发给 Agent。</strong><small>识别 ¥28 餐饮支出，进入可确认账本流程。</small></div><span>SCREENSHOT</span></div><div class="event"><time>18:04</time><div><strong>微信 → 支付宝转账。</strong><small>识别为 transfer / 中性流水，不把资金搬家重复算成收支。</small></div><span>RECONCILE</span></div><div class="event"><time>15:00</time><div><strong>Agent 提醒：GOAI 材料今天需要收口。</strong><small>任务与提醒策略已经确认，不需要临时翻日程表。</small></div><span>REMINDER</span></div><div class="event"><time>19:30</time><div><strong>手机调用家里电脑的本地模型。</strong><small>通过加密任务让 Personal Compute Node 整理今天记录。</small></div><span>LOCAL AI</span></div><div class="event"><time>22:20</time><div><strong>回看今天。</strong><small>任务、消费、备忘、附件与 Agent 自动处理记录在同一份生活上下文里。</small></div><span>OVERVIEW</span></div></div></div>
+    </div>
+    <div class="foot"><span>Real life / real workflows / verifiable loops</span><span>18</span></div>
+  </section>
+
+  <section class="page">
+    <div class="folio"><span class="series">The pieces have finally become practical at the same time.</span><span>19</span></div>
+    <div class="page-body">
+    <div class="fit reveal"><div><h2>个人软件，<br>正在换一种组织方式。</h2><div class="eras" style="margin-top:34px"><article class="era"><span class="date">PAST</span><h3>软件负责记录</h3><p>备忘、账本、任务各自保存一部分生活。</p></article><article class="era"><span class="date">RECENT</span><h3>AI 负责回答</h3><p>智能变强，却往往停留在独立聊天框。</p></article><article class="era now"><span class="date">NOW</span><h3>Agent 开始行动</h3><p>工具调用、本地模型、E2EE 与多端协同让闭环成为可能。</p></article></div></div><aside class="goai-note"><div><span class="label">WHY LIFLY FITS BOUNDLESS AGENTS</span><h3 style="margin-top:16px">真实生活，才是 Agent 最难也最值得进入的场景。</h3></div><div><p>用户不是为了“多一个聊天窗口”而需要 AI，而是希望它能进入持续发生的生活工作流，同时保留数据与执行控制权。</p><div class="criteria" style="margin-top:22px"><span><b>真实场景价值</b><em>LIFE</em></span><span><b>闭环执行</b><em>LOOP</em></span><span><b>多端与工具调用</b><em>AGENT</em></span><span><b>工程与隐私边界</b><em>TRUST</em></span></div></div></aside></div>
+    </div>
+    <div class="foot"><span>From recording tools → answering AI → acting agents</span><span>19</span></div>
+  </section>
+
+  <section class="page back">
+    <div class="folio"><div class="brandline"><div class="markL">L</div><strong>Lifly</strong></div><span>20</span></div>
+    <div class="page-body">
+    <div class="center reveal"><div><h2>让 AI<br><span class="brick">真正参与生活。</span></h2><div class="tag">Your life. Your data. Your AI.</div><div class="brand-sub">Life, fly. 让生活轻一点，向前一点。</div></div></div>
+    </div>
+    <div class="foot"><span>Personal Life Agent · Local-first · MCP · E2EE · Cross-device</span><span>GOAI 2026</span></div>
+  </section>
+
+  <script>
+    const pages=[...document.querySelectorAll('.page')];
+    const counter=document.getElementById('counter');
+    const io=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){e.target.querySelectorAll('.reveal').forEach((n,i)=>setTimeout(()=>n.classList.add('on'),i*80));const idx=pages.indexOf(e.target);if(idx>=0)counter.textContent=String(idx+1).padStart(2,'0')+' / '+String(pages.length).padStart(2,'0')}})},{threshold:.48});
+    pages.forEach(p=>io.observe(p));
+    window.addEventListener('keydown',e=>{const y=scrollY;let i=pages.findIndex((p,j)=>p.offsetTop<=y+innerHeight*.5 && (pages[j+1]?.offsetTop??Infinity)>y+innerHeight*.5);if(e.key==='ArrowDown'||e.key==='PageDown'){e.preventDefault();pages[Math.min(i+1,pages.length-1)].scrollIntoView()}if(e.key==='ArrowUp'||e.key==='PageUp'){e.preventDefault();pages[Math.max(i-1,0)].scrollIntoView()}});
+  </script>
+</body>
+</html>
