@@ -18,6 +18,26 @@ Desktop 运行时承担两类相互复用但不同入口的能力：
 
 Android 不运行 MCP Server；Android 可以作为 encrypted AI Job Requester。
 
+### 1.3 v0.9.0 Desktop 交付边界
+
+v0.9.0 不把全部 Compute Node 逻辑重写进 Flutter 进程，而采用同一 Desktop 交付包内的两个本地运行时：
+
+```text
+Desktop Client
+  └─ Flutter UI / SQLCipher / PowerSync / 本机业务操作
+
+Compute Node Companion
+  └─ 独立稳定 Device Identity
+  └─ local_ai / local_mcp / background_executor
+  └─ encrypted relay worker
+  └─ Local Core Bridge
+  └─ Ollama / 用户自配 Provider
+```
+
+二者可以安装在同一台电脑，但 Device Registry 语义不得混淆：只有真正管理 worker 生命周期的 Companion 才声明 compute capabilities，也由 Companion 承担 Default Compute Node 角色。Desktop Client 不得为了 UI 显示方便虚假上报 capability。
+
+Demo bundle 必须预编译 Local MCP worker 与 Local Core bridge，提供单一 Companion launcher；运行时不得再要求现场执行 `pnpm build`。v0.9.0 Linux Demo 允许宿主已安装 Node、uv 与 Ollama，这些依赖由 launcher `--check-env` 明确验证。Windows 必须在真实 Windows host 重新构建并验收，不以 WSL 构建结果替代。
+
 ## 2. 非目标
 
 Desktop Local MCP / Compute Node 不负责：
