@@ -24,7 +24,7 @@
     h1{font-size:clamp(64px,9.7vw,166px);line-height:.84;letter-spacing:-.065em;font-weight:500;max-width:1320px}h2{font-size:clamp(43px,6.25vw,104px);line-height:.96;letter-spacing:-.048em;font-weight:500;max-width:1280px}h3{font-size:clamp(22px,2.1vw,36px);line-height:1.16;letter-spacing:-.03em}p{font-size:clamp(16px,1.34vw,22px);line-height:1.68;color:var(--soft);max-width:840px}
     .lede{font-family:"Iowan Old Style","Baskerville","Songti SC",serif;font-size:clamp(24px,2.45vw,43px);line-height:1.36;color:var(--ink);max-width:1060px}.sage{color:var(--sage)}.brick{color:var(--brick)}.red{color:var(--red)}
     .label{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--sage);font-weight:800}.rule{height:1px;background:var(--line)}.stamp{display:inline-grid;place-items:center;border:1px solid var(--brick);color:var(--brick);padding:8px 11px;font-size:10px;letter-spacing:.15em;text-transform:uppercase;transform:rotate(-2deg)}
-    .reveal{opacity:0;transform:translateY(20px);transition:opacity .85s cubic-bezier(.2,.75,.15,1),transform .85s cubic-bezier(.2,.75,.15,1)}.reveal.on{opacity:1;transform:none}
+    .reveal{opacity:0;transform:translateY(20px);transition:opacity .85s cubic-bezier(.2,.75,.15,1),transform .85s cubic-bezier(.2,.75,.15,1)}.reveal.on{opacity:1;transform:none}.print-measuring .reveal{opacity:1!important;transform:none!important;transition:none!important}
 
     /* 01 */
     .hero .brandword{position:absolute;right:-.03em;bottom:-.12em;font-family:"Iowan Old Style","Baskerville",serif;font-size:clamp(150px,27vw,500px);line-height:.65;letter-spacing:-.09em;color:rgba(97,113,93,.08);z-index:0;white-space:nowrap}.hero .mast{display:grid;grid-template-columns:1.25fr .75fr;gap:7vw;align-items:end}.hero .manifesto{border-left:1px solid var(--line);padding-left:28px}.hero .manifesto p{font-size:17px;max-width:440px}.hero .eng{margin-top:22px;font-family:"Iowan Old Style","Baskerville",serif;font-style:italic;font-size:clamp(22px,2.3vw,39px)}
@@ -93,41 +93,18 @@
     }
     .page-body{display:contents}
     @media print{
-      @page{size:16in 9in;margin:0}
-      html,body{background:var(--paper);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      html,body{background:var(--paper);-webkit-print-color-adjust:exact;print-color-adjust:exact;scroll-snap-type:none}
       body:before,.nav{display:none!important}
-      .page{
-        width:16in;height:9in;min-height:9in;
-        display:grid!important;grid-template-rows:auto minmax(0,1fr) auto!important;
-        justify-content:initial!important;align-items:stretch!important;
-        padding:.42in .56in!important;margin:0;
-        page-break-after:always;break-after:page;overflow:hidden
-      }
+      .page{margin:0!important;page-break-after:always;break-after:page;border:0}
       .page:last-of-type{page-break-after:auto;break-after:auto}
-      .folio{padding-top:0}
-      .page-body{
-        display:flex!important;flex-direction:column;justify-content:space-between;
-        min-height:0;overflow:visible;
-        transform:scale(var(--print-scale,1));transform-origin:top center
-      }
-      .page-body>*{position:relative;z-index:2}
-      .hero .brandword{z-index:0}
-      .page:nth-of-type(3) .page-body{--print-scale:.96}
-      .page:nth-of-type(6) .page-body{--print-scale:.84}
-      .page:nth-of-type(7) .page-body{--print-scale:.84}
-      .page:nth-of-type(9) .page-body{--print-scale:.94}
-      .page:nth-of-type(13) .page-body{--print-scale:.86}
-      .page:nth-of-type(18) .page-body{--print-scale:.96}
-      .page:nth-of-type(19) .page-body{--print-scale:.90}
+      .page-body{display:contents!important}
       .reveal{opacity:1!important;transform:none!important}
       .cursor{opacity:1!important}
-      .page:after{inset:.14in!important}
-      *{box-shadow:none!important}
     }
   </style>
 </head>
 <body>
-  <div class="nav"><b>Lifly / Living Paper · Life Fly</b><span id="counter">01 / 20</span><button onclick="window.print()">导出 PDF</button></div>
+  <div class="nav"><b>Lifly / Living Paper · Life Fly</b><span id="counter">01 / 20</span><button onclick="printDeck()">按当前窗口打印</button></div>
 
   <section class="page hero">
     <div class="brandword">Lifly</div>
@@ -338,6 +315,66 @@
 
   <script>
     const pages=[...document.querySelectorAll('.page')];
+    const printStyle=document.createElement('style');
+    printStyle.id='lifly-live-print-size';
+    document.head.appendChild(printStyle);
+
+    function syncPrintPages(){
+      document.documentElement.classList.add('print-measuring');
+      void document.documentElement.offsetHeight;
+
+      const pageRules=[];
+      const printRules=[];
+      pages.forEach((page,index)=>{
+        const pageRect=page.getBoundingClientRect();
+        const width=Math.max(1,Math.round(pageRect.width));
+        const computed=getComputedStyle(page);
+        const bottomPad=parseFloat(computed.paddingBottom)||0;
+        const pageSelector=`.page:nth-of-type(${index+1})`;
+        const name=`liflyPage${index+1}`;
+        const bodyChildren=[...page.querySelectorAll(':scope > .page-body > *')];
+        const folio=page.querySelector(':scope > .folio');
+        const foot=page.querySelector(':scope > .foot');
+        const brandword=page.querySelector(':scope > .brandword');
+
+        let bodyBottom=0;
+        const freeze=(selector,element,{trackBottom=true}={})=>{
+          if(!element)return;
+          const rect=element.getBoundingClientRect();
+          const left=rect.left-pageRect.left;
+          const top=rect.top-pageRect.top;
+          if(trackBottom)bodyBottom=Math.max(bodyBottom,rect.bottom-pageRect.top);
+          printRules.push(`${selector}{position:absolute!important;left:${left.toFixed(2)}px!important;top:${top.toFixed(2)}px!important;width:${rect.width.toFixed(2)}px!important}`);
+        };
+
+        freeze(`${pageSelector} > .folio`,folio,{trackBottom:false});
+        bodyChildren.forEach((child,childIndex)=>freeze(`${pageSelector} > .page-body > :nth-child(${childIndex+1})`,child));
+        freeze(`${pageSelector} > .brandword`,brandword,{trackBottom:false});
+
+        const footRect=foot?.getBoundingClientRect();
+        const originalFootTop=footRect ? footRect.top-pageRect.top : bodyBottom;
+        const safeFootTop=Math.max(originalFootTop,bodyBottom+20);
+        const footHeight=footRect?.height||0;
+        const canvasHeight=Math.ceil(Math.max(pageRect.height,safeFootTop+footHeight+bottomPad));
+
+        pageRules.push(`@page ${name}{size:${width}px ${canvasHeight}px;margin:0}`);
+        printRules.push(`${pageSelector}{page:${name};position:relative!important;display:block!important;width:${width}px!important;height:${canvasHeight}px!important;min-height:${canvasHeight}px!important;max-height:${canvasHeight}px!important;padding:0!important;overflow:hidden!important}`);
+        if(foot&&footRect){
+          printRules.push(`${pageSelector} > .foot{position:absolute!important;left:${(footRect.left-pageRect.left).toFixed(2)}px!important;top:${safeFootTop.toFixed(2)}px!important;width:${footRect.width.toFixed(2)}px!important}`);
+        }
+      });
+
+      printStyle.textContent=`${pageRules.join('\n')}\n@media print{${printRules.join('\n')}}`;
+      document.documentElement.classList.remove('print-measuring');
+    }
+
+    function printDeck(){
+      syncPrintPages();
+      window.print();
+    }
+
+    syncPrintPages();
+    window.addEventListener('resize',syncPrintPages);
     const counter=document.getElementById('counter');
     const io=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){e.target.querySelectorAll('.reveal').forEach((n,i)=>setTimeout(()=>n.classList.add('on'),i*80));const idx=pages.indexOf(e.target);if(idx>=0)counter.textContent=String(idx+1).padStart(2,'0')+' / '+String(pages.length).padStart(2,'0')}})},{threshold:.48});
     pages.forEach(p=>io.observe(p));
