@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -25,10 +25,21 @@ router = APIRouter()
 
 @router.get("/credentials", response_model=ApiResponse)
 async def get_credentials(
+    request: Request,
     subject: AuthenticatedSubject = Depends(get_active_subject),
 ) -> ApiResponse:
+    forwarded_host = request.headers.get("x-forwarded-host")
+    endpoint = None
+    if forwarded_host:
+        host = forwarded_host.split(",", 1)[0].strip()
+        proto = request.headers.get("x-forwarded-proto", "https").split(",", 1)[0].strip()
+        if host:
+            endpoint = f"{proto}://{host}/powersync"
     try:
-        credentials: PowerSyncCredentialsResponse = issue_powersync_credentials(subject)
+        credentials: PowerSyncCredentialsResponse = issue_powersync_credentials(
+            subject,
+            endpoint=endpoint,
+        )
     except ValueError as error:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

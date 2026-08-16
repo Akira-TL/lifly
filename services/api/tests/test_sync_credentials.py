@@ -2,11 +2,60 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from jose import jwt
 
 from app.core.config import settings
 from app.core.security import AuthenticatedSubject
+from app.modules.auth.sessions import get_active_subject
+from app.modules.sync.router import router as sync_router
 from app.modules.sync.service import issue_powersync_credentials
+
+
+def test_forwarded_public_host_returns_same_origin_powersync_endpoint() -> None:
+    app = FastAPI()
+    app.include_router(sync_router, prefix="/api/v1/sync")
+    app.dependency_overrides[get_active_subject] = lambda: AuthenticatedSubject(
+        account_id="account-1",
+        device_id="device-1",
+    )
+    response = TestClient(app).get(
+        "/api/v1/sync/credentials",
+        headers={
+            "X-Forwarded-Host": "lifly.babelbeast.com",
+            "X-Forwarded-Proto": "https",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()["data"]
+    endpoint = "https://lifly.babelbeast.com/powersync"
+    assert data["endpoint"] == endpoint
+    payload = jwt.decode(
+        data["token"],
+        settings.jwt_secret,
+        algorithms=[settings.jwt_algorithm],
+        audience=endpoint,
+    )
+    assert payload["aud"] == endpoint
+
+
+def test_public_powersync_endpoint_becomes_jwt_audience() -> None:
+    endpoint = "https://lifly.babelbeast.com/powersync"
+    credentials = issue_powersync_credentials(
+        AuthenticatedSubject(account_id="account-1", device_id="device-1"),
+        endpoint=endpoint,
+    )
+
+    assert credentials.endpoint == endpoint
+    payload = jwt.decode(
+        credentials.token,
+        settings.jwt_secret,
+        algorithms=[settings.jwt_algorithm],
+        audience=endpoint,
+    )
+    assert payload["aud"] == endpoint
 
 
 def test_issue_powersync_credentials_returns_authenticated_device_token() -> None:

@@ -37,10 +37,43 @@ async def ensure_schema_compatibility(conn: AsyncConnection) -> None:
                 "WHERE next_attempt_at IS NULL AND reminder_status = 'pending'"
             )
         )
+        capture_session_columns = (
+            "ADD COLUMN IF NOT EXISTS revision INTEGER NOT NULL DEFAULT 1",
+            "ADD COLUMN IF NOT EXISTS session_status VARCHAR(20)",
+            "ADD COLUMN IF NOT EXISTS committed_at TIMESTAMPTZ",
+            "ADD COLUMN IF NOT EXISTS dismissed_at TIMESTAMPTZ",
+        )
+        for definition in capture_session_columns:
+            await conn.execute(text(f"ALTER TABLE mcp_capture_sessions {definition}"))
+        await conn.execute(
+            text(
+                "UPDATE mcp_capture_sessions "
+                "SET session_status = CASE WHEN committed THEN 'committed' ELSE 'active' END "
+                "WHERE session_status IS NULL"
+            )
+        )
+        await conn.execute(
+            text(
+                "UPDATE mcp_capture_sessions SET committed_at = updated_at "
+                "WHERE committed IS TRUE AND committed_at IS NULL"
+            )
+        )
         await conn.execute(
             text(
                 "ALTER TABLE mcp_capture_sessions "
-                "ADD COLUMN IF NOT EXISTS revision INTEGER NOT NULL DEFAULT 1"
+                "ALTER COLUMN session_status SET DEFAULT 'active'"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE mcp_capture_sessions "
+                "ALTER COLUMN session_status SET NOT NULL"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE encrypted_entities "
+                "ALTER COLUMN id TYPE VARCHAR(128)"
             )
         )
         capture_turn_columns = (
@@ -52,6 +85,7 @@ async def ensure_schema_compatibility(conn: AsyncConnection) -> None:
         )
         for definition in capture_turn_columns:
             await conn.execute(text(f"ALTER TABLE mcp_capture_turns {definition}"))
+        await _ensure_powersync_publication(conn)
         return
 
     if dialect == "sqlite":
@@ -94,7 +128,19 @@ async def ensure_schema_compatibility(conn: AsyncConnection) -> None:
         await _add_sqlite_columns(
             conn,
             "mcp_capture_sessions",
-            {"revision": "INTEGER NOT NULL DEFAULT 1"},
+            {
+                "revision": "INTEGER NOT NULL DEFAULT 1",
+                "session_status": "TEXT NOT NULL DEFAULT 'active'",
+                "committed_at": "TEXT",
+                "dismissed_at": "TEXT",
+            },
+        )
+        await conn.execute(
+            text(
+                "UPDATE mcp_capture_sessions "
+                "SET session_status = CASE WHEN committed THEN 'committed' ELSE 'active' END "
+                "WHERE session_status IS NULL OR session_status = ''"
+            )
         )
         await _add_sqlite_columns(
             conn,
@@ -107,6 +153,29 @@ async def ensure_schema_compatibility(conn: AsyncConnection) -> None:
                 "supersedes_turn_id": "TEXT",
             },
         )
+
+
+async def _ensure_powersync_publication(conn: AsyncConnection) -> None:
+    publication = await conn.execute(
+        text("SELECT puballtables FROM pg_publication WHERE pubname = 'powersync'")
+    )
+    all_tables = publication.scalar_one_or_none()
+    if all_tables is None:
+        await conn.execute(
+            text("CREATE PUBLICATION powersync FOR TABLE public.encrypted_entities")
+        )
+        return
+    if bool(all_tables):
+        # A FOR ALL TABLES publication cannot be converted with ALTER ... SET
+        # TABLE. Recreate it transactionally under the same stable name.
+        await conn.execute(text("DROP PUBLICATION powersync"))
+        await conn.execute(
+            text("CREATE PUBLICATION powersync FOR TABLE public.encrypted_entities")
+        )
+        return
+    await conn.execute(
+        text("ALTER PUBLICATION powersync SET TABLE public.encrypted_entities")
+    )
 
 
 async def _add_sqlite_columns(

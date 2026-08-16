@@ -39,19 +39,22 @@ from app.modules.tasks.service import task_to_dict
 
 def issue_powersync_credentials(
     subject: AuthenticatedSubject,
+    *,
+    endpoint: str | None = None,
 ) -> PowerSyncCredentialsResponse:
     """Issue a short-lived PowerSync JWT bound to Account + Device identity."""
 
     if subject.device_id is None:
         raise ValueError("PowerSync credentials require device identity")
 
+    resolved_endpoint = (endpoint or settings.powersync_url).rstrip("/")
     issued_at = datetime.now(timezone.utc)
     expires_at = issued_at + timedelta(minutes=settings.powersync_token_expire_minutes)
     token = jwt.encode(
         {
             **subject.token_claims(),
             "type": "powersync",
-            "aud": settings.powersync_url,
+            "aud": resolved_endpoint,
             "iat": int(issued_at.timestamp()),
             "exp": int(expires_at.timestamp()),
         },
@@ -60,7 +63,7 @@ def issue_powersync_credentials(
         headers={"kid": "lifly-dev-hs256"},
     )
     return PowerSyncCredentialsResponse(
-        endpoint=settings.powersync_url,
+        endpoint=resolved_endpoint,
         token=token,
         user_id=subject.user_id,
         device_id=subject.device_id,

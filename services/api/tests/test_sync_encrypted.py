@@ -98,6 +98,16 @@ async def test_encrypted_sync_persists_only_opaque_envelope_fields() -> None:
     assert not hasattr(stored, "merchant")
 
 
+def test_encrypted_entity_storage_accepts_non_uuid_local_ids() -> None:
+    local_id = "local_capture_turn_1786867446589000_0002"
+
+    envelope = _envelope().model_copy(update={"id": local_id})
+
+    assert len(local_id) > 36
+    assert EncryptedEntity.__table__.c.id.type.length == 128
+    assert envelope.id == local_id
+
+
 @pytest.mark.anyio
 async def test_encrypted_sync_rejects_cross_account_envelope() -> None:
     session = FakeEncryptedSession()
