@@ -165,15 +165,15 @@ class AuthRepository {
     return refreshed;
   }
 
-  Future<void> revoke() async {
+  Future<void> revokeRemoteSession() async {
     final existing = await _sessions.read();
     if (existing == null) return;
-    try {
-      await _transport.post('/auth/revoke');
-    } finally {
-      await _sessions.clear();
-    }
+    await _transport.post('/auth/revoke');
   }
+
+  Future<void> clearSession() => _sessions.clear();
+
+  Future<void> destroyDeviceIdentity() => _deviceIdentity.clear();
 
   void _validateProtocol(_AuthStart start) {
     if (start.protocol != _pake.protocol ||

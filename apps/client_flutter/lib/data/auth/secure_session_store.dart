@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:client_flutter/data/auth/auth_session.dart';
 import 'package:client_flutter/data/auth/secure_secret_store.dart';
 
@@ -13,12 +14,13 @@ abstract interface class AuthSessionStore {
   Future<void> clear();
 }
 
-class SecureAuthSessionStore implements AuthSessionStore {
+class SecureAuthSessionStore extends ChangeNotifier
+    implements AuthSessionStore {
   static const _sessionKey = 'lifly.auth.session.v1';
 
   final SecretStore _secrets;
 
-  const SecureAuthSessionStore(this._secrets);
+  SecureAuthSessionStore(this._secrets);
 
   @override
   Future<AuthSession?> read() async {
@@ -40,9 +42,14 @@ class SecureAuthSessionStore implements AuthSessionStore {
   Future<String?> readAccessToken() async => (await read())?.accessToken;
 
   @override
-  Future<void> write(AuthSession session) =>
-      _secrets.write(_sessionKey, jsonEncode(session.toJson()));
+  Future<void> write(AuthSession session) async {
+    await _secrets.write(_sessionKey, jsonEncode(session.toJson()));
+    notifyListeners();
+  }
 
   @override
-  Future<void> clear() => _secrets.delete(_sessionKey);
+  Future<void> clear() async {
+    await _secrets.delete(_sessionKey);
+    notifyListeners();
+  }
 }

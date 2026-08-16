@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import replace
 from datetime import datetime, timezone
 
@@ -112,7 +113,12 @@ class _FakeDeviceRepository:
         return item
 
     async def list_for_account(self, account_id: str) -> list[DeviceRecord]:
-        return [item for item in self.items.values() if item.account_id == account_id]
+        return [
+            item
+            for item in self.items.values()
+            if item.account_id == account_id
+            and item.trust_state == DeviceTrustState.TRUSTED
+        ]
 
     async def get_for_account(self, account_id: str, device_id: str) -> DeviceRecord:
         item = self.items.get(device_id)
@@ -169,8 +175,12 @@ def _client() -> tuple[TestClient, _FakeDeviceRepository, SessionRegistry, str, 
     app.include_router(device_router, prefix="/api/v1/devices")
     devices = _FakeDeviceRepository()
     sessions = SessionRegistry()
-    phone_session = sessions.issue(account_id="account-1", device_id="phone-1")
-    desktop_session = sessions.issue(account_id="account-1", device_id="desktop-1")
+    phone_session = asyncio.run(
+        sessions.issue(account_id="account-1", device_id="phone-1")
+    )
+    desktop_session = asyncio.run(
+        sessions.issue(account_id="account-1", device_id="desktop-1")
+    )
     app.dependency_overrides[get_device_repository] = lambda: devices
     app.dependency_overrides[get_session_registry] = lambda: sessions
     return (
@@ -269,6 +279,9 @@ def test_revoke_device_revokes_only_that_devices_sessions() -> None:
         headers={"Authorization": f"Bearer {phone_access}"},
     )
     assert phone_still_active.status_code == 200
+    assert [
+        item["device_id"] for item in phone_still_active.json()["devices"]
+    ] == ["phone-1"]
 
 
 @pytest.mark.anyio

@@ -4,6 +4,7 @@ import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/app/theme/theme_package.dart';
 import 'package:client_flutter/app/theme/theme_platform_profile.dart';
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/auth/secure_session_store.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/repositories/home_overview_repository.dart';
 import 'package:client_flutter/data/repositories/task_repository.dart';
@@ -101,6 +102,7 @@ class _HomePageState extends State<HomePage> {
       context.read<ApiClient>(),
       localCore: context.read<LocalCoreBridge>(),
       dataMode: context.read<LiflyDataMode>(),
+      sessions: context.read<AuthSessionStore>(),
     ).load();
   }
 
@@ -115,6 +117,7 @@ class _HomePageState extends State<HomePage> {
           context.read<ApiClient>(),
           localCore: context.read<LocalCoreBridge>(),
           dataMode: context.read<LiflyDataMode>(),
+          sessions: context.read<AuthSessionStore>(),
         ).complete(item.entityId);
       }
     } catch (error, stackTrace) {

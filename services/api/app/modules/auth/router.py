@@ -19,7 +19,7 @@ from app.modules.auth.contracts import (
     RegistrationStartRequest,
     RevokeResponse,
 )
-from app.modules.auth.flows import AuthFlowStore, get_auth_flow_store
+from app.modules.auth.flows import AuthFlowStoreProtocol, get_auth_flow_store
 from app.modules.auth.pake import (
     PakeProtocolError,
     PakeServerAdapter,
@@ -28,7 +28,7 @@ from app.modules.auth.pake import (
 )
 from app.modules.auth.phone import InvalidPhoneNumber, normalize_phone
 from app.modules.auth.sessions import (
-    SessionRegistry,
+    SessionStore,
     SessionTokens,
     bearer_token,
     get_session_registry,
@@ -112,6 +112,7 @@ async def _enroll_trusted_device(
     account_id: str,
     request_device: DeviceEnrollmentRequest,
     devices: DeviceRepository,
+    commit: bool = True,
 ) -> DeviceRecord:
     try:
         return await devices.register_trusted(
@@ -122,6 +123,7 @@ async def _enroll_trusted_device(
             public_key=request_device.public_key,
             capability_report=request_device.capability_report,
             make_default_compute_node=request_device.make_default_compute_node,
+            commit=commit,
         )
     except DeviceOwnershipConflict as exc:
         raise HTTPException(status_code=409, detail="Device id is unavailable") from exc
@@ -132,7 +134,7 @@ async def registration_start(
     request: RegistrationStartRequest,
     accounts: AccountRepository = Depends(get_account_repository),
     pake: PakeServerAdapter = Depends(get_pake_server_adapter),
-    flows: AuthFlowStore = Depends(get_auth_flow_store),
+    flows: AuthFlowStoreProtocol = Depends(get_auth_flow_store),
 ) -> AuthStartResponse:
     phone_e164 = _normalize_or_422(request.phone, request.region)
     if await accounts.find_by_phone(phone_e164) is not None:
@@ -143,7 +145,7 @@ async def registration_start(
             client_request=request.client_request,
         )
     )
-    flow = flows.create_registration(
+    flow = await flows.create_registration(
         phone_e164=phone_e164,
         display_name=request.display_name,
         server_state=started.server_state,
@@ -161,11 +163,11 @@ async def registration_finish(
     request: RegistrationFinishRequest,
     accounts: AccountRepository = Depends(get_account_repository),
     pake: PakeServerAdapter = Depends(get_pake_server_adapter),
-    flows: AuthFlowStore = Depends(get_auth_flow_store),
-    sessions: SessionRegistry = Depends(get_session_registry),
+    flows: AuthFlowStoreProtocol = Depends(get_auth_flow_store),
+    sessions: SessionStore = Depends(get_session_registry),
     devices: DeviceRepository = Depends(get_device_repository),
 ) -> AuthSessionResponse:
-    flow = flows.consume_registration(request.flow_id)
+    flow = await flows.consume_registration(request.flow_id)
     if await accounts.find_by_phone(flow.phone_e164) is not None:
         raise HTTPException(status_code=409, detail="Phone already registered")
     credential_record = await _pake_call(
@@ -180,15 +182,25 @@ async def registration_finish(
             phone_e164=flow.phone_e164,
             display_name=flow.display_name,
             credential_record=credential_record,
+            commit=False,
         )
+        device = await _enroll_trusted_device(
+            account_id=account.account_id,
+            request_device=request.device,
+            devices=devices,
+            commit=False,
+        )
+        await accounts.commit()
     except AccountAlreadyExists as exc:
+        await accounts.rollback()
         raise HTTPException(status_code=409, detail="Phone already registered") from exc
-    device = await _enroll_trusted_device(
-        account_id=account.account_id,
-        request_device=request.device,
-        devices=devices,
-    )
-    tokens = sessions.issue(account_id=account.account_id, device_id=device.device_id)
+    except HTTPException:
+        await accounts.rollback()
+        raise
+    except Exception:
+        await accounts.rollback()
+        raise
+    tokens = await sessions.issue(account_id=account.account_id, device_id=device.device_id)
     return _session_response(account, tokens, device=device)
 
 
@@ -197,7 +209,7 @@ async def login_start(
     request: LoginStartRequest,
     accounts: AccountRepository = Depends(get_account_repository),
     pake: PakeServerAdapter = Depends(get_pake_server_adapter),
-    flows: AuthFlowStore = Depends(get_auth_flow_store),
+    flows: AuthFlowStoreProtocol = Depends(get_auth_flow_store),
 ) -> AuthStartResponse:
     phone_e164 = _normalize_or_422(request.phone, request.region)
     account = await accounts.find_by_phone(phone_e164)
@@ -211,7 +223,7 @@ async def login_start(
             client_request=request.client_request,
         )
     )
-    flow = flows.create_login(
+    flow = await flows.create_login(
         phone_e164=phone_e164,
         account_id=account.account_id if account is not None else None,
         server_state=started.server_state,
@@ -229,11 +241,11 @@ async def login_finish(
     request: LoginFinishRequest,
     accounts: AccountRepository = Depends(get_account_repository),
     pake: PakeServerAdapter = Depends(get_pake_server_adapter),
-    flows: AuthFlowStore = Depends(get_auth_flow_store),
-    sessions: SessionRegistry = Depends(get_session_registry),
+    flows: AuthFlowStoreProtocol = Depends(get_auth_flow_store),
+    sessions: SessionStore = Depends(get_session_registry),
     devices: DeviceRepository = Depends(get_device_repository),
 ) -> AuthSessionResponse:
-    flow = flows.consume_login(request.flow_id)
+    flow = await flows.consume_login(request.flow_id)
     authenticated = await _pake_call(
         pake.login_finish(
             identifier=flow.phone_e164,
@@ -251,7 +263,7 @@ async def login_finish(
         request_device=request.device,
         devices=devices,
     )
-    tokens = sessions.issue(account_id=account.account_id, device_id=device.device_id)
+    tokens = await sessions.issue(account_id=account.account_id, device_id=device.device_id)
     return _session_response(account, tokens, device=device)
 
 
@@ -259,10 +271,10 @@ async def login_finish(
 async def refresh_session(
     request: RefreshRequest,
     accounts: AccountRepository = Depends(get_account_repository),
-    sessions: SessionRegistry = Depends(get_session_registry),
+    sessions: SessionStore = Depends(get_session_registry),
     devices: DeviceRepository = Depends(get_device_repository),
 ) -> AuthSessionResponse:
-    tokens = sessions.refresh(request.refresh_token)
+    tokens = await sessions.refresh(request.refresh_token)
     if tokens is None:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
     account = await accounts.find_by_id(tokens.account_id)
@@ -282,8 +294,8 @@ async def refresh_session(
 @router.post("/revoke", response_model=RevokeResponse)
 async def revoke_session(
     token: str = Depends(bearer_token),
-    sessions: SessionRegistry = Depends(get_session_registry),
+    sessions: SessionStore = Depends(get_session_registry),
 ) -> RevokeResponse:
-    if not sessions.revoke_access(token):
+    if not await sessions.revoke_access(token):
         raise HTTPException(status_code=401, detail="Invalid or revoked token")
     return RevokeResponse()

@@ -66,6 +66,8 @@ class WideShell extends StatelessWidget {
   final VoidCallback onOpenManagement;
   final VoidCallback onOpenSettings;
   final VoidCallback onToggleSidebar;
+  final String accountLabel;
+  final String accountSubtitle;
 
   const WideShell({
     super.key,
@@ -80,6 +82,8 @@ class WideShell extends StatelessWidget {
     required this.onOpenManagement,
     required this.onOpenSettings,
     required this.onToggleSidebar,
+    required this.accountLabel,
+    required this.accountSubtitle,
   });
 
   @override
@@ -98,6 +102,8 @@ class WideShell extends StatelessWidget {
             onOpenManagement: onOpenManagement,
             onOpenSettings: onOpenSettings,
             onToggleSidebar: onToggleSidebar,
+            accountLabel: accountLabel,
+            accountSubtitle: accountSubtitle,
           )
         else
           _CompactNavigationRail(
@@ -186,6 +192,8 @@ class _DashboardSidebar extends StatelessWidget {
   final VoidCallback onOpenManagement;
   final VoidCallback onOpenSettings;
   final VoidCallback onToggleSidebar;
+  final String accountLabel;
+  final String accountSubtitle;
 
   const _DashboardSidebar({
     required this.currentIndex,
@@ -196,6 +204,8 @@ class _DashboardSidebar extends StatelessWidget {
     required this.onOpenManagement,
     required this.onOpenSettings,
     required this.onToggleSidebar,
+    required this.accountLabel,
+    required this.accountSubtitle,
   });
 
   @override
@@ -247,6 +257,8 @@ class _DashboardSidebar extends StatelessWidget {
           _SidebarFooter(
             collapsed: collapsed,
             onToggleSidebar: onToggleSidebar,
+            accountLabel: accountLabel,
+            accountSubtitle: accountSubtitle,
           ),
         ],
       ),
@@ -528,10 +540,14 @@ class _SidebarItem extends StatelessWidget {
 class _SidebarFooter extends StatelessWidget {
   final bool collapsed;
   final VoidCallback onToggleSidebar;
+  final String accountLabel;
+  final String accountSubtitle;
 
   const _SidebarFooter({
     required this.collapsed,
     required this.onToggleSidebar,
+    required this.accountLabel,
+    required this.accountSubtitle,
   });
 
   @override
@@ -568,13 +584,13 @@ class _SidebarFooter extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '本地用户',
+                accountLabel,
                 style: theme.textTheme.labelMedium?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
               ),
               Text(
-                '本地优先',
+                accountSubtitle,
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                   fontSize: 10,

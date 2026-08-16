@@ -4,6 +4,7 @@ import 'package:client_flutter/data/auth/pake_client_adapter.dart';
 import 'package:client_flutter/data/auth/secure_session_store.dart';
 import 'package:client_flutter/data/device/device_contracts.dart';
 import 'package:client_flutter/data/device/device_identity_store.dart';
+import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _MemorySessionStore implements AuthSessionStore {
@@ -23,6 +24,11 @@ class _MemorySessionStore implements AuthSessionStore {
 }
 
 class _FakeDeviceIdentityStore implements DeviceIdentityStore {
+  bool cleared = false;
+
+  @override
+  Future<void> clear() async => cleared = true;
+
   @override
   Future<DeviceIdentity> loadOrCreate() async => const DeviceIdentity(
     deviceId: 'device-1',
@@ -31,7 +37,9 @@ class _FakeDeviceIdentityStore implements DeviceIdentityStore {
   );
 
   @override
-  Future<List<int>> loadPrivateKeyBytes() async => List<int>.filled(32, 7);
+  Future<SecretKey> deriveSharedSecret({
+    required String remotePublicKey,
+  }) async => SecretKey(List<int>.filled(32, 7));
 }
 
 class _FakePake implements PakeClientAdapter {
@@ -190,26 +198,38 @@ void main() {
     },
   );
 
-  test('refresh rotates persisted session and revoke clears it', () async {
-    final transport = _FakeTransport();
-    final sessions = _MemorySessionStore();
-    sessions.value = AuthSession.fromJson(
-      _sessionJson(accessToken: 'access-1', refreshToken: 'refresh-1'),
-    );
-    final repository = AuthRepository(
-      transport,
-      sessions,
-      _FakeDeviceIdentityStore(),
-      _FakePake(),
-      const DeviceClientProfile(displayName: 'Phone', platform: 'android'),
-    );
+  test(
+    'refresh, remote revoke, local session clear and identity destroy are separate',
+    () async {
+      final transport = _FakeTransport();
+      final sessions = _MemorySessionStore();
+      sessions.value = AuthSession.fromJson(
+        _sessionJson(accessToken: 'access-1', refreshToken: 'refresh-1'),
+      );
+      final identity = _FakeDeviceIdentityStore();
+      final repository = AuthRepository(
+        transport,
+        sessions,
+        identity,
+        _FakePake(),
+        const DeviceClientProfile(displayName: 'Phone', platform: 'android'),
+      );
 
-    final refreshed = await repository.refresh();
-    expect(refreshed?.accessToken, 'access-2');
-    expect(sessions.value?.refreshToken, 'refresh-2');
+      final refreshed = await repository.refresh();
+      expect(refreshed?.accessToken, 'access-2');
+      expect(sessions.value?.refreshToken, 'refresh-2');
 
-    await repository.revoke();
-    expect(await sessions.read(), isNull);
-    expect(transport.requests.last.path, '/auth/revoke');
-  });
+      await repository.revokeRemoteSession();
+      expect(await sessions.read(), isNotNull);
+      expect(identity.cleared, isFalse);
+      expect(transport.requests.last.path, '/auth/revoke');
+
+      await repository.clearSession();
+      expect(await sessions.read(), isNull);
+      expect(identity.cleared, isFalse);
+
+      await repository.destroyDeviceIdentity();
+      expect(identity.cleared, isTrue);
+    },
+  );
 }

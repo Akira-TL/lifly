@@ -5,6 +5,7 @@ import 'package:client_flutter/app/theme/theme_registry.dart';
 import 'package:client_flutter/app/theme/theme_runtime.dart';
 import 'package:client_flutter/app/theme/themes/lifly_test_theme.dart';
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/auth/account_runtime_state.dart';
 import 'package:client_flutter/features/settings/account_device_runtime.dart';
 import 'package:client_flutter/features/settings/settings_page.dart';
 import 'package:flutter/material.dart';
@@ -17,6 +18,17 @@ class _StubAccountDeviceRuntime implements AccountDeviceRuntime {
 
   @override
   Future<AccountDeviceSnapshot> load() async => const AccountDeviceSnapshot();
+
+  @override
+  Future<AccountRuntimeState> resolveRuntimeState() async =>
+      const AccountRuntimeState.signedOut();
+
+  @override
+  Future<void> destroyLocalDeviceIdentity() async {}
+
+  @override
+  Future<AccountDeviceSnapshot> revokeSession() async =>
+      const AccountDeviceSnapshot();
 
   @override
   Future<AccountDeviceSnapshot> login({

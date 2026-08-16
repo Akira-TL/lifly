@@ -1,5 +1,6 @@
 import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/auth/secure_session_store.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/repositories/memo_repository.dart';
 import 'package:client_flutter/domain/entities/memo.dart';
@@ -45,6 +46,7 @@ class _MemoListPageState extends State<MemoListPage> {
       context.read<ApiClient>(),
       localCore: context.read<LocalCoreBridge>(),
       dataMode: context.read<LiflyDataMode>(),
+      sessions: context.read<AuthSessionStore>(),
     );
     _scrollController.addListener(_handleScroll);
     _loadFirstPage();

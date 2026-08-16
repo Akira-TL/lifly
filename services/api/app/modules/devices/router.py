@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.security import AuthenticatedSubject
-from app.modules.auth.sessions import SessionRegistry, get_active_subject, get_session_registry
+from app.modules.auth.sessions import SessionStore, get_active_subject, get_session_registry
 from app.modules.devices.contracts import (
     DeviceDescriptor,
     DeviceEnrollmentRequest,
@@ -146,7 +146,7 @@ async def revoke_device(
     device_id: str,
     subject: AuthenticatedSubject = Depends(get_active_subject),
     devices: DeviceRepository = Depends(get_device_repository),
-    sessions: SessionRegistry = Depends(get_session_registry),
+    sessions: SessionStore = Depends(get_session_registry),
 ) -> DeviceRevokeResponse:
     try:
         device = await devices.revoke(
@@ -155,7 +155,7 @@ async def revoke_device(
         )
     except DeviceNotFound as exc:
         raise _not_found(exc) from exc
-    revoked_sessions = sessions.revoke_device(
+    revoked_sessions = await sessions.revoke_device(
         account_id=subject.account_id,
         device_id=device_id,
     )

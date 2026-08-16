@@ -445,6 +445,44 @@ class Account(Base, TimestampMixin):
     )
 
 
+class AccountAuthFlow(Base, TimestampMixin):
+    """Short-lived one-time OPAQUE transcript state shared across API workers."""
+
+    __tablename__ = "account_auth_flows"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    flow_type: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    phone_e164: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    display_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    account_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("accounts.id"), nullable=True, index=True
+    )
+    server_state: Mapped[str] = mapped_column(Text, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+
+
+class AccountSession(Base, TimestampMixin):
+    """Durable authenticated session shared across API workers and reloads.
+
+    Access JWTs carry ``sid`` and remain self-authenticating; this row supplies
+    shared revocation and refresh-token rotation state. Only a SHA-256 refresh
+    token hash is persisted.
+    """
+
+    __tablename__ = "account_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    account_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("accounts.id"), nullable=False, index=True
+    )
+    device_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("devices.id"), nullable=True, index=True
+    )
+    refresh_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    refresh_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class AccountAuthCredential(Base, TimestampMixin):
     """Opaque authentication record; never a plaintext or replayable password equivalent."""
 
@@ -527,7 +565,7 @@ class EncryptedEntity(Base, TimestampMixin):
 
     __tablename__ = "encrypted_entities"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("accounts.id"), nullable=False, index=True
     )

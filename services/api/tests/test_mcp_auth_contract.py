@@ -14,8 +14,12 @@ async def test_mcp_verifier_accepts_active_session_and_rejects_revoked(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     sessions = SessionRegistry()
-    issued = sessions.issue(account_id="account-1", device_id="device-1")
-    monkeypatch.setattr(cloud_server, "get_session_registry", lambda: sessions)
+    issued = await sessions.issue(account_id="account-1", device_id="device-1")
+
+    async def active(token: str, *, subject):
+        return await sessions.is_access_active(token, subject=subject)
+
+    monkeypatch.setattr(cloud_server, "is_access_active_persistent", active)
     verifier = cloud_server.LiflyMcpTokenVerifier()
 
     access = await verifier.verify_token(issued.access_token)
@@ -26,7 +30,7 @@ async def test_mcp_verifier_accepts_active_session_and_rejects_revoked(
         "device_id": "device-1",
     }
 
-    assert sessions.revoke_access(issued.access_token) is True
+    assert await sessions.revoke_access(issued.access_token) is True
     assert await verifier.verify_token(issued.access_token) is None
 
 

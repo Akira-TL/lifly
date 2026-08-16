@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -14,7 +15,12 @@ from app.modules.auth.router import router as auth_router
 from app.core.security import decode_token
 from app.modules.auth.sessions import SessionRegistry, get_session_registry
 from app.modules.devices.contracts import DeviceCapabilityReport, DeviceTrustState
-from app.modules.devices.repository import DeviceNotFound, DeviceRecord, get_device_repository
+from app.modules.devices.repository import (
+    DeviceNotFound,
+    DeviceOwnershipConflict,
+    DeviceRecord,
+    get_device_repository,
+)
 
 
 @dataclass
@@ -25,6 +31,8 @@ class _FakeAccountRepository:
     def __init__(self) -> None:
         self.by_phone = {}
         self.credentials = {}
+        self.pending_by_phone: dict[str, AccountRecord] = {}
+        self.pending_credentials: dict[str, str] = {}
 
     async def find_by_phone(self, phone_e164: str) -> AccountRecord | None:
         return self.by_phone.get(phone_e164)
@@ -44,8 +52,9 @@ class _FakeAccountRepository:
         phone_e164: str,
         display_name: str | None,
         credential_record: str,
+        commit: bool = True,
     ) -> AccountRecord:
-        if phone_e164 in self.by_phone:
+        if phone_e164 in self.by_phone or phone_e164 in self.pending_by_phone:
             raise ValueError("duplicate account")
         account = AccountRecord(
             account_id="account-1",
@@ -54,9 +63,21 @@ class _FakeAccountRepository:
             account_status="active",
             plan="demo",
         )
-        self.by_phone[phone_e164] = account
-        self.credentials[account.account_id] = credential_record
+        self.pending_by_phone[phone_e164] = account
+        self.pending_credentials[account.account_id] = credential_record
+        if commit:
+            await self.commit()
         return account
+
+    async def commit(self) -> None:
+        self.by_phone.update(self.pending_by_phone)
+        self.credentials.update(self.pending_credentials)
+        self.pending_by_phone.clear()
+        self.pending_credentials.clear()
+
+    async def rollback(self) -> None:
+        self.pending_by_phone.clear()
+        self.pending_credentials.clear()
 
 
 class _FakeDeviceRepository:
@@ -64,6 +85,9 @@ class _FakeDeviceRepository:
         self.items: dict[str, DeviceRecord] = {}
 
     async def register_trusted(self, **kwargs) -> DeviceRecord:
+        existing = self.items.get(kwargs["device_id"])
+        if existing is not None and existing.account_id != kwargs["account_id"]:
+            raise DeviceOwnershipConflict("Device id belongs to another account")
         now = datetime.now(timezone.utc)
         item = DeviceRecord(
             device_id=kwargs["device_id"],
@@ -243,6 +267,55 @@ def test_register_normalizes_phone_and_auto_enrolls_trusted_device() -> None:
     assert devices.items["phone-1"].trust_state is DeviceTrustState.TRUSTED
 
 
+def test_registration_device_conflict_rolls_back_account_creation() -> None:
+    client, accounts, devices, _ = _client()
+    devices.items["shared-device"] = DeviceRecord(
+        device_id="shared-device",
+        account_id="other-account",
+        display_name="Existing Device",
+        platform="web",
+        public_key="existing-public-key",
+        trust_state=DeviceTrustState.TRUSTED,
+        capability_report=DeviceCapabilityReport(),
+        is_default_compute_node=False,
+        last_seen_at=datetime.now(timezone.utc),
+        revoked_at=None,
+        key_version=1,
+        protocol_version=1,
+    )
+
+    start = client.post(
+        "/api/v1/auth/register/start",
+        json={
+            "phone": "+8613912345678",
+            "client_request": "registration-request",
+        },
+    )
+    assert start.status_code == 200, start.text
+    finish = client.post(
+        "/api/v1/auth/register/finish",
+        json={
+            "flow_id": start.json()["flow_id"],
+            "client_upload": "registration-upload",
+            "device": _device_payload("shared-device"),
+        },
+    )
+    assert finish.status_code == 409
+    assert finish.json()["detail"] == "Device id is unavailable"
+    assert accounts.by_phone == {}
+    assert accounts.credentials == {}
+    assert accounts.pending_by_phone == {}
+
+    retry = client.post(
+        "/api/v1/auth/register/start",
+        json={
+            "phone": "+8613912345678",
+            "client_request": "registration-request",
+        },
+    )
+    assert retry.status_code == 200, retry.text
+
+
 def test_login_masks_unknown_account_until_finish_without_enrollment() -> None:
     client, _, devices, _ = _client()
 
@@ -349,20 +422,21 @@ def test_refresh_rotates_token_and_revoke_invalidates_account_profile() -> None:
     assert denied_old_access.status_code == 401
 
 
-def test_parallel_sessions_get_unique_access_tokens_and_revoke_independently() -> None:
+@pytest.mark.anyio
+async def test_parallel_sessions_get_unique_access_tokens_and_revoke_independently() -> None:
     sessions = SessionRegistry()
-    first = sessions.issue(account_id="account-1", device_id="device-1")
-    second = sessions.issue(account_id="account-1", device_id="device-1")
+    first = await sessions.issue(account_id="account-1", device_id="device-1")
+    second = await sessions.issue(account_id="account-1", device_id="device-1")
 
     assert first.access_token != second.access_token
-    assert sessions.is_access_active(first.access_token)
-    assert sessions.is_access_active(second.access_token)
+    assert await sessions.is_access_active(first.access_token)
+    assert await sessions.is_access_active(second.access_token)
     first_payload = decode_token(first.access_token)
     second_payload = decode_token(second.access_token)
     assert first_payload is not None and second_payload is not None
     assert first_payload["sid"] != second_payload["sid"]
     assert first_payload["jti"] != second_payload["jti"]
 
-    assert sessions.revoke_access(first.access_token)
-    assert not sessions.is_access_active(first.access_token)
-    assert sessions.is_access_active(second.access_token)
+    assert await sessions.revoke_access(first.access_token)
+    assert not await sessions.is_access_active(first.access_token)
+    assert await sessions.is_access_active(second.access_token)

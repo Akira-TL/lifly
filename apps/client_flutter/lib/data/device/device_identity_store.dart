@@ -28,7 +28,9 @@ class DeviceIdentityCorrupt implements Exception {
 abstract interface class DeviceIdentityStore {
   Future<DeviceIdentity> loadOrCreate();
 
-  Future<List<int>> loadPrivateKeyBytes();
+  Future<SecretKey> deriveSharedSecret({required String remotePublicKey});
+
+  Future<void> clear();
 }
 
 class SecureDeviceIdentityStore implements DeviceIdentityStore {
@@ -64,12 +66,30 @@ class SecureDeviceIdentityStore implements DeviceIdentityStore {
   }
 
   @override
-  Future<List<int>> loadPrivateKeyBytes() async {
+  Future<void> clear() async {
+    await _secrets.delete(_privateKey);
+    await _secrets.delete(_deviceIdKey);
+  }
+
+  @override
+  Future<SecretKey> deriveSharedSecret({
+    required String remotePublicKey,
+  }) async {
     final encoded = await _secrets.read(_privateKey);
     if (encoded == null || encoded.isEmpty) {
       throw const DeviceIdentityCorrupt('Device private key is unavailable');
     }
-    return _decodePrivateKey(encoded);
+    final privateBytes = _decodePrivateKey(encoded);
+    final remoteBytes = _decodePublicKey(remotePublicKey);
+    final keyPair = await _algorithm.newKeyPairFromSeed(privateBytes);
+    try {
+      return await _algorithm.sharedSecretKey(
+        keyPair: keyPair,
+        remotePublicKey: SimplePublicKey(remoteBytes, type: KeyPairType.x25519),
+      );
+    } finally {
+      privateBytes.fillRange(0, privateBytes.length, 0);
+    }
   }
 
   Future<DeviceIdentity> _create() async {
@@ -103,6 +123,20 @@ class SecureDeviceIdentityStore implements DeviceIdentityStore {
       publicKey: base64Encode(publicKey.bytes),
       keyVersion: 1,
     );
+  }
+
+  List<int> _decodePublicKey(String encoded) {
+    try {
+      final bytes = base64Decode(encoded);
+      if (bytes.length != 32) {
+        throw const DeviceIdentityCorrupt(
+          'Unexpected X25519 public key length',
+        );
+      }
+      return bytes;
+    } on FormatException catch (error) {
+      throw DeviceIdentityCorrupt('Invalid public key encoding: $error');
+    }
   }
 
   List<int> _decodePrivateKey(String encoded) {

@@ -1,5 +1,6 @@
 import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/auth/secure_session_store.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_context.dart';
 import 'package:client_flutter/data/local_core/local_core_models.dart';
@@ -10,11 +11,16 @@ class TaskRepository {
   final ApiClient api;
   final LocalCoreBridge? localCore;
   final LiflyDataMode dataMode;
+  final AuthSessionStore? sessions;
 
-  TaskRepository(this.api, {this.localCore, this.dataMode = LiflyDataMode.api});
+  TaskRepository(
+    this.api, {
+    this.localCore,
+    this.dataMode = LiflyDataMode.api,
+    this.sessions,
+  });
 
-  bool get _useLocalCore =>
-      dataMode == LiflyDataMode.local && localCore != null;
+  bool get _useLocalCore => localCore != null;
 
   bool get _hasLocalCore => localCore != null;
 
@@ -31,7 +37,7 @@ class TaskRepository {
         'task_status': taskStatus,
         'group': group,
         'limit': limit + offset,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       final pageItems = records
           .skip(offset)
           .take(limit)
@@ -83,7 +89,7 @@ class TaskRepository {
     if (_useLocalCore) {
       final records = await localCore!.listTasks({
         'limit': 100,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       for (final record in records) {
         if (record.id == id) return _taskFromLocal(record);
       }
@@ -96,10 +102,7 @@ class TaskRepository {
 
   Future<Task> create(Map<String, dynamic> data) async {
     if (_useLocalCore) {
-      final record = await localCore!.createTask(
-        data,
-        LocalCoreContext.flutterUser(),
-      );
+      final record = await localCore!.createTask(data, await _localContext());
       return _taskFromLocal(record);
     }
 
@@ -112,7 +115,7 @@ class TaskRepository {
       final record = await localCore!.updateTask({
         ...data,
         'task_id': id,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return _taskFromLocal(record);
     }
 
@@ -124,7 +127,7 @@ class TaskRepository {
     if (_useLocalCore) {
       final record = await localCore!.completeTask({
         'task_id': id,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return _taskFromLocal(record);
     }
 
@@ -133,10 +136,10 @@ class TaskRepository {
   }
 
   Future<Map<String, dynamic>?> reminderStrategy(String taskId) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final item = await localCore!.getTaskReminderStrategy({
         'task_id': taskId,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return item == null ? null : _strategyToMap(item);
     }
 
@@ -149,7 +152,7 @@ class TaskRepository {
       if (_hasLocalCore) {
         final item = await localCore!.getTaskReminderStrategy({
           'task_id': taskId,
-        }, LocalCoreContext.flutterUser());
+        }, await _localContext());
         return item == null ? null : _strategyToMap(item);
       }
       throw StateError('Task reminder strategy unavailable: $error');
@@ -161,11 +164,11 @@ class TaskRepository {
     bool replaceSuggested = true,
   }) async {
     final data = {'replace_suggested': replaceSuggested};
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final item = await localCore!.generateTaskReminderStrategy({
         ...data,
         'task_id': taskId,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return item == null ? null : _strategyToMap(item);
     }
 
@@ -182,11 +185,11 @@ class TaskRepository {
     String taskId,
     Map<String, dynamic> data,
   ) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final item = await localCore!.confirmTaskReminderStrategy({
         ...data,
         'task_id': taskId,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return _strategyToMap(item);
     }
 
@@ -201,11 +204,11 @@ class TaskRepository {
     String taskId,
     Map<String, dynamic> data,
   ) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final item = await localCore!.dismissTaskReminderStrategy({
         ...data,
         'task_id': taskId,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return _strategyToMap(item);
     }
 
@@ -238,12 +241,12 @@ class TaskRepository {
     DateTime? dueBefore,
     int limit = 100,
   }) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final items = await localCore!.listTaskReminders({
         'status': status,
         'due_before': dueBefore?.toUtc().toIso8601String(),
         'limit': limit,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return items.map(_reminderToMap).toList(growable: false);
     }
 
@@ -268,7 +271,7 @@ class TaskRepository {
           'status': status,
           'due_before': dueBefore?.toUtc().toIso8601String(),
           'limit': limit,
-        }, LocalCoreContext.flutterUser());
+        }, await _localContext());
         return items.map(_reminderToMap).toList(growable: false);
       }
       throw StateError('Task reminders unavailable: $error');
@@ -314,15 +317,12 @@ class TaskRepository {
           'reminder_id': reminderId,
           'dispatch_token': dispatchToken,
           'external_id': externalId,
-        }, LocalCoreContext.flutterUser()),
+        }, await _localContext()),
       );
     }
     final res = await api.post(
       '/tasks/reminders/$reminderId/delivered',
-      data: {
-        'dispatch_token': dispatchToken,
-        'external_id': externalId,
-      },
+      data: {'dispatch_token': dispatchToken, 'external_id': externalId},
     );
     return Map<String, dynamic>.from(res['data'] as Map);
   }
@@ -340,7 +340,7 @@ class TaskRepository {
           'dispatch_token': dispatchToken,
           'error': error,
           'retry_after_seconds': retryAfterSeconds,
-        }, LocalCoreContext.flutterUser()),
+        }, await _localContext()),
       );
     }
     final res = await api.post(
@@ -363,7 +363,7 @@ class TaskRepository {
         await localCore!.retryTaskReminder({
           'reminder_id': reminderId,
           'reset_attempts': resetAttempts,
-        }, LocalCoreContext.flutterUser()),
+        }, await _localContext()),
       );
     }
     final res = await api.post(
@@ -378,7 +378,7 @@ class TaskRepository {
       return _reminderToMap(
         await localCore!.cancelTaskReminder({
           'reminder_id': reminderId,
-        }, LocalCoreContext.flutterUser()),
+        }, await _localContext()),
       );
     }
     final res = await api.post('/tasks/reminders/$reminderId/cancel');
@@ -387,9 +387,7 @@ class TaskRepository {
 
   Future<void> delete(String id) async {
     if (_useLocalCore) {
-      await localCore!.deleteTask({
-        'task_id': id,
-      }, LocalCoreContext.flutterUser());
+      await localCore!.deleteTask({'task_id': id}, await _localContext());
       return;
     }
 
@@ -400,12 +398,19 @@ class TaskRepository {
     if (_useLocalCore) {
       final record = await localCore!.restoreTask({
         'task_id': id,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return _taskFromLocal(record);
     }
 
     await api.post('/trash/task/$id/restore', data: const {});
     return get(id);
+  }
+
+  Future<LocalCoreContext> _localContext() async {
+    final session = await sessions?.read();
+    return LocalCoreContext.flutterUser(
+      userId: session?.account.accountId ?? defaultLocalCoreUserId,
+    );
   }
 
   Task _taskFromLocal(LocalTaskRecord record) {

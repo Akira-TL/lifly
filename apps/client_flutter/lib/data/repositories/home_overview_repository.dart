@@ -1,5 +1,6 @@
 import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/auth/secure_session_store.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_context.dart';
 import 'package:client_flutter/data/local_core/local_core_models.dart';
@@ -9,30 +10,27 @@ class HomeOverviewRepository {
   final ApiClient api;
   final LocalCoreBridge? localCore;
   final LiflyDataMode dataMode;
+  final AuthSessionStore? sessions;
 
   const HomeOverviewRepository(
     this.api, {
     this.localCore,
     this.dataMode = LiflyDataMode.api,
+    this.sessions,
   });
 
   bool get _hasLocalCore => localCore != null;
 
   Future<HomeOverview> load({String period = 'current_month'}) async {
-    if (dataMode == LiflyDataMode.local) {
-      return _loadLocal(period: period, sourceMode: 'local');
-    }
-
-    try {
-      return await _loadCloud();
-    } catch (cloudError) {
-      if (_hasLocalCore) {
-        return _loadLocal(period: period, sourceMode: 'fallback');
-      }
-      throw StateError(
-        'Dashboard cloud load failed and local fallback is unavailable: $cloudError',
+    if (_hasLocalCore) {
+      return _loadLocal(
+        period: period,
+        sourceMode: dataMode == LiflyDataMode.local
+            ? 'local'
+            : 'local_encrypted',
       );
     }
+    return _loadCloud();
   }
 
   Future<HomeOverview> _loadCloud() async {
@@ -58,8 +56,15 @@ class HomeOverviewRepository {
     final overview = await bridge.getHomeOverview({
       'period': period,
       'source_mode': sourceMode,
-    }, LocalCoreContext.flutterUser());
+    }, await _localContext());
     return _fromLocal(overview);
+  }
+
+  Future<LocalCoreContext> _localContext() async {
+    final session = await sessions?.read();
+    return LocalCoreContext.flutterUser(
+      userId: session?.account.accountId ?? defaultLocalCoreUserId,
+    );
   }
 
   HomeOverview _fromLocal(LocalHomeOverview local) {

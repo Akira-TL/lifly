@@ -119,13 +119,17 @@ def authenticated_subject_from_token(
     return authenticated_subject_from_payload(payload)
 
 
-def get_authenticated_subject(authorization: str = Header(...)) -> AuthenticatedSubject:
+def get_authenticated_subject(
+    authorization: str | None = Header(default=None),
+) -> AuthenticatedSubject:
     """FastAPI dependency seam for authenticated Account identity injection.
 
     This validates token identity claims only. Account/session revocation and
     Device Registry state remain the auth/device module's responsibility.
     """
 
+    if authorization is None or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid token")
     token = authorization.removeprefix("Bearer ")
     subject = authenticated_subject_from_token(token)
     if subject is None:

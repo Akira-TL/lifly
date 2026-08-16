@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:client_flutter/app/app_config.dart';
 import 'package:client_flutter/app/data_mode.dart';
+import 'package:client_flutter/app/auth/session_gate.dart';
 import 'package:client_flutter/app/shell/app_shell.dart';
 import 'package:client_flutter/app/startup/startup_metrics.dart';
 import 'package:client_flutter/app/theme/theme_cache_bootstrapper.dart';
@@ -22,6 +23,7 @@ import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/auth/secure_secret_store.dart';
 import 'package:client_flutter/data/auth/secure_session_store.dart';
 import 'package:client_flutter/data/crypto/account_e2ee_runtime.dart';
+import 'package:client_flutter/data/crypto/secure_local_database_key_provider.dart';
 import 'package:client_flutter/data/local_core/fake_local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/powersync_local_core_bridge.dart';
@@ -31,18 +33,23 @@ import 'package:client_flutter/data/powersync/powersync_credentials_service.dart
 import 'package:client_flutter/data/powersync/sync_service.dart';
 import 'package:client_flutter/features/ai_capture/data/ai_capture_service.dart';
 import 'package:client_flutter/features/settings/account_device_runtime.dart';
+import 'package:client_flutter/features/settings/account_access_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   StartupMetrics.markDartEntrypoint();
   final useVisualFixtures = kDebugMode && AppConfig.visualFixtures;
+  final dataMode = useVisualFixtures ? LiflyDataMode.local : AppConfig.dataMode;
   final secrets = FlutterSecureSecretStore();
   final sessions = SecureAuthSessionStore(secrets);
   final api = ApiClient(
     baseUrl: AppConfig.apiBaseUrl,
     accessTokenProvider: sessions.readAccessToken,
   );
-  final syncService = SyncService(api: api);
+  final syncService = SyncService(
+    api: api,
+    databaseKeyProvider: SecureLocalDatabaseKeyProvider(secrets: secrets),
+  );
   final e2ee = AccountE2eeRuntime(
     syncService: syncService,
     sessions: sessions,
@@ -50,10 +57,16 @@ Future<void> main() async {
     passwordEnvelopes: PasswordKeyEnvelopeService(api),
   );
   await e2ee.restoreFromSession();
+  final syncCoordinator = PowerSyncConnectionCoordinator(
+    credentialsService: PowerSyncCredentialsService(api),
+    syncService: syncService,
+  );
   final accountDeviceRuntime = DefaultAccountDeviceRuntime(
     api,
     secrets: secrets,
+    sessions: sessions,
     e2ee: e2ee,
+    syncCoordinator: syncCoordinator,
   );
   runApp(
     MultiProvider(
@@ -85,23 +98,14 @@ Future<void> main() async {
             return runtime;
           },
         ),
-        Provider<LiflyDataMode>.value(
-          value: useVisualFixtures ? LiflyDataMode.local : AppConfig.dataMode,
-        ),
+        Provider<LiflyDataMode>.value(value: dataMode),
         Provider<SecretStore>.value(value: secrets),
         Provider<AuthSessionStore>.value(value: sessions),
         Provider<ApiClient>.value(value: api),
         Provider<SyncService>.value(value: syncService),
         Provider<AccountE2eeRuntime>.value(value: e2ee),
         Provider<AccountDeviceRuntime>.value(value: accountDeviceRuntime),
-        Provider<PowerSyncConnectionCoordinator>(
-          create: (context) => PowerSyncConnectionCoordinator(
-            credentialsService: PowerSyncCredentialsService(
-              context.read<ApiClient>(),
-            ),
-            syncService: context.read<SyncService>(),
-          ),
-        ),
+        Provider<PowerSyncConnectionCoordinator>.value(value: syncCoordinator),
         ProxyProvider2<SyncService, AccountE2eeRuntime, LocalCoreBridge>(
           update: (_, syncService, e2eeRuntime, previous) {
             if (useVisualFixtures) {
@@ -125,10 +129,15 @@ Future<void> main() async {
             api: api,
             dataMode: dataMode,
             localCore: localCore,
+            sessions: sessions,
           ),
         ),
       ],
-      child: const LiflyApp(),
+      child: LiflyApp(
+        sessionStore: sessions,
+        e2eeRuntime: e2ee,
+        dataMode: dataMode,
+      ),
     ),
   );
   WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -168,7 +177,16 @@ Future<void> _restoreThemesAfterCoreFrame({
 }
 
 class LiflyApp extends StatelessWidget {
-  const LiflyApp({super.key});
+  final SecureAuthSessionStore sessionStore;
+  final AccountE2eeRuntime e2eeRuntime;
+  final LiflyDataMode dataMode;
+
+  const LiflyApp({
+    super.key,
+    required this.sessionStore,
+    required this.e2eeRuntime,
+    required this.dataMode,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -187,7 +205,17 @@ class LiflyApp extends StatelessWidget {
           child: content,
         );
       },
-      home: const AppShell(),
+      home: SessionGate(
+        dataMode: dataMode,
+        sessionStore: sessionStore,
+        runtimeListenable: Listenable.merge([sessionStore, e2eeRuntime]),
+        resolveRuntime: context
+            .read<AccountDeviceRuntime>()
+            .resolveRuntimeState,
+        signedOutBuilder: (_) => const AccountAccessPage(),
+        signedInBuilder: (_, session) => AppShell(session: session),
+        localBuilder: (_) => const AppShell(),
+      ),
       debugShowCheckedModeBanner: false,
     );
   }

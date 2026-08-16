@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:client_flutter/app/shell/shell_layout_policy.dart';
+import 'package:client_flutter/data/auth/auth_session.dart';
 import 'package:client_flutter/app/shell/shell_preferences.dart';
 import 'package:client_flutter/app/shell/wide_shell.dart';
 import 'package:client_flutter/app/theme/theme_package.dart';
@@ -17,8 +18,9 @@ import 'package:flutter/material.dart';
 
 class AppShell extends StatefulWidget {
   final ShellPreferenceStore? preferenceStore;
+  final AuthSession? session;
 
-  const AppShell({super.key, this.preferenceStore});
+  const AppShell({super.key, this.preferenceStore, this.session});
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -26,41 +28,9 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   static const _primaryDestinationIndex = 2;
-  static const _destinations = <ShellDestination>[
-    ShellDestination(
-      label: '首页',
-      webLabel: '今天',
-      icon: Icons.home_outlined,
-      selectedIcon: Icons.home,
-      page: HomePage(),
-    ),
-    ShellDestination(
-      label: '备忘',
-      icon: Icons.note_outlined,
-      selectedIcon: Icons.note,
-      page: MemoListPage(),
-    ),
-    ShellDestination(
-      label: 'AI',
-      webLabel: 'AI 会话',
-      icon: Icons.auto_awesome_outlined,
-      selectedIcon: Icons.auto_awesome,
-      page: AiCapturePage(),
-    ),
-    ShellDestination(
-      label: '记账',
-      icon: Icons.account_balance_wallet_outlined,
-      selectedIcon: Icons.account_balance_wallet,
-      page: LedgerListPage(),
-    ),
-    ShellDestination(
-      label: '任务',
-      icon: Icons.check_circle_outline,
-      selectedIcon: Icons.check_circle,
-      page: TaskListPage(),
-    ),
-  ];
 
+  late final AiCapturePageController _aiPageController;
+  late final List<ShellDestination> _destinations;
   late final ShellPreferenceStore _preferenceStore;
   int _currentIndex = 0;
   bool _sidebarCollapsed = false;
@@ -68,6 +38,41 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    _aiPageController = AiCapturePageController();
+    _destinations = <ShellDestination>[
+      const ShellDestination(
+        label: '首页',
+        webLabel: '今天',
+        icon: Icons.home_outlined,
+        selectedIcon: Icons.home,
+        page: HomePage(),
+      ),
+      const ShellDestination(
+        label: '备忘',
+        icon: Icons.note_outlined,
+        selectedIcon: Icons.note,
+        page: MemoListPage(),
+      ),
+      ShellDestination(
+        label: 'AI',
+        webLabel: 'AI 会话',
+        icon: Icons.auto_awesome_outlined,
+        selectedIcon: Icons.auto_awesome,
+        page: AiCapturePage(controller: _aiPageController),
+      ),
+      const ShellDestination(
+        label: '记账',
+        icon: Icons.account_balance_wallet_outlined,
+        selectedIcon: Icons.account_balance_wallet,
+        page: LedgerListPage(),
+      ),
+      const ShellDestination(
+        label: '任务',
+        icon: Icons.check_circle_outline,
+        selectedIcon: Icons.check_circle,
+        page: TaskListPage(),
+      ),
+    ];
     final providedStore = widget.preferenceStore;
     if (providedStore != null) {
       _preferenceStore = providedStore;
@@ -107,9 +112,11 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _selectDestination(int index) {
-    if (index < 0 || index >= _destinations.length || _currentIndex == index) {
-      return;
+    if (index < 0 || index >= _destinations.length) return;
+    if (index == _primaryDestinationIndex) {
+      _aiPageController.activate();
     }
+    if (_currentIndex == index) return;
     setState(() => _currentIndex = index);
     unawaited(_preferenceStore.saveDestinationIndex(index).catchError((_) {}));
   }
@@ -124,6 +131,12 @@ class _AppShellState extends State<AppShell> {
 
   void _openPage(BuildContext context, Widget page) {
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+  }
+
+  @override
+  void dispose() {
+    _aiPageController.dispose();
+    super.dispose();
   }
 
   @override
@@ -158,6 +171,13 @@ class _AppShellState extends State<AppShell> {
                   _openPage(context, const ManagementHubPage()),
               onOpenSettings: () => _openPage(context, const SettingsPage()),
               onToggleSidebar: _toggleSidebar,
+              accountLabel:
+                  widget.session?.account.displayName ??
+                  widget.session?.account.phoneE164 ??
+                  '本地用户',
+              accountSubtitle: widget.session == null
+                  ? '本地模式'
+                  : widget.session!.device.displayName,
             ),
           );
         }

@@ -48,7 +48,12 @@ class AccountRepository(Protocol):
         phone_e164: str,
         display_name: str | None,
         credential_record: str,
+        commit: bool = True,
     ) -> AccountRecord: ...
+
+    async def commit(self) -> None: ...
+
+    async def rollback(self) -> None: ...
 
 
 class SqlAlchemyAccountRepository:
@@ -82,6 +87,7 @@ class SqlAlchemyAccountRepository:
         phone_e164: str,
         display_name: str | None,
         credential_record: str,
+        commit: bool = True,
     ) -> AccountRecord:
         account = Account(phone_e164=phone_e164, display_name=display_name)
         self._db.add(account)
@@ -95,12 +101,21 @@ class SqlAlchemyAccountRepository:
                     credential_record=credential_record,
                 )
             )
-            await self._db.commit()
+            await self._db.flush()
+            if commit:
+                await self._db.commit()
         except IntegrityError as exc:
             await self._db.rollback()
             raise AccountAlreadyExists from exc
-        await self._db.refresh(account)
+        if commit:
+            await self._db.refresh(account)
         return AccountRecord.from_model(account)
+
+    async def commit(self) -> None:
+        await self._db.commit()
+
+    async def rollback(self) -> None:
+        await self._db.rollback()
 
 
 async def get_account_repository(

@@ -13,7 +13,7 @@ from mcp.types import Tool, TextContent
 
 from app.core.config import settings
 from app.core.security import authenticated_subject_from_token
-from app.modules.auth.sessions import get_session_registry
+from app.modules.auth.sessions import is_access_active_persistent
 
 class LiflyMcpTokenVerifier:
     async def verify_token(self, token: str) -> AccessToken | None:
@@ -23,7 +23,7 @@ class LiflyMcpTokenVerifier:
         )
         if subject is None:
             return None
-        if not get_session_registry().is_access_active(token, subject=subject):
+        if not await is_access_active_persistent(token, subject=subject):
             return None
         claims: dict[str, str] = {"account_id": subject.account_id}
         if subject.device_id is not None:

@@ -1,5 +1,6 @@
 import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/auth/secure_session_store.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/repositories/ledger_repository.dart';
 import 'package:client_flutter/domain/entities/ledger_transaction.dart';
@@ -37,6 +38,7 @@ class _LedgerDetailPageState extends State<LedgerDetailPage> {
       context.read<ApiClient>(),
       localCore: context.read<LocalCoreBridge>(),
       dataMode: context.read<LiflyDataMode>(),
+      sessions: context.read<AuthSessionStore>(),
     );
     _transaction = widget.initialTransaction;
     _load();

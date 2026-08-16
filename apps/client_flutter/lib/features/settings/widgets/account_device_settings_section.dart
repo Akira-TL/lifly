@@ -1,6 +1,7 @@
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/device/device_contracts.dart';
 import 'package:client_flutter/features/settings/account_device_runtime.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 class AccountDeviceSettingsSection extends StatefulWidget {
@@ -56,7 +57,7 @@ class _AccountDeviceSettingsSectionState
       setState(() => _snapshot = snapshot);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
+      setState(() => _error = _accountErrorMessage(error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -72,6 +73,31 @@ class _AccountDeviceSettingsSectionState
 
   Future<void> _login() =>
       _run(() => _runtime.login(phone: _phone.text, password: _password.text));
+
+  Future<void> _destroyLocalDeviceIdentity() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('重置此设备身份？'),
+        content: const Text('这会删除本机 Device Key。下次登录会创建新的设备身份；不会删除账号或云端数据。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('重置身份'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _run(() async {
+      await _runtime.destroyLocalDeviceIdentity();
+      return _runtime.load();
+    });
+  }
 
   Future<void> _rename(DeviceDescriptor device) async {
     final controller = TextEditingController(text: device.displayName);
@@ -176,6 +202,11 @@ class _AccountDeviceSettingsSectionState
               onPressed: enabled ? _login : null,
               child: const Text('登录'),
             ),
+            TextButton(
+              key: const ValueKey('destroy-local-device-identity'),
+              onPressed: _busy ? null : _destroyLocalDeviceIdentity,
+              child: const Text('重置此设备身份'),
+            ),
           ],
         ),
       ],
@@ -202,8 +233,14 @@ class _AccountDeviceSettingsSectionState
               child: const Text('刷新会话'),
             ),
             TextButton(
+              key: const ValueKey('local-logout'),
               onPressed: _busy ? null : () => _run(_runtime.logout),
-              child: const Text('退出登录'),
+              child: const Text('仅本机退出'),
+            ),
+            TextButton(
+              key: const ValueKey('revoke-current-session'),
+              onPressed: _busy ? null : () => _run(_runtime.revokeSession),
+              child: const Text('撤销当前会话'),
             ),
           ],
         ),
@@ -218,11 +255,11 @@ class _AccountDeviceSettingsSectionState
   Widget _deviceTile(DeviceDescriptor device) {
     final current = device.deviceId == _snapshot.currentDeviceId;
     final capabilities = device.capabilityReport.capabilities
-        .map((item) => item.value)
-        .join(', ');
+        .map(_deviceCapabilityLabel)
+        .join('、');
     final status = [
-      device.platform,
-      device.trustState.value,
+      _devicePlatformLabel(device.platform),
+      _deviceTrustStateLabel(device.trustState),
       if (current) '当前设备',
       if (device.isDefaultComputeNode) '默认计算节点',
       if (capabilities.isNotEmpty) capabilities,
@@ -263,3 +300,47 @@ class _AccountDeviceSettingsSectionState
     );
   }
 }
+
+String _accountErrorMessage(Object error) {
+  if (error is DioException) {
+    final status = error.response?.statusCode;
+    final data = error.response?.data;
+    final detail = data is Map ? data['detail'] : null;
+    if (status == 409 && detail == 'Phone already registered') {
+      return '该手机号已注册，请直接登录。';
+    }
+    if (status == 409 && detail == 'Device id is unavailable') {
+      return '当前设备身份已绑定其他账号，请退出原账号后重试。';
+    }
+    if (detail is String && detail.trim().isNotEmpty) {
+      return detail.trim();
+    }
+    if (status != null) return '请求失败（HTTP $status）';
+    return '网络请求失败，请检查连接后重试。';
+  }
+  return error.toString();
+}
+
+String _deviceCapabilityLabel(DeviceCapability capability) =>
+    switch (capability) {
+      DeviceCapability.localAi => '本地 AI',
+      DeviceCapability.localMcp => '本地 MCP',
+      DeviceCapability.backgroundExecutor => '后台执行',
+    };
+
+String _deviceTrustStateLabel(DeviceTrustState state) => switch (state) {
+  DeviceTrustState.pending => '待信任',
+  DeviceTrustState.trusted => '已信任',
+  DeviceTrustState.revoked => '已撤销',
+};
+
+String _devicePlatformLabel(String platform) =>
+    switch (platform.toLowerCase()) {
+      'web' => '网页端',
+      'linux' => 'Linux',
+      'windows' => 'Windows',
+      'macos' => 'macOS',
+      'android' => 'Android',
+      'ios' => 'iOS',
+      _ => platform,
+    };

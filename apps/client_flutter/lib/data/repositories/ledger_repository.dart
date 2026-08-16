@@ -1,5 +1,6 @@
 import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/auth/secure_session_store.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_context.dart';
 import 'package:client_flutter/data/local_core/local_core_models.dart';
@@ -11,15 +12,16 @@ class LedgerRepository {
   final ApiClient api;
   final LocalCoreBridge? localCore;
   final LiflyDataMode dataMode;
+  final AuthSessionStore? sessions;
 
   LedgerRepository(
     this.api, {
     this.localCore,
     this.dataMode = LiflyDataMode.api,
+    this.sessions,
   });
 
-  bool get _useLocalCore =>
-      dataMode == LiflyDataMode.local && localCore != null;
+  bool get _useLocalCore => localCore != null;
 
   bool get _hasLocalCore => localCore != null;
 
@@ -33,7 +35,7 @@ class LedgerRepository {
     if (_useLocalCore) {
       final records = await localCore!.searchExpenses({
         'limit': limit + offset,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       final filtered = direction == null || direction.isEmpty
           ? records
           : records.where((tx) => tx.direction == direction).toList();
@@ -85,7 +87,7 @@ class LedgerRepository {
     if (_useLocalCore) {
       final records = await localCore!.searchExpenses({
         'limit': 100,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       for (final record in records) {
         if (record.id == id) return _transactionFromLocal(record);
       }
@@ -100,7 +102,7 @@ class LedgerRepository {
     if (_useLocalCore) {
       final record = await localCore!.createExpense(
         data,
-        LocalCoreContext.flutterUser(),
+        await _localContext(),
       );
       return _transactionFromLocal(record);
     }
@@ -114,7 +116,7 @@ class LedgerRepository {
       final record = await localCore!.updateExpense({
         ...data,
         'transaction_id': id,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return _transactionFromLocal(record);
     }
 
@@ -126,7 +128,7 @@ class LedgerRepository {
     if (_useLocalCore) {
       await localCore!.deleteExpense({
         'transaction_id': id,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return;
     }
 
@@ -137,7 +139,7 @@ class LedgerRepository {
     if (_useLocalCore) {
       final record = await localCore!.restoreExpense({
         'transaction_id': id,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return _transactionFromLocal(record);
     }
 
@@ -150,12 +152,12 @@ class LedgerRepository {
     String status = 'active',
     String? categoryId,
   }) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final items = await localCore!.listLedgerBudgets({
         'period': period,
         'status': status,
         'category_id': ?categoryId,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return items.map(_budgetFromLocal).toList(growable: false);
     }
 
@@ -179,7 +181,7 @@ class LedgerRepository {
           'period': period,
           'status': status,
           'category_id': ?categoryId,
-        }, LocalCoreContext.flutterUser());
+        }, await _localContext());
         return items.map(_budgetFromLocal).toList(growable: false);
       }
       throw StateError('Ledger budgets unavailable: $error');
@@ -189,10 +191,7 @@ class LedgerRepository {
   Future<LedgerBudget> createBudget(Map<String, dynamic> data) async {
     if (_useLocalCore) {
       return _budgetFromLocal(
-        await localCore!.createLedgerBudget(
-          data,
-          LocalCoreContext.flutterUser(),
-        ),
+        await localCore!.createLedgerBudget(data, await _localContext()),
       );
     }
     final response = await api.post('/ledger/budgets', data: data);
@@ -208,7 +207,7 @@ class LedgerRepository {
         await localCore!.updateLedgerBudget({
           ...data,
           'budget_id': budgetId,
-        }, LocalCoreContext.flutterUser()),
+        }, await _localContext()),
       );
     }
     final response = await api.put('/ledger/budgets/$budgetId', data: data);
@@ -220,7 +219,7 @@ class LedgerRepository {
       return _budgetFromLocal(
         await localCore!.deleteLedgerBudget({
           'budget_id': budgetId,
-        }, LocalCoreContext.flutterUser()),
+        }, await _localContext()),
       );
     }
     final response = await api.delete('/ledger/budgets/$budgetId');
@@ -230,12 +229,12 @@ class LedgerRepository {
   Future<Map<String, dynamic>> overview({
     String period = 'current_month',
   }) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       return _ledgerOverviewToMap(
         await localCore!.getLedgerOverview({
           'period': period,
           'source_mode': 'local',
-        }, LocalCoreContext.flutterUser()),
+        }, await _localContext()),
       );
     }
 
@@ -248,7 +247,7 @@ class LedgerRepository {
           await localCore!.getLedgerOverview({
             'period': period,
             'source_mode': 'fallback',
-          }, LocalCoreContext.flutterUser()),
+          }, await _localContext()),
         );
       }
       throw StateError('Ledger overview unavailable: $error');
@@ -259,11 +258,11 @@ class LedgerRepository {
     String period = 'current_month',
     String direction = 'expense',
   }) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final items = await localCore!.getLedgerCategorySummary({
         'period': period,
         'direction': direction,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return items.map(_categorySummaryToMap).toList(growable: false);
     }
 
@@ -282,7 +281,7 @@ class LedgerRepository {
         final items = await localCore!.getLedgerCategorySummary({
           'period': period,
           'direction': direction,
-        }, LocalCoreContext.flutterUser());
+        }, await _localContext());
         return items.map(_categorySummaryToMap).toList(growable: false);
       }
       throw StateError('Ledger category summary unavailable: $error');
@@ -292,10 +291,10 @@ class LedgerRepository {
   Future<List<Map<String, dynamic>>> insights({
     String period = 'current_month',
   }) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final items = await localCore!.getLedgerInsights({
         'period': period,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return items.map(_insightToMap).toList(growable: false);
     }
 
@@ -310,7 +309,7 @@ class LedgerRepository {
       if (_hasLocalCore) {
         final items = await localCore!.getLedgerInsights({
           'period': period,
-        }, LocalCoreContext.flutterUser());
+        }, await _localContext());
         return items.map(_insightToMap).toList(growable: false);
       }
       throw StateError('Ledger insights unavailable: $error');
@@ -324,7 +323,7 @@ class LedgerRepository {
     if (_useLocalCore) {
       final summary = await localCore!.summarizeExpenses({
         'period': 'current_month',
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return {
         'income_total': summary.totalIncome,
         'expense_total': summary.totalExpense,
@@ -338,6 +337,13 @@ class LedgerRepository {
 
     final res = await api.get('/ledger/summary', params: params);
     return res['data'] as Map<String, dynamic>;
+  }
+
+  Future<LocalCoreContext> _localContext() async {
+    final session = await sessions?.read();
+    return LocalCoreContext.flutterUser(
+      userId: session?.account.accountId ?? defaultLocalCoreUserId,
+    );
   }
 
   LedgerBudget _budgetFromLocal(LocalLedgerBudget budget) {

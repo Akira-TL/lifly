@@ -1,5 +1,6 @@
 import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/auth/secure_session_store.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_context.dart';
 import 'package:client_flutter/data/local_core/local_core_models.dart';
@@ -13,6 +14,7 @@ class MemoRepository {
   final LocalCoreBridge? localCore;
   final LiflyDataMode dataMode;
   final AssetE2eeCoordinator? assetE2ee;
+  final AuthSessionStore? sessions;
   final String Function() _newAssetRefId;
   final DateTime Function() _now;
 
@@ -21,13 +23,13 @@ class MemoRepository {
     this.localCore,
     this.dataMode = LiflyDataMode.api,
     this.assetE2ee,
+    this.sessions,
     String Function()? newAssetRefId,
     DateTime Function()? now,
   }) : _newAssetRefId = newAssetRefId ?? const Uuid().v4,
        _now = now ?? DateTime.now;
 
-  bool get _useLocalCore =>
-      dataMode == LiflyDataMode.local && localCore != null;
+  bool get _useLocalCore => localCore != null;
 
   bool get _hasLocalCore => localCore != null;
 
@@ -43,7 +45,7 @@ class MemoRepository {
       final records = await localCore!.searchMemos({
         'q': q,
         'limit': limit + offset,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       var filtered = type == null || type.isEmpty
           ? records
           : records.where((memo) => memo.type == type).toList();
@@ -101,7 +103,7 @@ class MemoRepository {
     if (_useLocalCore) {
       final records = await localCore!.searchMemos({
         'limit': 100,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       for (final record in records) {
         if (record.id == id) return _memoFromLocal(record);
       }
@@ -114,10 +116,7 @@ class MemoRepository {
 
   Future<Memo> create(Map<String, dynamic> data) async {
     if (_useLocalCore) {
-      final record = await localCore!.createMemo(
-        data,
-        LocalCoreContext.flutterUser(),
-      );
+      final record = await localCore!.createMemo(data, await _localContext());
       return _memoFromLocal(record);
     }
 
@@ -130,7 +129,7 @@ class MemoRepository {
       final record = await localCore!.updateMemo({
         ...data,
         'memo_id': id,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return _memoFromLocal(record);
     }
 
@@ -139,10 +138,10 @@ class MemoRepository {
   }
 
   Future<List<Map<String, dynamic>>> classifications(String memoId) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final items = await localCore!.getMemoClassifications({
         'memo_id': memoId,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return items.map(_classificationToMap).toList(growable: false);
     }
 
@@ -157,7 +156,7 @@ class MemoRepository {
       if (_hasLocalCore) {
         final items = await localCore!.getMemoClassifications({
           'memo_id': memoId,
-        }, LocalCoreContext.flutterUser());
+        }, await _localContext());
         return items.map(_classificationToMap).toList(growable: false);
       }
       throw StateError('Memo classifications unavailable: $error');
@@ -173,11 +172,11 @@ class MemoRepository {
       'replace_suggested': replaceSuggested,
       'include_user_tags': includeUserTags,
     };
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final items = await localCore!.generateMemoClassifications({
         ...data,
         'memo_id': memoId,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return items.map(_classificationToMap).toList(growable: false);
     }
 
@@ -196,11 +195,11 @@ class MemoRepository {
     String memoId,
     Map<String, dynamic> data,
   ) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final item = await localCore!.confirmMemoClassification({
         ...data,
         'memo_id': memoId,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return _classificationToMap(item);
     }
 
@@ -215,11 +214,11 @@ class MemoRepository {
     String memoId,
     Map<String, dynamic> data,
   ) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final item = await localCore!.rejectMemoClassification({
         ...data,
         'memo_id': memoId,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return _classificationToMap(item);
     }
 
@@ -231,10 +230,10 @@ class MemoRepository {
   }
 
   Future<List<Map<String, dynamic>>> tagSummary({String kind = 'memo'}) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final items = await localCore!.getTagSummary({
         'kind': kind,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return items.map(_tagSummaryToMap).toList(growable: false);
     }
 
@@ -249,7 +248,7 @@ class MemoRepository {
       if (_hasLocalCore) {
         final items = await localCore!.getTagSummary({
           'kind': kind,
-        }, LocalCoreContext.flutterUser());
+        }, await _localContext());
         return items.map(_tagSummaryToMap).toList(growable: false);
       }
       throw StateError('Tag summary unavailable: $error');
@@ -257,10 +256,10 @@ class MemoRepository {
   }
 
   Future<List<Map<String, dynamic>>> tagMetadata({String kind = 'memo'}) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final items = await localCore!.listTagMetadata({
         'kind': kind,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return items.map(_tagMetadataToMap).toList(growable: false);
     }
 
@@ -275,10 +274,10 @@ class MemoRepository {
   Future<Map<String, dynamic>> upsertTagMetadata(
     Map<String, dynamic> data,
   ) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final item = await localCore!.upsertTagMetadata(
         data,
-        LocalCoreContext.flutterUser(),
+        await _localContext(),
       );
       return _tagMetadataToMap(item);
     }
@@ -291,11 +290,11 @@ class MemoRepository {
     String name, {
     String kind = 'memo',
   }) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final item = await localCore!.deleteTagMetadata({
         'name': name,
         'kind': kind,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return _tagMetadataToMap(item);
     }
 
@@ -307,9 +306,7 @@ class MemoRepository {
 
   Future<void> delete(String id) async {
     if (_useLocalCore) {
-      await localCore!.deleteMemo({
-        'memo_id': id,
-      }, LocalCoreContext.flutterUser());
+      await localCore!.deleteMemo({'memo_id': id}, await _localContext());
       return;
     }
 
@@ -320,7 +317,7 @@ class MemoRepository {
     if (_useLocalCore) {
       final record = await localCore!.restoreMemo({
         'memo_id': id,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return _memoFromLocal(record);
     }
 
@@ -370,6 +367,13 @@ class MemoRepository {
       memoId: memoId,
       assetId: assetId,
       now: _now().toUtc(),
+    );
+  }
+
+  Future<LocalCoreContext> _localContext() async {
+    final session = await sessions?.read();
+    return LocalCoreContext.flutterUser(
+      userId: session?.account.accountId ?? defaultLocalCoreUserId,
     );
   }
 

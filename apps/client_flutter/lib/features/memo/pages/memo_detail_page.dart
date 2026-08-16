@@ -1,5 +1,6 @@
 import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/auth/secure_session_store.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/crypto/account_e2ee_runtime.dart';
 import 'package:client_flutter/data/repositories/asset_repository.dart';
@@ -50,6 +51,7 @@ class _MemoDetailPageState extends State<MemoDetailPage> {
       api,
       localCore: context.read<LocalCoreBridge>(),
       dataMode: _dataMode,
+      sessions: context.read<AuthSessionStore>(),
       assetE2ee: e2ee,
     );
     _assetRepo = AssetRepository(api, e2ee: e2ee);

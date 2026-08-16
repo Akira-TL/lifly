@@ -46,12 +46,45 @@ void main() {
             'public key is derived; only private seed and stable id are stored',
       );
 
-      final privateBytes = await store.loadPrivateKeyBytes();
-      expect(privateBytes, hasLength(32));
-      expect(
-        base64Encode(privateBytes),
-        secrets.values['lifly.device.x25519.private.v1'],
+      final remoteKeyPair = await X25519().newKeyPair();
+      final remotePublic = await remoteKeyPair.extractPublicKey();
+      final localShared = await store.deriveSharedSecret(
+        remotePublicKey: base64Encode(remotePublic.bytes),
       );
+      final remoteShared = await X25519().sharedSecretKey(
+        keyPair: remoteKeyPair,
+        remotePublicKey: SimplePublicKey(
+          base64Decode(first.publicKey),
+          type: KeyPairType.x25519,
+        ),
+      );
+      expect(
+        await localShared.extractBytes(),
+        await remoteShared.extractBytes(),
+      );
+    },
+  );
+
+  test(
+    'clear removes device id and private key so the next account gets a new identity',
+    () async {
+      final secrets = _MemorySecrets();
+      var sequence = 0;
+      final store = SecureDeviceIdentityStore(
+        secrets,
+        newDeviceId: () => 'device-${++sequence}',
+        algorithm: X25519(),
+      );
+
+      final first = await store.loadOrCreate();
+      await store.clear();
+      expect(secrets.values['lifly.device.id.v1'], isNull);
+      expect(secrets.values['lifly.device.x25519.private.v1'], isNull);
+
+      final second = await store.loadOrCreate();
+      expect(second.deviceId, 'device-2');
+      expect(second.deviceId, isNot(first.deviceId));
+      expect(second.publicKey, isNot(first.publicKey));
     },
   );
 

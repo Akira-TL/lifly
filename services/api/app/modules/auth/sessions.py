@@ -3,14 +3,19 @@ from __future__ import annotations
 import hashlib
 import secrets
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from typing import Protocol
 
 from fastapi import Depends, Header, HTTPException
-from jose import jwt
+from jose import JWTError, jwt
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.database import async_session_factory, get_db
 from app.core.security import AuthenticatedSubject, authenticated_subject_from_token
+from app.db.models import AccountSession
 
 _REFRESH_PREFIX = "lifly_refresh_"
 
@@ -26,7 +31,7 @@ def _create_session_access_token(
     session_id: str,
     now: datetime,
 ) -> tuple[str, datetime]:
-    """Mint a foundation-compatible access JWT with unique session identity."""
+    """Mint a foundation-compatible access JWT with durable session identity."""
 
     expires_at = now + timedelta(minutes=settings.jwt_expire_minutes)
     subject = AuthenticatedSubject(account_id=account_id, device_id=device_id)
@@ -44,6 +49,23 @@ def _create_session_access_token(
     return token, expires_at
 
 
+def _session_id_from_access_token(token: str) -> str | None:
+    try:
+        payload = jwt.decode(
+            token,
+            settings.jwt_secret,
+            algorithms=[settings.jwt_algorithm],
+        )
+    except JWTError:
+        return None
+    if payload.get("type") != "access":
+        return None
+    session_id = payload.get("sid")
+    if not isinstance(session_id, str) or not session_id:
+        return None
+    return session_id
+
+
 @dataclass(frozen=True, slots=True)
 class SessionTokens:
     account_id: str
@@ -54,33 +76,47 @@ class SessionTokens:
     refresh_expires_at: datetime
 
 
+class SessionStore(Protocol):
+    async def issue(
+        self, *, account_id: str, device_id: str | None = None
+    ) -> SessionTokens: ...
+
+    async def refresh(self, refresh_token: str) -> SessionTokens | None: ...
+
+    async def is_access_active(
+        self, token: str, *, subject: AuthenticatedSubject | None = None
+    ) -> bool: ...
+
+    async def revoke_access(self, access_token: str) -> bool: ...
+
+    async def revoke_device(self, *, account_id: str, device_id: str) -> int: ...
+
+
 @dataclass(slots=True)
-class _SessionRecord:
+class _MemorySessionRecord:
     session_id: str
     account_id: str
     device_id: str | None
     refresh_hash: str
     refresh_expires_at: datetime
-    access_hashes: set[str] = field(default_factory=set)
     revoked: bool = False
 
 
 class SessionRegistry:
-    """Demo session registry with rotation and revocation semantics.
+    """In-memory SessionStore used as an explicit test double.
 
-    The registry is intentionally process-local because the foundation model has no
-    session table yet. Callers still receive normal access JWTs so shared business
-    endpoints can adopt the same authenticated subject contract. A production
-    integration must move this registry to durable/shared storage and make the
-    central auth dependency consult it for revocation.
+    Production dependencies use :class:`SqlAlchemySessionRegistry`; keeping this
+    implementation lets router tests exercise auth semantics without requiring a
+    live PostgreSQL instance.
     """
 
     def __init__(self) -> None:
-        self._sessions: dict[str, _SessionRecord] = {}
-        self._access_to_session: dict[str, str] = {}
+        self._sessions: dict[str, _MemorySessionRecord] = {}
         self._refresh_to_session: dict[str, str] = {}
 
-    def issue(self, *, account_id: str, device_id: str | None = None) -> SessionTokens:
+    async def issue(
+        self, *, account_id: str, device_id: str | None = None
+    ) -> SessionTokens:
         now = datetime.now(timezone.utc)
         session_id = str(uuid.uuid4())
         access_token, access_expires_at = _create_session_access_token(
@@ -90,18 +126,15 @@ class SessionRegistry:
             now=now,
         )
         refresh_token = _REFRESH_PREFIX + secrets.token_urlsafe(48)
-        record = _SessionRecord(
+        record = _MemorySessionRecord(
             session_id=session_id,
             account_id=account_id,
             device_id=device_id,
             refresh_hash=_token_hash(refresh_token),
             refresh_expires_at=now + timedelta(days=settings.jwt_refresh_expire_days),
         )
-        access_hash = _token_hash(access_token)
-        record.access_hashes.add(access_hash)
-        self._sessions[record.session_id] = record
-        self._access_to_session[access_hash] = record.session_id
-        self._refresh_to_session[record.refresh_hash] = record.session_id
+        self._sessions[session_id] = record
+        self._refresh_to_session[record.refresh_hash] = session_id
         self._prune(now)
         return SessionTokens(
             account_id=account_id,
@@ -112,7 +145,7 @@ class SessionRegistry:
             refresh_expires_at=record.refresh_expires_at,
         )
 
-    def refresh(self, refresh_token: str) -> SessionTokens | None:
+    async def refresh(self, refresh_token: str) -> SessionTokens | None:
         now = datetime.now(timezone.utc)
         self._prune(now)
         old_refresh_hash = _token_hash(refresh_token)
@@ -129,19 +162,14 @@ class SessionRegistry:
             return None
 
         new_refresh = _REFRESH_PREFIX + secrets.token_urlsafe(48)
-        new_refresh_hash = _token_hash(new_refresh)
-        record.refresh_hash = new_refresh_hash
-        self._refresh_to_session[new_refresh_hash] = session_id
-
+        record.refresh_hash = _token_hash(new_refresh)
+        self._refresh_to_session[record.refresh_hash] = session_id
         access_token, access_expires_at = _create_session_access_token(
             account_id=record.account_id,
             device_id=record.device_id,
             session_id=record.session_id,
             now=now,
         )
-        access_hash = _token_hash(access_token)
-        record.access_hashes.add(access_hash)
-        self._access_to_session[access_hash] = session_id
         return SessionTokens(
             account_id=record.account_id,
             device_id=record.device_id,
@@ -151,17 +179,16 @@ class SessionRegistry:
             refresh_expires_at=record.refresh_expires_at,
         )
 
-    def is_access_active(
+    async def is_access_active(
         self, token: str, *, subject: AuthenticatedSubject | None = None
     ) -> bool:
         now = datetime.now(timezone.utc)
         self._prune(now)
-        access_hash = _token_hash(token)
-        session_id = self._access_to_session.get(access_hash)
+        session_id = _session_id_from_access_token(token)
         if session_id is None:
             return False
         record = self._sessions.get(session_id)
-        if record is None or record.revoked:
+        if record is None or record.revoked or record.refresh_expires_at <= now:
             return False
         if subject is not None and (
             record.account_id != subject.account_id
@@ -170,17 +197,17 @@ class SessionRegistry:
             return False
         return True
 
-    def revoke_access(self, access_token: str) -> bool:
-        session_id = self._access_to_session.get(_token_hash(access_token))
+    async def revoke_access(self, access_token: str) -> bool:
+        session_id = _session_id_from_access_token(access_token)
         if session_id is None:
             return False
         record = self._sessions.get(session_id)
-        if record is None:
+        if record is None or record.revoked:
             return False
         self._revoke_record(record)
         return True
 
-    def revoke_device(self, *, account_id: str, device_id: str) -> int:
+    async def revoke_device(self, *, account_id: str, device_id: str) -> int:
         revoked = 0
         for record in self._sessions.values():
             if (
@@ -192,11 +219,9 @@ class SessionRegistry:
                 revoked += 1
         return revoked
 
-    def _revoke_record(self, record: _SessionRecord) -> None:
+    def _revoke_record(self, record: _MemorySessionRecord) -> None:
         record.revoked = True
         self._refresh_to_session.pop(record.refresh_hash, None)
-        for access_hash in record.access_hashes:
-            self._access_to_session.pop(access_hash, None)
 
     def _prune(self, now: datetime) -> None:
         expired = [
@@ -207,20 +232,158 @@ class SessionRegistry:
         for session_id in expired:
             record = self._sessions.pop(session_id)
             self._refresh_to_session.pop(record.refresh_hash, None)
-            for access_hash in record.access_hashes:
-                self._access_to_session.pop(access_hash, None)
 
 
-_default_session_registry = SessionRegistry()
+class SqlAlchemySessionRegistry:
+    """Durable SessionStore backed by the shared account database."""
+
+    def __init__(self, db: AsyncSession) -> None:
+        self._db = db
+
+    async def issue(
+        self, *, account_id: str, device_id: str | None = None
+    ) -> SessionTokens:
+        now = datetime.now(timezone.utc)
+        session_id = str(uuid.uuid4())
+        refresh_token = _REFRESH_PREFIX + secrets.token_urlsafe(48)
+        refresh_expires_at = now + timedelta(days=settings.jwt_refresh_expire_days)
+        self._db.add(
+            AccountSession(
+                id=session_id,
+                account_id=account_id,
+                device_id=device_id,
+                refresh_hash=_token_hash(refresh_token),
+                refresh_expires_at=refresh_expires_at,
+            )
+        )
+        await self._db.commit()
+        access_token, access_expires_at = _create_session_access_token(
+            account_id=account_id,
+            device_id=device_id,
+            session_id=session_id,
+            now=now,
+        )
+        return SessionTokens(
+            account_id=account_id,
+            device_id=device_id,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            access_expires_at=access_expires_at,
+            refresh_expires_at=refresh_expires_at,
+        )
+
+    async def refresh(self, refresh_token: str) -> SessionTokens | None:
+        now = datetime.now(timezone.utc)
+        old_refresh_hash = _token_hash(refresh_token)
+        result = await self._db.execute(
+            select(AccountSession)
+            .where(AccountSession.refresh_hash == old_refresh_hash)
+            .with_for_update()
+        )
+        record = result.scalar_one_or_none()
+        if (
+            record is None
+            or record.revoked_at is not None
+            or record.refresh_expires_at <= now
+        ):
+            await self._db.rollback()
+            return None
+
+        new_refresh = _REFRESH_PREFIX + secrets.token_urlsafe(48)
+        record.refresh_hash = _token_hash(new_refresh)
+        access_token, access_expires_at = _create_session_access_token(
+            account_id=record.account_id,
+            device_id=record.device_id,
+            session_id=record.id,
+            now=now,
+        )
+        await self._db.commit()
+        return SessionTokens(
+            account_id=record.account_id,
+            device_id=record.device_id,
+            access_token=access_token,
+            refresh_token=new_refresh,
+            access_expires_at=access_expires_at,
+            refresh_expires_at=record.refresh_expires_at,
+        )
+
+    async def is_access_active(
+        self, token: str, *, subject: AuthenticatedSubject | None = None
+    ) -> bool:
+        session_id = _session_id_from_access_token(token)
+        if session_id is None:
+            return False
+        result = await self._db.execute(
+            select(AccountSession).where(AccountSession.id == session_id)
+        )
+        record = result.scalar_one_or_none()
+        now = datetime.now(timezone.utc)
+        if (
+            record is None
+            or record.revoked_at is not None
+            or record.refresh_expires_at <= now
+        ):
+            return False
+        if subject is not None and (
+            record.account_id != subject.account_id
+            or record.device_id != subject.device_id
+        ):
+            return False
+        return True
+
+    async def revoke_access(self, access_token: str) -> bool:
+        session_id = _session_id_from_access_token(access_token)
+        if session_id is None:
+            return False
+        result = await self._db.execute(
+            select(AccountSession)
+            .where(AccountSession.id == session_id)
+            .with_for_update()
+        )
+        record = result.scalar_one_or_none()
+        if record is None or record.revoked_at is not None:
+            await self._db.rollback()
+            return False
+        record.revoked_at = datetime.now(timezone.utc)
+        await self._db.commit()
+        return True
+
+    async def revoke_device(self, *, account_id: str, device_id: str) -> int:
+        now = datetime.now(timezone.utc)
+        result = await self._db.execute(
+            update(AccountSession)
+            .where(
+                AccountSession.account_id == account_id,
+                AccountSession.device_id == device_id,
+                AccountSession.revoked_at.is_(None),
+            )
+            .values(revoked_at=now)
+        )
+        await self._db.commit()
+        return int(result.rowcount or 0)
 
 
-def get_session_registry() -> SessionRegistry:
-    return _default_session_registry
+async def get_session_registry(
+    db: AsyncSession = Depends(get_db),
+) -> SessionStore:
+    return SqlAlchemySessionRegistry(db)
 
 
-def bearer_token(authorization: str = Header(...)) -> str:
+async def is_access_active_persistent(
+    token: str, *, subject: AuthenticatedSubject
+) -> bool:
+    """Shared auth check for non-FastAPI integrations such as Cloud MCP."""
+
+    async with async_session_factory() as db:
+        return await SqlAlchemySessionRegistry(db).is_access_active(
+            token,
+            subject=subject,
+        )
+
+
+def bearer_token(authorization: str | None = Header(default=None)) -> str:
     prefix = "Bearer "
-    if not authorization.startswith(prefix):
+    if authorization is None or not authorization.startswith(prefix):
         raise HTTPException(status_code=401, detail="Invalid token")
     token = authorization[len(prefix) :].strip()
     if not token:
@@ -228,15 +391,15 @@ def bearer_token(authorization: str = Header(...)) -> str:
     return token
 
 
-def get_active_subject(
+async def get_active_subject(
     token: str = Depends(bearer_token),
-    sessions: SessionRegistry = Depends(get_session_registry),
+    sessions: SessionStore = Depends(get_session_registry),
 ) -> AuthenticatedSubject:
     subject = authenticated_subject_from_token(
         token,
         allowed_types=frozenset({"access"}),
     )
-    if subject is None or not sessions.is_access_active(token, subject=subject):
+    if subject is None or not await sessions.is_access_active(token, subject=subject):
         raise HTTPException(status_code=401, detail="Invalid or revoked token")
     return subject
 

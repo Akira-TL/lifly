@@ -75,6 +75,7 @@ class DeviceRepository(Protocol):
         public_key: str,
         capability_report: DeviceCapabilityReport,
         make_default_compute_node: bool,
+        commit: bool = True,
     ) -> DeviceRecord: ...
 
     async def list_for_account(self, account_id: str) -> list[DeviceRecord]: ...
@@ -114,6 +115,7 @@ class SqlAlchemyDeviceRepository:
         public_key: str,
         capability_report: DeviceCapabilityReport,
         make_default_compute_node: bool,
+        commit: bool = True,
     ) -> DeviceRecord:
         result = await self._db.execute(select(Device).where(Device.id == device_id))
         device = result.scalar_one_or_none()
@@ -146,13 +148,19 @@ class SqlAlchemyDeviceRepository:
         await self._db.flush()
         if make_default_compute_node:
             await self._set_default_model(account_id=account_id, device=device)
-        await self._db.commit()
-        await self._db.refresh(device)
+        if commit:
+            await self._db.commit()
+            await self._db.refresh(device)
         return DeviceRecord.from_model(device)
 
     async def list_for_account(self, account_id: str) -> list[DeviceRecord]:
         result = await self._db.execute(
-            select(Device).where(Device.account_id == account_id).order_by(Device.created_at)
+            select(Device)
+            .where(
+                Device.account_id == account_id,
+                Device.trust_state == DeviceTrustState.TRUSTED.value,
+            )
+            .order_by(Device.created_at)
         )
         return [DeviceRecord.from_model(item) for item in result.scalars().all()]
 
