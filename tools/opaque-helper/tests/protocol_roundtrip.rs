@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use lifly_opaque_helper::handle_json;
+use lifly_opaque_helper::{handle_client_json, handle_json};
 use serde_json::{json, Value};
 use tempfile::TempDir;
 
@@ -101,7 +101,10 @@ fn registration_and_login_reproduce_export_key_without_exposing_password() {
             "server_response": field(&login_server_start, "server_response"),
         }),
     );
-    assert_eq!(registration_export_key, field(&login_client_finish, "export_key"));
+    assert_eq!(
+        registration_export_key,
+        field(&login_client_finish, "export_key")
+    );
 
     let login_server_finish = invoke(
         &setup,
@@ -116,6 +119,38 @@ fn registration_and_login_reproduce_export_key_without_exposing_password() {
     );
     assert_eq!(login_server_finish["authenticated"], true);
     assert!(setup.exists());
+}
+
+#[test]
+fn client_handler_exposes_only_client_operations() {
+    let started = handle_client_json(
+        &json!({
+            "protocol": "opaque-rfc9807",
+            "protocol_version": 1,
+            "operation": "client_registration_start",
+            "password": "browser-password",
+        })
+        .to_string(),
+    )
+    .expect("client operation should succeed");
+    assert!(started["client_request"].as_str().is_some());
+    assert!(started["client_state"].as_str().is_some());
+    assert!(!started.to_string().contains("browser-password"));
+
+    let error = handle_client_json(
+        &json!({
+            "protocol": "opaque-rfc9807",
+            "protocol_version": 1,
+            "operation": "registration_start",
+            "identifier": "+8613800138000",
+            "client_request": "not-used",
+        })
+        .to_string(),
+    )
+    .expect_err("server operation must not be exposed through the browser client handler");
+    assert!(error
+        .to_string()
+        .contains("unsupported OPAQUE client operation"));
 }
 
 #[cfg(unix)]

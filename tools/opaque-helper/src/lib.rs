@@ -5,17 +5,20 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, bail, Context, Result};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine as _;
+use opaque_ke::{CipherSuite, Ristretto255, TripleDh};
 use opaque_ke::{
     ClientLogin, ClientLoginFinishParameters, ClientRegistration,
     ClientRegistrationFinishParameters, CredentialFinalization, CredentialRequest,
-    CredentialResponse, RegistrationRequest, RegistrationResponse, RegistrationUpload,
-    ServerLogin, ServerLoginParameters, ServerRegistration, ServerSetup,
+    CredentialResponse, RegistrationRequest, RegistrationResponse, RegistrationUpload, ServerLogin,
+    ServerLoginParameters, ServerRegistration, ServerSetup,
 };
-use opaque_ke::{CipherSuite, Ristretto255, TripleDh};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256, Sha512};
+
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
 
 pub const PROTOCOL: &str = "opaque-rfc9807";
 pub const PROTOCOL_VERSION: u64 = 1;
@@ -60,8 +63,30 @@ struct RegistrationServerState {
 }
 
 pub fn handle_json(input: &str, server_setup_path: &Path) -> Result<Value> {
-    let request: HelperRequest = serde_json::from_str(input).context("invalid helper request JSON")?;
+    let request: HelperRequest =
+        serde_json::from_str(input).context("invalid helper request JSON")?;
     handle_request(request, server_setup_path)
+}
+
+pub fn handle_client_json(input: &str) -> Result<Value> {
+    let request: HelperRequest =
+        serde_json::from_str(input).context("invalid helper request JSON")?;
+    validate_protocol(&request)?;
+    match request.operation.as_str() {
+        "client_registration_start" => client_registration_start(&request),
+        "client_registration_finish" => client_registration_finish(&request),
+        "client_login_start" => client_login_start(&request),
+        "client_login_finish" => client_login_finish(&request),
+        other => bail!("unsupported OPAQUE client operation: {other}"),
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn opaque_client_invoke(input: &str) -> std::result::Result<String, JsValue> {
+    handle_client_json(input)
+        .and_then(|value| serde_json::to_string(&value).context("failed to encode helper response"))
+        .map_err(|error| JsValue::from_str(&error.to_string()))
 }
 
 pub fn handle_request(request: HelperRequest, server_setup_path: &Path) -> Result<Value> {
@@ -202,8 +227,8 @@ fn server_registration_start(request: &HelperRequest, setup_path: &Path) -> Resu
 fn server_registration_finish(request: &HelperRequest) -> Result<Value> {
     let identifier = required(&request.identifier, "identifier")?;
     let state_bytes = decode(required(&request.server_state, "server_state")?)?;
-    let state: RegistrationServerState = serde_json::from_slice(&state_bytes)
-        .context("invalid OPAQUE registration server state")?;
+    let state: RegistrationServerState =
+        serde_json::from_slice(&state_bytes).context("invalid OPAQUE registration server state")?;
     if state.kind != "registration-v1" || state.identifier_hash != identifier_hash(identifier) {
         bail!("OPAQUE registration server state does not match identifier")
     }
@@ -220,12 +245,15 @@ fn server_registration_finish(request: &HelperRequest) -> Result<Value> {
 
 fn server_login_start(request: &HelperRequest, setup_path: &Path) -> Result<Value> {
     let identifier = required(&request.identifier, "identifier")?;
-    let credential_request = CredentialRequest::<LiflyCipherSuite>::deserialize(&decode(required(
-        &request.client_request,
-        "client_request",
-    )?)?)
+    let credential_request = CredentialRequest::<LiflyCipherSuite>::deserialize(&decode(
+        required(&request.client_request, "client_request")?,
+    )?)
     .context("invalid OPAQUE credential request")?;
-    let password_file = match request.credential_record.as_deref().filter(|value| !value.is_empty()) {
+    let password_file = match request
+        .credential_record
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    {
         Some(value) => Some(
             ServerRegistration::<LiflyCipherSuite>::deserialize(&decode(value)?)
                 .context("invalid OPAQUE credential record")?,
@@ -283,8 +311,7 @@ fn persist_server_setup(path: &Path, bytes: &[u8]) -> Result<()> {
         .parent()
         .ok_or_else(|| anyhow!("OPAQUE setup path has no parent"))?;
     let created_parent = !parent.exists();
-    fs::create_dir_all(parent)
-        .with_context(|| format!("failed to create {}", parent.display()))?;
+    fs::create_dir_all(parent).with_context(|| format!("failed to create {}", parent.display()))?;
     if created_parent {
         set_private_directory_permissions(parent)?;
     }
