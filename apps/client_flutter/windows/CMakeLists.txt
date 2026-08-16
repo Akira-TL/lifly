@@ -87,6 +87,16 @@ if(PLUGIN_BUNDLED_LIBRARIES)
     COMPONENT Runtime)
 endif()
 
+# Native RFC9807 OPAQUE client runtime. The Windows release builder produces
+# this DLL before invoking Flutter; Dart FFI resolves it next to the executable.
+set(LIFLY_OPAQUE_NATIVE_LIBRARY
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../../build/native-opaque/windows/lifly_opaque_helper.dll")
+if(EXISTS "${LIFLY_OPAQUE_NATIVE_LIBRARY}")
+  install(FILES "${LIFLY_OPAQUE_NATIVE_LIBRARY}"
+    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+    COMPONENT Runtime)
+endif()
+
 # Copy the native assets provided by the build.dart from all packages.
 set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/windows/")
 install(DIRECTORY "${NATIVE_ASSETS_DIR}"

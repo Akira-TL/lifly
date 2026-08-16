@@ -1,6 +1,11 @@
 use std::path::Path;
 
+#[cfg(not(target_arch = "wasm32"))]
+use std::ffi::{CStr, CString};
+
 use lifly_opaque_helper::{handle_client_json, handle_json};
+#[cfg(not(target_arch = "wasm32"))]
+use lifly_opaque_helper::{lifly_opaque_client_invoke_json, lifly_opaque_string_free};
 use serde_json::{json, Value};
 use tempfile::TempDir;
 
@@ -119,6 +124,34 @@ fn registration_and_login_reproduce_export_key_without_exposing_password() {
     );
     assert_eq!(login_server_finish["authenticated"], true);
     assert!(setup.exists());
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn native_c_abi_wraps_client_response_and_releases_memory() {
+    let request = CString::new(
+        json!({
+            "protocol": "opaque-rfc9807",
+            "protocol_version": 1,
+            "operation": "client_registration_start",
+            "password": "ffi-password",
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let response = unsafe { lifly_opaque_client_invoke_json(request.as_ptr()) };
+    assert!(!response.is_null());
+    let decoded: Value = unsafe { CStr::from_ptr(response) }
+        .to_str()
+        .map(serde_json::from_str)
+        .unwrap()
+        .unwrap();
+    unsafe { lifly_opaque_string_free(response) };
+
+    assert_eq!(decoded["ok"], true);
+    assert!(decoded["response"]["client_request"].as_str().is_some());
+    assert!(decoded["response"]["client_state"].as_str().is_some());
+    assert!(!decoded.to_string().contains("ffi-password"));
 }
 
 #[test]

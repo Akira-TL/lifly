@@ -2,6 +2,11 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+#[cfg(not(target_arch = "wasm32"))]
+use std::ffi::{CStr, CString};
+#[cfg(not(target_arch = "wasm32"))]
+use std::os::raw::c_char;
+
 use anyhow::{anyhow, bail, Context, Result};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine as _;
@@ -87,6 +92,40 @@ pub fn opaque_client_invoke(input: &str) -> std::result::Result<String, JsValue>
     handle_client_json(input)
         .and_then(|value| serde_json::to_string(&value).context("failed to encode helper response"))
         .map_err(|error| JsValue::from_str(&error.to_string()))
+}
+
+/// Stable native C ABI used by Flutter/Dart FFI on Android/Desktop.
+///
+/// The returned pointer owns a NUL-terminated UTF-8 JSON envelope and must be
+/// released with [lifly_opaque_string_free]. Passwords are consumed only by the
+/// same client-only OPAQUE implementation used by the WebAssembly adapter.
+#[cfg(not(target_arch = "wasm32"))]
+#[no_mangle]
+pub unsafe extern "C" fn lifly_opaque_client_invoke_json(input: *const c_char) -> *mut c_char {
+    let output = if input.is_null() {
+        json!({"ok": false, "error": "OPAQUE native input is null"})
+    } else {
+        match CStr::from_ptr(input).to_str() {
+            Ok(input) => match handle_client_json(input) {
+                Ok(value) => json!({"ok": true, "response": value}),
+                Err(error) => json!({"ok": false, "error": error.to_string()}),
+            },
+            Err(_) => json!({"ok": false, "error": "OPAQUE native input is not UTF-8"}),
+        }
+    };
+    let encoded = serde_json::to_string(&output)
+        .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"OPAQUE native encode failed\"}".to_string());
+    CString::new(encoded)
+        .expect("OPAQUE native JSON must not contain NUL")
+        .into_raw()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[no_mangle]
+pub unsafe extern "C" fn lifly_opaque_string_free(value: *mut c_char) {
+    if !value.is_null() {
+        drop(CString::from_raw(value));
+    }
 }
 
 pub fn handle_request(request: HelperRequest, server_setup_path: &Path) -> Result<Value> {

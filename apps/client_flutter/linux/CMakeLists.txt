@@ -106,6 +106,17 @@ foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
     COMPONENT Runtime)
 endforeach(bundled_library)
 
+# Demo/native release builds place the RFC9807 OPAQUE client cdylib here before
+# invoking Flutter. Keep it beside the other relocatable runtime libraries so
+# Dart FFI can resolve it from the packaged executable directory.
+set(LIFLY_OPAQUE_NATIVE_LIBRARY
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../../build/native-opaque/linux/liblifly_opaque_helper.so")
+if(EXISTS "${LIFLY_OPAQUE_NATIVE_LIBRARY}")
+  install(FILES "${LIFLY_OPAQUE_NATIVE_LIBRARY}"
+    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+    COMPONENT Runtime)
+endif()
+
 # Copy the native assets provided by the build.dart from all packages.
 set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/linux/")
 install(DIRECTORY "${NATIVE_ASSETS_DIR}"

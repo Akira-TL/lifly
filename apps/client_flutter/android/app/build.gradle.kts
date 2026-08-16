@@ -39,6 +39,10 @@ android {
         multiDexEnabled = true
     }
 
+    sourceSets.getByName("main").jniLibs.srcDir(
+        rootProject.file("../../../build/native-opaque/android")
+    )
+
     signingConfigs {
         if (releaseKeystorePropertiesFile.exists()) {
             create("release") {
