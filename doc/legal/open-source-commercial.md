@@ -27,7 +27,7 @@ Lifly 希望源码可以被阅读、研究、fork 和修改，但不允许第三
 
 重新分发时必须保留许可证，以及项目提供的 Required Notice。
 
-正式 `LICENSE` 落库前，需要确认 Required Notice 中的著作权主体和联系方式。
+仓库根目录已经加入正式 `LICENSE`。当前 Required Notice 使用公开身份 `Akira-TL`；如果未来改为公司主体或其他正式著作权主体，只需要同步更新 Notice。
 
 ## 3. 未经授权不允许的事情
 

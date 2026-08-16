@@ -6,7 +6,7 @@
 
 | URL | Upstream | 用途 |
 |---|---:|---|
-| `https://lifly.babelbeast.com/` | `apps/client_flutter/build/web` | Flutter Web release 静态产物，由 Nginx 直接托管 |
+| `https://lifly.babelbeast.com/` | `build/public-web` | Flutter Web release 静态产物，由 Nginx 直接托管 |
 | `https://lifly.babelbeast.com/api/*` | `127.0.0.1:8210` | FastAPI |
 | `https://lifly.babelbeast.com/mcp` | `127.0.0.1:8210` | Cloud MCP Streamable HTTP |
 
@@ -66,7 +66,7 @@ bash scripts/web-release-build.sh
 该脚本会把 Web 构建到：
 
 ```text
-apps/client_flutter/build/web
+build/public-web
 ```
 
 构建时默认使用公网同源 API：

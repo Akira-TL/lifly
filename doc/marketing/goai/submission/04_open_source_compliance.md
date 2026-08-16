@@ -4,7 +4,7 @@
 
 Lifly 不打算允许第三方拿项目代码直接做商业产品，也不打算用 MIT / Apache 这类允许商业复用的宽松许可证。
 
-当前准备采用的方向是：
+当前采用：
 
 ```text
 第一方源码：PolyForm Noncommercial 1.0.0
@@ -15,7 +15,7 @@ Lifly 不打算允许第三方拿项目代码直接做商业产品，也不打�
 
 PolyForm Noncommercial 允许非商业使用、修改和分发，因此别人可以 fork、研究、修改，也可以在非商业前提下继续分享自己的版本。商业目的默认不在授权范围内。
 
-为了保留原作者信息，正式发布时会在许可证旁加入 Required Notice。fork 或重新分发时，需要把许可证和该 Notice 一并保留。最终 Notice 中的著作权主体名称要在 `LICENSE` 正式落库前确认。
+仓库根目录已经提供正式 `LICENSE` 和 Required Notice。fork 或重新分发时，需要把许可证和该 Notice 一并保留。当前 Notice 使用公开身份 `Akira-TL`。
 
 需要注意：因为我们限制商业用途，这种方式更准确的称呼是 **source-available / non-commercial**，不属于 OSI 对“Open Source”的定义。比赛材料中直接说明，不把两者混在一起。
 

@@ -4,14 +4,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CLIENT_DIR="$PROJECT_ROOT/apps/client_flutter"
+PUBLIC_WEB_DIR="$PROJECT_ROOT/build/public-web"
 
 cd "$PROJECT_ROOT"
 echo "=== Lifly v0.9.0 Demo Delivery Gate ==="
 
 echo "[1/6] Web release"
 bash scripts/web-release-build.sh
-test -s "$CLIENT_DIR/build/web/sqlite3mc.wasm"
-test -s "$CLIENT_DIR/build/web/opaque_client.js"
+test -s "$PUBLIC_WEB_DIR/sqlite3mc.wasm"
+test -s "$PUBLIC_WEB_DIR/opaque_client.js"
 
 echo "[2/6] Native OPAQUE"
 bash scripts/opaque-native-smoke.sh

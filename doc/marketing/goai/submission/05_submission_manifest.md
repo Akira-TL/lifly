@@ -101,7 +101,7 @@ OPEN_SOURCE_AND_COMPLIANCE.md
 
 ## License 怎么交代
 
-当前准备采用：
+Lifly 第一方代码当前采用：
 
 ```text
 PolyForm Noncommercial 1.0.0
@@ -118,7 +118,7 @@ Commercial use requires separate authorization.
 
 不要写成 MIT / Apache，也不要写“完全开源”。因为商业用途受到限制，它不属于 OSI 定义下的 Open Source。
 
-正式 `LICENSE` 落库前还需要确定著作权主体在 Required Notice 中的写法，并核对第三方依赖。
+仓库根目录已经加入正式 `LICENSE`。当前 Required Notice 使用公开身份 `Akira-TL`；第三方依赖继续遵守各自上游许可证。
 
 ## One-pager
 
@@ -185,7 +185,8 @@ Lifly_GOAI_2026_Preliminary/
 │   └── evidence/
 ├── 06_License/
 │   ├── OPEN_SOURCE_AND_COMPLIANCE.md
-│   └── THIRD_PARTY_NOTICES.md
+│   ├── DEPENDENCIES_AND_NOTICES.md
+│   └── LICENSE
 └── 07_Links/
     ├── web_demo.txt
     └── source_repository.txt

@@ -1,7 +1,7 @@
 [project]
 name = "api"
 version = "0.9.0"
-description = "Add your description here"
+description = "Lifly Personal Life Agent API, Cloud MCP and encrypted relay services"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

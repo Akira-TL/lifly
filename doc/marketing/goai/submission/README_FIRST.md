@@ -65,17 +65,17 @@ API：
 https://lifly.babelbeast.com/api/v1
 ```
 
-每次部署前都应重新执行 `scripts/web-release-build.sh`，否则 Nginx 指向的 `apps/client_flutter/build/web` 不存在时，根路径会直接返回 404。
+每次部署前都应重新执行 `scripts/web-release-build.sh`，否则 Nginx 指向的 `build/public-web` 不存在时，根路径会直接返回 404。
 
 ## License 方向
 
 我们不打算允许别人拿 Lifly 的代码直接做商业产品。
 
-当前准备采用的方向是 **PolyForm Noncommercial 1.0.0**：允许查看源码、fork、修改和非商业分发；商业使用需要单独获得授权。分发和 fork 需要保留许可证以及项目提供的 Required Notice，用来标明原项目和著作权归属。
+Lifly 第一方代码采用 **PolyForm Noncommercial 1.0.0**：允许查看源码、fork、修改和非商业分发；商业使用需要单独获得授权。分发和 fork 需要保留许可证以及项目提供的 Required Notice，用来标明原项目和著作权归属。
 
 这意味着 Lifly 更准确的说法是 **source-available / non-commercial**，而不是 OSI 定义下的“完全开源”。比赛材料里直接说明这一点，不绕词。
 
-最终 `LICENSE` 文件落库前，还要确认著作权主体的正式写法，并完成第三方依赖检查。
+仓库根目录已加入正式 `LICENSE`，当前 `Required Notice` 使用公开身份 `Akira-TL`。第三方依赖继续遵守各自上游许可证。
 
 ## 暂时不要写进宣传材料的内容
 

@@ -48,7 +48,7 @@ if [[ "$MODE" == --check ]]; then
   bash -n "$SCRIPT_DIR/deploy-nginx.sh"
   bash -n "$SCRIPT_DIR/reload-nginx-after-renewal.sh"
   grep -Fq 'server_name lifly.babelbeast.com;' "$SCRIPT_DIR/sites/lifly-http.conf"
-  grep -Fq 'root /home/Akira/Projects/lifly/apps/client_flutter/build/web;' "$SCRIPT_DIR/sites/lifly-https.conf"
+  grep -Fq 'root /home/Akira/Projects/lifly/build/public-web;' "$SCRIPT_DIR/sites/lifly-https.conf"
   grep -Fq 'proxy_pass http://127.0.0.1:8210;' "$SCRIPT_DIR/sites/lifly-https.conf"
   if grep -Fq "$PROJECT_INCLUDE" "$NGINX_CONFIG"; then
     nginx -t
