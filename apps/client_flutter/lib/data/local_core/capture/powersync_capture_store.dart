@@ -75,25 +75,74 @@ class PowerSyncCaptureStore {
     final timezone = _readOptionalString(input, 'timezone') ?? 'Asia/Shanghai';
     final locale = _readOptionalString(input, 'locale') ?? 'zh-CN';
     final assetIds = _readStringList(input, 'asset_ids');
-    final assetContext = await assetContextResolver.resolve(
-      assetIds,
-      userId: context.userId,
-    );
     final now = context.effectiveNow.toUtc();
     final captureId = policy.nextEntityId('capture');
-    final expiresAt = now.add(const Duration(days: 30));
     final actions = _parseLocalActions(
       text: text,
       captureId: captureId,
       assetIds: assetIds,
       now: now,
     );
+    return _persistCandidateSession(
+      captureId: captureId,
+      originalText: text,
+      timezone: timezone,
+      locale: locale,
+      assetIds: assetIds,
+      actions: actions,
+      context: context,
+      now: now,
+    );
+  }
+
+  Future<LocalCaptureSession> captureIngestCandidates(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final timezone = _readOptionalString(input, 'timezone') ?? 'Asia/Shanghai';
+    final locale = _readOptionalString(input, 'locale') ?? 'zh-CN';
+    final assetIds = _readStringList(input, 'asset_ids');
+    final actions = _readCandidateActions(input['actions']);
+    if (actions.isEmpty) {
+      throw const FormatException(
+        'Candidate ingestion requires at least one action',
+      );
+    }
+    final sourceText = _readOptionalString(input, 'source_text') ?? '';
+    final now = context.effectiveNow.toUtc();
+    return _persistCandidateSession(
+      captureId: policy.nextEntityId('capture'),
+      originalText: sourceText,
+      timezone: timezone,
+      locale: locale,
+      assetIds: assetIds,
+      actions: actions,
+      context: context,
+      now: now,
+    );
+  }
+
+  Future<LocalCaptureSession> _persistCandidateSession({
+    required String captureId,
+    required String originalText,
+    required String timezone,
+    required String locale,
+    required List<String> assetIds,
+    required List<LocalCaptureAction> actions,
+    required LocalCoreContext context,
+    required DateTime now,
+  }) async {
+    final assetContext = await assetContextResolver.resolve(
+      assetIds,
+      userId: context.userId,
+    );
+    final expiresAt = now.add(const Duration(days: 30));
     final userTurn = LocalCaptureTurn(
       id: policy.nextEntityId('capture_turn'),
       captureId: captureId,
       turnIndex: 0,
       role: 'user',
-      text: text,
+      text: originalText.isEmpty ? null : originalText,
       assetIds: assetIds,
       assetContext: assetContext,
       actions: const [],
@@ -120,7 +169,7 @@ class PowerSyncCaptureStore {
     );
     final session = LocalCaptureSession(
       captureId: captureId,
-      originalText: text,
+      originalText: originalText,
       timezone: timezone,
       locale: locale,
       actions: actions,
@@ -135,7 +184,7 @@ class PowerSyncCaptureStore {
     );
 
     await syncService.ensureInitialized();
-    await syncService.db.writeTransaction((tx) async {
+    await syncService.writeLocalTransaction((tx) async {
       await tx.execute(
         'INSERT INTO mcp_capture_sessions('
         'id, capture_id, user_id, original_text, timezone, locale, actions, requires_confirmation, '
@@ -162,8 +211,6 @@ class PowerSyncCaptureStore {
       await _insertTurn(tx, userTurn, context.userId, session.sourceChannel);
       await _insertTurn(tx, actionTurn, context.userId, session.sourceChannel);
     });
-    await syncService.flushLocalMutations();
-
     return session;
   }
 
@@ -270,7 +317,7 @@ class PowerSyncCaptureStore {
       updatedAt: now,
     );
     final expiresAt = now.add(const Duration(days: 30));
-    await syncService.db.writeTransaction((tx) async {
+    await syncService.writeLocalTransaction((tx) async {
       await _insertTurn(tx, userTurn, context.userId, session.sourceChannel);
       await _insertTurn(tx, actionTurn, context.userId, session.sourceChannel);
       await tx.execute(
@@ -288,7 +335,6 @@ class PowerSyncCaptureStore {
         ],
       );
     });
-    await syncService.flushLocalMutations();
     return (await _getSession(captureId, context.userId, includeTurns: true))!;
   }
 
@@ -359,7 +405,7 @@ class PowerSyncCaptureStore {
       createdAt: now,
       updatedAt: now,
     );
-    await syncService.db.writeTransaction((tx) async {
+    await syncService.writeLocalTransaction((tx) async {
       await tx.execute(
         'UPDATE mcp_capture_turns SET turn_status = ?, updated_at = ?, '
         'revision = revision + 1 WHERE id = ?',
@@ -380,7 +426,6 @@ class PowerSyncCaptureStore {
         ],
       );
     });
-    await syncService.flushLocalMutations();
     return revisedTurn;
   }
 
@@ -413,7 +458,7 @@ class PowerSyncCaptureStore {
         createdAt: now,
         updatedAt: now,
       );
-      await syncService.db.writeTransaction((tx) async {
+      await syncService.writeLocalTransaction((tx) async {
         await _insertTurn(tx, turn, context.userId, session.sourceChannel);
         await tx.execute(
           'UPDATE mcp_capture_sessions SET session_status = ?, dismissed_at = ?, updated_at = ?, '
@@ -427,7 +472,6 @@ class PowerSyncCaptureStore {
           ],
         );
       });
-      await syncService.flushLocalMutations();
     }
     return (await _getSession(captureId, context.userId, includeTurns: true))!;
   }
@@ -502,7 +546,7 @@ class PowerSyncCaptureStore {
         : failed.isEmpty
         ? 'committed'
         : 'partial';
-    await syncService.db.writeTransaction((tx) async {
+    await syncService.writeLocalTransaction((tx) async {
       await tx.execute(
         'UPDATE mcp_capture_sessions SET committed = ?, session_status = ?, '
         'updated_at = ?, committed_at = ?, revision = revision + 1 '
@@ -551,7 +595,6 @@ class PowerSyncCaptureStore {
         );
       }
     });
-    await syncService.flushLocalMutations();
 
     return LocalCaptureCommitResult(
       committed: created.isNotEmpty && failed.isEmpty,
@@ -619,7 +662,7 @@ class PowerSyncCaptureStore {
     }
 
     final now = context.effectiveNow.toUtc();
-    await syncService.db.writeTransaction((tx) async {
+    await syncService.writeLocalTransaction((tx) async {
       await tx.execute(
         'UPDATE mcp_undo_actions SET status = ?, used_at = ? '
         'WHERE undo_token = ? AND user_id = ? AND status = ?',
@@ -652,7 +695,6 @@ class PowerSyncCaptureStore {
         await _insertTurn(tx, turn, context.userId, context.sourceChannelName);
       }
     });
-    await syncService.flushLocalMutations();
 
     return LocalCaptureUndoResult(
       undone: undone,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Mapping
 
 import httpx
@@ -115,7 +116,9 @@ def test_ollama_provider_requests_structured_output_and_parses_actions() -> None
         asyncio.run(client.aclose())
 
     assert captured["url"] == "http://ollama.local:11434/api/chat"
-    assert '"format"' in str(captured["body"])
+    body = json.loads(str(captured["body"]))
+    assert "format" in body
+    assert body["options"] == {"temperature": 0}
     assert result.actions[0].type == "memo_create"
     assert result.usage.input_tokens == 12
     assert result.usage.output_tokens == 7

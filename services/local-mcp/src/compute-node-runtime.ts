@@ -2,7 +2,10 @@ import type { DesktopLocalCoreTransport } from "../../../packages/local-core/src
 import { HttpAiRelayClient, type AccessTokenProvider } from "./ai-relay-client.js";
 import { LocalCoreComputeNodePlanner } from "./compute-node-planner.js";
 import { ProviderBackedComputeNodePlanner } from "./provider-backed-planner.js";
-import { DeviceAiJobCipher } from "./device-ai-job-cipher.js";
+import {
+  DeviceAiJobCipher,
+  RawX25519DeviceKeyAgreement,
+} from "./device-ai-job-cipher.js";
 import { EncryptedAiJobEngine } from "./encrypted-job-engine.js";
 import { EncryptedAiRelayWorker } from "./encrypted-relay-worker.js";
 import { createDesktopLocalMcpRuntime, type LocalMcpRuntime } from "./tool-handlers.js";
@@ -50,11 +53,12 @@ export function createComputeNodeRelayRuntime(
     accessToken: options.tokenProvider,
     fetch: options.fetch,
   });
-  const cipher = new DeviceAiJobCipher({
+  const keyAgreement = new RawX25519DeviceKeyAgreement({
     deviceId: options.deviceId,
     privateKeyBytes: options.deviceKey,
     resolvePublicKey: (deviceId) => relay.resolveDevicePublicKey(deviceId),
   });
+  const cipher = new DeviceAiJobCipher({ keyAgreement });
   const deterministicPlanner = new LocalCoreComputeNodePlanner(localMcp.core);
   const executor = options.providerHelperPath
     ? new ProviderBackedComputeNodePlanner({

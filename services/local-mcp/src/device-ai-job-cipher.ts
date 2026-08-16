@@ -15,26 +15,77 @@ const X25519Pkcs8Prefix = hex("302e020100300506032b656e04220420");
 
 export type DevicePublicKeyResolver = (deviceId: string) => Promise<string>;
 
-export interface DeviceAiJobCipherOptions {
+/**
+ * Cryptographic seam consumed by the AI Job cipher.
+ *
+ * Implementations keep Device private-key representation internal. Native
+ * bootstrap may use [RawX25519DeviceKeyAgreement], while a future hardware or
+ * non-extractable WebCrypto adapter can implement the same interface without
+ * ever returning private key bytes to the cipher.
+ */
+export interface DeviceKeyAgreement {
+  readonly deviceId: string;
+  deriveSharedSecret(remoteDeviceId: string): Promise<ArrayBuffer>;
+}
+
+export interface RawX25519DeviceKeyAgreementOptions {
   deviceId: string;
   privateKeyBytes: Uint8Array;
   resolvePublicKey: DevicePublicKeyResolver;
-  nonce?: () => Uint8Array;
 }
 
-export class DeviceAiJobCipher implements EncryptedAiJobCipher {
-  private readonly deviceId: string;
+export class RawX25519DeviceKeyAgreement implements DeviceKeyAgreement {
+  readonly deviceId: string;
   private readonly privateKeyBytes: Uint8Array;
   private readonly resolvePublicKey: DevicePublicKeyResolver;
-  private readonly nonce: () => Uint8Array;
 
-  constructor(options: DeviceAiJobCipherOptions) {
+  constructor(options: RawX25519DeviceKeyAgreementOptions) {
     if (options.privateKeyBytes.length !== 32) {
       throw new Error("Device X25519 private key must be 32 bytes");
     }
     this.deviceId = options.deviceId;
     this.privateKeyBytes = Uint8Array.from(options.privateKeyBytes);
     this.resolvePublicKey = options.resolvePublicKey;
+  }
+
+  async deriveSharedSecret(remoteDeviceId: string): Promise<ArrayBuffer> {
+    const privateKey = await globalThis.crypto.subtle.importKey(
+      "pkcs8",
+      asArrayBuffer(concat(X25519Pkcs8Prefix, this.privateKeyBytes)),
+      { name: "X25519" },
+      false,
+      ["deriveBits"],
+    );
+    const remoteRaw = decodeBase64(await this.resolvePublicKey(remoteDeviceId));
+    if (remoteRaw.length !== 32) {
+      throw new Error("Device X25519 public key must be 32 bytes");
+    }
+    const publicKey = await globalThis.crypto.subtle.importKey(
+      "raw",
+      asArrayBuffer(remoteRaw),
+      { name: "X25519" },
+      false,
+      [],
+    );
+    return globalThis.crypto.subtle.deriveBits(
+      { name: "X25519", public: publicKey },
+      privateKey,
+      256,
+    );
+  }
+}
+
+export interface DeviceAiJobCipherOptions {
+  keyAgreement: DeviceKeyAgreement;
+  nonce?: () => Uint8Array;
+}
+
+export class DeviceAiJobCipher implements EncryptedAiJobCipher {
+  private readonly keyAgreement: DeviceKeyAgreement;
+  private readonly nonce: () => Uint8Array;
+
+  constructor(options: DeviceAiJobCipherOptions) {
+    this.keyAgreement = options.keyAgreement;
     this.nonce =
       options.nonce ??
       (() => {
@@ -50,9 +101,9 @@ export class DeviceAiJobCipher implements EncryptedAiJobCipher {
         `Unsupported device AI job encryption version: ${envelope.encryption_version}`,
       );
     }
-    if (envelope.target_device_id !== this.deviceId) {
+    if (envelope.target_device_id !== this.keyAgreement.deviceId) {
       throw new Error(
-        `Device ${this.deviceId} cannot decrypt AI job for ${envelope.target_device_id}`,
+        `Device ${this.keyAgreement.deviceId} cannot decrypt AI job for ${envelope.target_device_id}`,
       );
     }
     const contextValue = requestContext(envelope);
@@ -78,9 +129,9 @@ export class DeviceAiJobCipher implements EncryptedAiJobCipher {
     payload: unknown,
     result: EncryptedAiJobResultContext,
   ): Promise<EncryptedAiJobCiphertext> {
-    if (result.source_device_id !== this.deviceId) {
+    if (result.source_device_id !== this.keyAgreement.deviceId) {
       throw new Error(
-        `Device ${this.deviceId} cannot encrypt AI result as ${result.source_device_id}`,
+        `Device ${this.keyAgreement.deviceId} cannot encrypt AI result as ${result.source_device_id}`,
       );
     }
     const contextValue = resultContext(result);
@@ -109,29 +160,7 @@ export class DeviceAiJobCipher implements EncryptedAiJobCipher {
     deviceId: string,
     contextValue: readonly unknown[],
   ): Promise<CryptoKey> {
-    const privateKey = await globalThis.crypto.subtle.importKey(
-      "pkcs8",
-      asArrayBuffer(concat(X25519Pkcs8Prefix, this.privateKeyBytes)),
-      { name: "X25519" },
-      false,
-      ["deriveBits"],
-    );
-    const remoteRaw = decodeBase64(await this.resolvePublicKey(deviceId));
-    if (remoteRaw.length !== 32) {
-      throw new Error("Device X25519 public key must be 32 bytes");
-    }
-    const publicKey = await globalThis.crypto.subtle.importKey(
-      "raw",
-      asArrayBuffer(remoteRaw),
-      { name: "X25519" },
-      false,
-      [],
-    );
-    const shared = await globalThis.crypto.subtle.deriveBits(
-      { name: "X25519", public: publicKey },
-      privateKey,
-      256,
-    );
+    const shared = await this.keyAgreement.deriveSharedSecret(deviceId);
     const sharedKey = await globalThis.crypto.subtle.importKey(
       "raw",
       shared,

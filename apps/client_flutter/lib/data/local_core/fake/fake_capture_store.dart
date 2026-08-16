@@ -104,6 +104,90 @@ mixin _FakeCaptureStore on _FakeLocalCoreState {
   }
 
   @override
+  Future<LocalCaptureSession> captureIngestCandidates(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  ) async {
+    final rawActions = input['actions'];
+    if (rawActions is! List || rawActions.isEmpty) {
+      throw const FormatException('Candidate ingestion requires actions');
+    }
+    final actions = rawActions
+        .map((item) {
+          if (item is! Map) {
+            throw const FormatException('Candidate action must be an object');
+          }
+          final json = item.cast<String, Object?>();
+          final type = json['type'];
+          final payload = json['payload'];
+          final confidence = json['confidence'];
+          if (type is! String || payload is! Map || confidence is! num) {
+            throw const FormatException('Candidate action is incomplete');
+          }
+          return LocalCaptureAction(
+            type: type,
+            payload: payload.cast<String, Object?>(),
+            confidence: confidence.toDouble(),
+            rawText: json['raw_text'] as String?,
+          );
+        })
+        .toList(growable: false);
+    final sourceText = input['source_text'] as String? ?? '';
+    final assetIds = (input['asset_ids'] as List? ?? const [])
+        .whereType<String>()
+        .toList(growable: false);
+    final assetContext = _fakeAssetContexts(assetIds);
+    final now = context.effectiveNow;
+    final captureId = _nextStableId('capture');
+    final userTurn = LocalCaptureTurn(
+      id: _nextStableId('capture_turn'),
+      captureId: captureId,
+      turnIndex: 0,
+      role: 'user',
+      text: sourceText.isEmpty ? null : sourceText,
+      assetIds: assetIds,
+      assetContext: assetContext,
+      actions: const [],
+      selectedActionIndexes: const [],
+      resultEntities: const [],
+      turnStatus: 'accepted',
+      createdAt: now,
+      updatedAt: now,
+    );
+    final actionTurn = LocalCaptureTurn(
+      id: _nextStableId('capture_turn'),
+      captureId: captureId,
+      turnIndex: 1,
+      role: 'assistant',
+      text: null,
+      assetIds: assetIds,
+      assetContext: assetContext,
+      actions: actions,
+      selectedActionIndexes: const [],
+      resultEntities: const [],
+      turnStatus: 'parsed',
+      createdAt: now,
+      updatedAt: now,
+    );
+    final session = LocalCaptureSession(
+      captureId: captureId,
+      originalText: sourceText,
+      timezone: input['timezone'] as String? ?? 'Asia/Shanghai',
+      locale: input['locale'] as String? ?? 'zh-CN',
+      actions: actions,
+      requiresConfirmation: true,
+      sessionStatus: 'active',
+      sourceChannel: context.sourceChannelName,
+      createdAt: now,
+      updatedAt: now,
+      expiresAt: now.add(const Duration(days: 30)),
+      turns: [userTurn, actionTurn],
+    );
+    _captures[captureId] = session;
+    return session;
+  }
+
+  @override
   Future<List<LocalCaptureSession>> listCaptureSessions(
     Map<String, Object?> input,
     LocalCoreContext context,
@@ -111,22 +195,23 @@ mixin _FakeCaptureStore on _FakeLocalCoreState {
     final status = input['status'] as String? ?? 'active';
     final limit = input['limit'] as int? ?? 20;
     final offset = input['offset'] as int? ?? 0;
-    final sessions = _captures.values
-        .where(
-          (item) =>
-              status == 'all' ||
-              (status == 'active'
-                  ? item.sessionStatus != 'dismissed'
-                  : item.sessionStatus == status),
-        )
-        .toList()
-      ..sort(
-        (left, right) =>
-            (right.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0))
-                .compareTo(
-                  left.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0),
-                ),
-      );
+    final sessions =
+        _captures.values
+            .where(
+              (item) =>
+                  status == 'all' ||
+                  (status == 'active'
+                      ? item.sessionStatus != 'dismissed'
+                      : item.sessionStatus == status),
+            )
+            .toList()
+          ..sort(
+            (left, right) =>
+                (right.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+                    .compareTo(
+                      left.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+                    ),
+          );
     return sessions.skip(offset).take(limit).toList(growable: false);
   }
 
@@ -337,7 +422,8 @@ mixin _FakeCaptureStore on _FakeLocalCoreState {
     }
 
     final rawIndexes = input['selected_action_indexes'] as List?;
-    final indexes = rawIndexes?.whereType<int>().toList() ??
+    final indexes =
+        rawIndexes?.whereType<int>().toList() ??
         List<int>.generate(actionTurn.actions.length, (index) => index);
     final created = <LocalCoreEntityRef>[];
     final failed = <LocalCoreEntityRef>[];
@@ -417,15 +503,15 @@ mixin _FakeCaptureStore on _FakeLocalCoreState {
     for (final entry in entries) {
       try {
         if (entry.type == 'memo') {
-          await deleteMemo(
-            {'memo_id': entry.id, 'status': 'ai_trashed'},
-            context,
-          );
+          await deleteMemo({
+            'memo_id': entry.id,
+            'status': 'ai_trashed',
+          }, context);
         } else if (entry.type == 'task') {
-          await deleteTask(
-            {'task_id': entry.id, 'status': 'ai_trashed'},
-            context,
-          );
+          await deleteTask({
+            'task_id': entry.id,
+            'status': 'ai_trashed',
+          }, context);
         } else if (entry.type == 'ledger_transaction') {
           await deleteExpense({
             'transaction_id': entry.id,
@@ -574,10 +660,8 @@ mixin _FakeCaptureStore on _FakeLocalCoreState {
       assetType: asset.assetType,
       name: asset.title ?? asset.externalUrl ?? asset.id,
       sourceUrl: asset.externalUrl,
-      status:
-          asset.syncStatus == 'synced' ? 'metadata_only' : 'pending_upload',
-      extractor:
-          asset.kind == 'external' ? 'external_reference' : 'metadata',
+      status: asset.syncStatus == 'synced' ? 'metadata_only' : 'pending_upload',
+      extractor: asset.kind == 'external' ? 'external_reference' : 'metadata',
       error: asset.syncStatus == 'synced'
           ? null
           : 'asset_sync_status_${asset.syncStatus}',

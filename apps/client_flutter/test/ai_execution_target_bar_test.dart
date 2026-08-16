@@ -18,32 +18,57 @@ DeviceDescriptor _desktop() => DeviceDescriptor(
 );
 
 void main() {
-  testWidgets('compute failure UI never silently selects Cloud AI', (
+  testWidgets('web target bar only shows local computer and cloud AI', (
     tester,
   ) async {
     var target = AiExecutionTarget.computeNode;
     await tester.pumpWidget(
       MaterialApp(
-        home: StatefulBuilder(
-          builder: (context, setState) => Scaffold(
-            body: AiExecutionTargetBar(
-              target: target,
-              computeNodes: [_desktop()],
-              selectedComputeNodeId: 'desktop-1',
-              computeStatusText: 'Desktop 离线；加密任务会等待，不会自动转 Cloud AI',
-              onTargetChanged: (value) => setState(() => target = value),
-              onComputeNodeChanged: (_) {},
-            ),
+        home: Scaffold(
+          body: AiExecutionTargetBar(
+            webMode: true,
+            target: target,
+            computeNodes: [_desktop()],
+            selectedComputeNodeId: 'desktop-1',
+            computeStatusText: 'Desktop 已就绪，不会自动切换到云端 AI。',
+            onTargetChanged: (value) => target = value,
+            onComputeNodeChanged: (_) {},
           ),
         ),
       ),
     );
 
-    expect(find.textContaining('不会自动转 Cloud AI'), findsOneWidget);
-    expect(target, AiExecutionTarget.computeNode);
+    expect(find.text('当前处理'), findsNothing);
+    expect(find.text('我的电脑'), findsOneWidget);
+    expect(find.text('云端 AI'), findsOneWidget);
+    expect(find.text('Cloud AI'), findsNothing);
+    expect(find.textContaining('local_ai'), findsNothing);
+    expect(find.textContaining('Trusted'), findsNothing);
 
-    await tester.tap(find.text('Cloud AI'));
+    await tester.tap(find.text('云端 AI'));
     await tester.pump();
     expect(target, AiExecutionTarget.cloudAi);
+  });
+
+  testWidgets('empty compute list uses Chinese product copy', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AiExecutionTargetBar(
+            webMode: true,
+            target: AiExecutionTarget.computeNode,
+            computeNodes: const [],
+            selectedComputeNodeId: null,
+            computeStatusText: '没有可用的本地计算节点。',
+            onTargetChanged: (_) {},
+            onComputeNodeChanged: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('没有可用的可信本地计算节点。'), findsOneWidget);
+    expect(find.textContaining('local_ai'), findsNothing);
+    expect(find.textContaining('Trusted'), findsNothing);
   });
 }

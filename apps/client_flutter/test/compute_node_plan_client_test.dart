@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:client_flutter/data/ai/ai_job_envelope.dart';
 import 'package:client_flutter/data/ai/device_ai_job_cipher.dart';
@@ -7,9 +8,13 @@ import 'package:client_flutter/data/auth/secure_secret_store.dart';
 import 'package:client_flutter/data/device/device_contracts.dart';
 import 'package:client_flutter/data/device/device_identity_store.dart';
 import 'package:client_flutter/features/ai_capture/data/compute_node_plan_client.dart';
+import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _FixedIdentityStore implements DeviceIdentityStore {
+  @override
+  Future<void> clear() async {}
+
   _FixedIdentityStore({
     required this.deviceId,
     required this.publicKey,
@@ -25,8 +30,19 @@ class _FixedIdentityStore implements DeviceIdentityStore {
       DeviceIdentity(deviceId: deviceId, publicKey: publicKey, keyVersion: 1);
 
   @override
-  Future<List<int>> loadPrivateKeyBytes() async =>
-      List<int>.from(privateKeyBytes);
+  Future<SecretKey> deriveSharedSecret({
+    required String remotePublicKey,
+  }) async {
+    final algorithm = X25519();
+    final keyPair = await algorithm.newKeyPairFromSeed(privateKeyBytes);
+    return algorithm.sharedSecretKey(
+      keyPair: keyPair,
+      remotePublicKey: SimplePublicKey(
+        base64Decode(remotePublicKey),
+        type: KeyPairType.x25519,
+      ),
+    );
+  }
 }
 
 class _MemorySecrets implements SecretStore {
@@ -58,6 +74,20 @@ DeviceDescriptor _descriptor({
   keyVersion: 1,
   protocolVersion: 1,
 );
+
+Map<String, dynamic> _loadDeviceAiJobVector() =>
+    (jsonDecode(
+              File(
+                '../../packages/protocol/test-vectors/device-ai-job-v1.json',
+              ).readAsStringSync(),
+            )
+            as Map)
+        .cast<String, dynamic>();
+
+String _padBase64Url(String value) {
+  final padding = (4 - value.length % 4) % 4;
+  return '$value${List<String>.filled(padding, '=').join()}';
+}
 
 AuthSession _session(DeviceDescriptor phone) => AuthSession(
   account: const AccountProfile(
@@ -94,6 +124,8 @@ class _LoopbackRelay implements AiRelayTransport {
       'operation': 'plan',
       'text': '记录一下加密中继',
       'asset_ids': ['asset-1'],
+      'timezone': 'America/Los_Angeles',
+      'locale': 'en-US',
     });
     result = await desktopCipher.encryptJson(
       accountId: envelope.accountId,
@@ -128,39 +160,67 @@ class _LoopbackRelay implements AiRelayTransport {
 
 void main() {
   test(
-    'Dart device AI encryption matches independent Node crypto vector',
+    'Dart device AI crypto matches shared Dart/TypeScript protocol vectors',
     () async {
-      const desktopPublic = 'zo060cy2M+x7cMF4FKXHbs0CloUFDTRHRboFhw5YfVk=';
-      final cipher = DeviceAiJobCipher(
+      final vector = _loadDeviceAiJobVector();
+      final phone = (vector['phone'] as Map).cast<String, dynamic>();
+      final desktop = (vector['desktop'] as Map).cast<String, dynamic>();
+      final request = (vector['request'] as Map).cast<String, dynamic>();
+      final requestPayload = (request['payload'] as Map)
+          .cast<String, Object?>();
+      final phoneCipher = DeviceAiJobCipher(
         _FixedIdentityStore(
           deviceId: 'phone-1',
-          publicKey: 'pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk=',
-          privateKeyBytes: List<int>.filled(32, 1),
+          publicKey: phone['public_key_base64'] as String,
+          privateKeyBytes: base64Decode(phone['private_key_base64'] as String),
         ),
-        nonce: () => List<int>.filled(12, 5),
+        nonce: () => base64Url.decode(
+          _padBase64Url(request['nonce_base64url'] as String),
+        ),
       );
 
-      final envelope = await cipher.encryptJson(
+      final envelope = await phoneCipher.encryptJson(
         accountId: 'account-1',
         sourceDeviceId: 'phone-1',
         targetDeviceId: 'desktop-1',
         messageType: AiJobMessageType.request,
         jobId: 'request-1',
         idempotencyKey: 'idem-1',
-        expiresAt: DateTime.utc(2026, 8, 15, 13),
-        remotePublicKey: desktopPublic,
-        payload: const {
-          'schema_version': 1,
-          'operation': 'plan',
-          'text': '记一下跨设备',
-          'asset_ids': <String>[],
-        },
+        expiresAt: DateTime.parse('2026-08-15T13:00:00.000Z'),
+        remotePublicKey: desktop['public_key_base64'] as String,
+        payload: requestPayload,
       );
 
-      expect(envelope.nonce, 'BQUFBQUFBQUFBQUF');
+      expect(envelope.nonce, request['nonce_base64url']);
+      expect(envelope.ciphertext, request['ciphertext_base64url']);
+
+      final result = (vector['result'] as Map).cast<String, dynamic>();
+      final phoneDecryptor = DeviceAiJobCipher(
+        _FixedIdentityStore(
+          deviceId: 'phone-1',
+          publicKey: phone['public_key_base64'] as String,
+          privateKeyBytes: base64Decode(phone['private_key_base64'] as String),
+        ),
+      );
+      final resultEnvelope = AiJobEnvelope(
+        jobId: 'result-1',
+        accountId: 'account-1',
+        sourceDeviceId: 'desktop-1',
+        targetDeviceId: 'phone-1',
+        messageType: AiJobMessageType.result,
+        correlationId: 'request-1',
+        idempotencyKey: 'idem-1',
+        expiresAt: DateTime.parse('2026-08-15T13:00:00.000Z'),
+        encryptionVersion: 1,
+        nonce: result['nonce_base64url'] as String,
+        ciphertext: result['ciphertext_base64url'] as String,
+      );
       expect(
-        envelope.ciphertext,
-        '3E2NRilY9tb6-Iz2VJ8lzS_oc7iKfkSzk_x9GGiToztDB4VqdGJYZTZE6wPSD00yehqcsmqOc1qSnDMo6_4Zxkqm0PEsZB_EBnD54hH0lcv5XshXk-cm7VJqQpeAHNNd2NA',
+        await phoneDecryptor.decryptJson(
+          resultEnvelope,
+          remotePublicKey: desktop['public_key_base64'] as String,
+        ),
+        (result['payload'] as Map).cast<String, dynamic>(),
       );
     },
   );
@@ -305,6 +365,8 @@ void main() {
         target: desktop,
         text: '记录一下加密中继',
         assetIds: const ['asset-1'],
+        timezone: 'America/Los_Angeles',
+        locale: 'en-US',
       );
 
       expect(relay.submitted, isNotNull);

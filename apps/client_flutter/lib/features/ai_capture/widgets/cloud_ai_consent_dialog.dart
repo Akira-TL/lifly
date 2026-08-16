@@ -63,7 +63,7 @@ class _CloudAiConsentDialogState extends State<_CloudAiConsentDialog> {
         : widget.inputText;
     final model = _modelController.text.trim();
     return AlertDialog(
-      title: const Text('本次授权 Cloud AI'),
+      title: const Text('本次授权 云端 AI'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -114,7 +114,7 @@ class _CloudAiConsentDialogState extends State<_CloudAiConsentDialog> {
               key: const Key('cloud_ai_once_consent'),
               contentPadding: EdgeInsets.zero,
               value: _confirmed,
-              title: const Text('我确认本次将上述当前输入发送给 Cloud AI'),
+              title: const Text('我确认本次将上述当前输入发送给 云端 AI'),
               onChanged: (value) => setState(() => _confirmed = value ?? false),
             ),
           ],

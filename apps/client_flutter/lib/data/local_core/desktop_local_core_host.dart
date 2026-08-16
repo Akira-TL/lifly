@@ -72,6 +72,12 @@ class DesktopLocalCoreHost {
             _context(request['context'], method),
           ),
         ),
+        'capture_ingest_candidates' => _captureSession(
+          await _bridge.captureIngestCandidates(
+            input,
+            _context(request['context'], method),
+          ),
+        ),
         'capture_commit' => _captureCommit(
           await _bridge.captureCommit(
             input,

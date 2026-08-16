@@ -78,9 +78,36 @@ class _OfflineComputeClient implements ComputeNodePlanClient {
     required DeviceDescriptor target,
     required String text,
     required List<String> assetIds,
+    required String timezone,
+    required String locale,
   }) async {
     calls += 1;
     throw const ComputeNodeUnavailable('desktop offline');
+  }
+}
+
+class _RecordingComputeClient implements ComputeNodePlanClient {
+  DeviceDescriptor? target;
+  String? timezone;
+  String? locale;
+
+  @override
+  Future<ExternalAiPlanResult> plan({
+    required AuthSession session,
+    required DeviceDescriptor target,
+    required String text,
+    required List<String> assetIds,
+    required String timezone,
+    required String locale,
+  }) async {
+    this.target = target;
+    this.timezone = timezone;
+    this.locale = locale;
+    return ExternalAiPlanResult(
+      sourceLabel: 'Desktop',
+      targetDeviceId: target.deviceId,
+      actions: const [],
+    );
   }
 }
 
@@ -88,12 +115,14 @@ Map<String, dynamic> _deviceJson({
   required String id,
   required bool isDefault,
   required List<String> capabilities,
+  String? publicKey,
+  int keyVersion = 1,
 }) => {
   'device_id': id,
   'account_id': 'account-1',
   'display_name': id == 'desktop-1' ? 'Desktop' : 'Phone',
   'platform': id == 'desktop-1' ? 'linux' : 'android',
-  'public_key': '$id-public-key',
+  'public_key': publicKey ?? '$id-public-key',
   'trust_state': 'trusted',
   'capability_report': {
     'protocol_version': 1,
@@ -102,7 +131,7 @@ Map<String, dynamic> _deviceJson({
   },
   'is_default_compute_node': isDefault,
   'last_seen_at': '2026-08-15T11:30:00Z',
-  'key_version': 1,
+  'key_version': keyVersion,
   'protocol_version': 1,
 };
 
@@ -176,6 +205,49 @@ void main() {
 
       expect(compute.calls, 1);
       expect(cloud.calls, 0);
+    },
+  );
+
+  test(
+    'compute planning refreshes a rotated target public key before encryption',
+    () async {
+      final devices = <Map<String, dynamic>>[
+        _deviceJson(
+          id: 'desktop-1',
+          isDefault: true,
+          capabilities: const ['local_ai'],
+          publicKey: 'old-public-key',
+          keyVersion: 1,
+        ),
+      ];
+      final compute = _RecordingComputeClient();
+      final runtime = DefaultAiCaptureExecutionRuntime.forTesting(
+        sessions: _MemorySessionStore(_session()),
+        devices: DeviceRepository(_DeviceTransport(devices)),
+        cloud: LiflyCloudAiProvider(transport: _CloudTransport()),
+        compute: compute,
+      );
+      final staleTarget = (await runtime.loadTargets()).defaultComputeNode!;
+      devices[0] = _deviceJson(
+        id: 'desktop-1',
+        isDefault: true,
+        capabilities: const ['local_ai'],
+        publicKey: 'rotated-public-key',
+        keyVersion: 2,
+      );
+
+      await runtime.planOnComputeNode(
+        target: staleTarget,
+        text: '记录一条备忘',
+        timezone: 'America/Los_Angeles',
+        locale: 'en-US',
+      );
+
+      expect(staleTarget.publicKey, 'old-public-key');
+      expect(compute.target?.publicKey, 'rotated-public-key');
+      expect(compute.target?.keyVersion, 2);
+      expect(compute.timezone, 'America/Los_Angeles');
+      expect(compute.locale, 'en-US');
     },
   );
 

@@ -50,6 +50,8 @@ abstract interface class ComputeNodePlanClient {
     required DeviceDescriptor target,
     required String text,
     required List<String> assetIds,
+    required String timezone,
+    required String locale,
   });
 }
 
@@ -62,8 +64,10 @@ class UnavailableComputeNodePlanClient implements ComputeNodePlanClient {
     required DeviceDescriptor target,
     required String text,
     required List<String> assetIds,
+    required String timezone,
+    required String locale,
   }) {
-    throw const ComputeNodeUnavailable('加密 AI Job 中继尚未接入客户端；不会自动改用 Cloud AI。');
+    throw const ComputeNodeUnavailable('加密 AI 任务 中继尚未接入客户端；不会自动改用 云端 AI。');
   }
 }
 
@@ -83,15 +87,15 @@ class UnavailableAiCaptureExecutionRuntime
     required DeviceDescriptor target,
     required String text,
     List<String> assetIds = const [],
+    String timezone = 'Asia/Shanghai',
+    String locale = 'zh-CN',
   }) {
-    throw const ComputeNodeUnavailable(
-      'Device/Compute 路由当前不可用；不会自动转 Cloud AI。',
-    );
+    throw const ComputeNodeUnavailable('设备/本地计算路由当前不可用；不会自动转 云端 AI。');
   }
 
   @override
   Future<ExternalAiPlanResult> planOnCloud(CloudAiInferenceRequest request) {
-    throw StateError('Cloud AI 路由当前不可用');
+    throw StateError('云端 AI 路由当前不可用');
   }
 
   @override
@@ -112,6 +116,8 @@ abstract interface class AiCaptureExecutionRuntime {
     required DeviceDescriptor target,
     required String text,
     List<String> assetIds,
+    String timezone,
+    String locale,
   });
 
   Future<ExternalAiPlanResult> planOnCloud(CloudAiInferenceRequest request);
@@ -214,25 +220,40 @@ class DefaultAiCaptureExecutionRuntime implements AiCaptureExecutionRuntime {
     required DeviceDescriptor target,
     required String text,
     List<String> assetIds = const [],
+    String timezone = 'Asia/Shanghai',
+    String locale = 'zh-CN',
   }) async {
-    if (target.trustState != DeviceTrustState.trusted ||
-        !target.capabilityReport.capabilities.contains(
-          DeviceCapability.localAi,
-        )) {
-      throw const ComputeNodeUnavailable('目标设备不是可用的 Trusted Compute Node。');
-    }
+    final freshTarget = await _freshComputeTarget(target.deviceId);
     final session = await _sessions.read();
     if (session == null) {
-      throw const ComputeNodeUnavailable('请先登录账号，再发送跨设备加密 AI Job。');
+      throw const ComputeNodeUnavailable('请先登录账号，再发送跨设备加密 AI 任务。');
     }
-    // Deliberately no Cloud AI fallback here. Any transport/offline failure is
-    // surfaced to the caller so the user remains on the Compute Node route.
+    // Resolve the target immediately before encryption so a long-lived AI page
+    // cannot encrypt with a stale public key after the Compute Node rotates its
+    // X25519 identity. Deliberately no 云端 AI fallback here.
     return _compute.plan(
       session: session,
-      target: target,
+      target: freshTarget,
       text: text,
       assetIds: assetIds,
+      timezone: timezone,
+      locale: locale,
     );
+  }
+
+  Future<DeviceDescriptor> _freshComputeTarget(String deviceId) async {
+    final devices = await _devices.list();
+    for (final device in devices) {
+      if (device.deviceId != deviceId) continue;
+      if (device.trustState != DeviceTrustState.trusted ||
+          !device.capabilityReport.capabilities.contains(
+            DeviceCapability.localAi,
+          )) {
+        break;
+      }
+      return device;
+    }
+    throw const ComputeNodeUnavailable('目标设备不是可用的已信任本地计算节点。');
   }
 
   @override
@@ -241,7 +262,7 @@ class DefaultAiCaptureExecutionRuntime implements AiCaptureExecutionRuntime {
   ) async {
     final response = await _cloud.plan(request);
     return ExternalAiPlanResult(
-      sourceLabel: 'Cloud AI · ${response.provider.value} / ${response.model}',
+      sourceLabel: '云端 AI · ${response.provider.value} / ${response.model}',
       actions: response.actions,
     );
   }

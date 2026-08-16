@@ -42,6 +42,7 @@ class OllamaAiProvider(AiProvider):
                     "model": self.config.model,
                     "stream": False,
                     "format": CandidateActionEnvelope.model_json_schema(),
+                    "options": {"temperature": 0},
                     "messages": provider_messages(request),
                 },
             )

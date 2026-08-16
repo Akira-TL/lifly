@@ -9,6 +9,7 @@ class ExternalAiPlanPanel extends StatelessWidget {
     required this.plan,
     required this.commits,
     required this.busyIndexes,
+    required this.undoneIndexes,
     required this.onCommit,
     required this.onUndo,
     required this.onClose,
@@ -17,6 +18,7 @@ class ExternalAiPlanPanel extends StatelessWidget {
   final ExternalAiPlanResult plan;
   final Map<int, ExternalAiActionCommitResult> commits;
   final Set<int> busyIndexes;
+  final Set<int> undoneIndexes;
   final ValueChanged<int> onCommit;
   final ValueChanged<int> onUndo;
   final VoidCallback onClose;
@@ -42,14 +44,14 @@ class ExternalAiPlanPanel extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  tooltip: '关闭候选结果',
+                  tooltip: '关闭执行结果',
                   onPressed: onClose,
                   icon: const Icon(Icons.close, size: 18),
                 ),
               ],
             ),
             Text(
-              '以下只是结构化候选。只有你明确点击“提交”后才进入现有验证/审计/撤销链路。',
+              'AI 已默认执行可用操作；如需取消，可在下方点击“撤回”。',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 8),
@@ -61,6 +63,7 @@ class ExternalAiPlanPanel extends StatelessWidget {
                 final capture = action.toCaptureAction();
                 final committed = commits[index];
                 final busy = busyIndexes.contains(index);
+                final undone = undoneIndexes.contains(index);
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: DecoratedBox(
@@ -71,14 +74,16 @@ class ExternalAiPlanPanel extends StatelessWidget {
                     child: ListTile(
                       title: Text(capture.label),
                       subtitle: Text(capture.summary),
-                      trailing: committed == null
-                          ? FilledButton.tonal(
-                              onPressed: busy ? null : () => onCommit(index),
-                              child: Text(busy ? '提交中' : '提交'),
-                            )
-                          : OutlinedButton(
+                      trailing: undone
+                          ? const Text('已撤回')
+                          : committed != null
+                          ? OutlinedButton(
                               onPressed: busy ? null : () => onUndo(index),
-                              child: Text(busy ? '撤销中' : '撤销'),
+                              child: Text(busy ? '撤回中' : '撤回'),
+                            )
+                          : FilledButton.tonal(
+                              onPressed: busy ? null : () => onCommit(index),
+                              child: Text(busy ? '处理中' : '重试'),
                             ),
                     ),
                   ),

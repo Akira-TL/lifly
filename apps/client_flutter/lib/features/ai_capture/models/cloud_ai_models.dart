@@ -87,23 +87,21 @@ class CloudAiInferenceRequest {
   }
 
   void validateForSend() {
-    if (requestId.isEmpty) throw StateError('Cloud AI request id is required');
+    if (requestId.isEmpty) throw StateError('云端 AI 请求编号不能为空');
     if (!disclosure.granted) {
-      throw StateError('Cloud AI requires explicit once consent');
+      throw StateError('使用云端 AI 前必须进行本次明确授权');
     }
     if (history.isNotEmpty && !disclosure.includesHistory) {
-      throw StateError('Cloud AI history was not authorized');
+      throw StateError('本次未授权向云端 AI 提供历史会话');
     }
     if (attachments.isNotEmpty && !disclosure.includesAttachments) {
-      throw StateError('Cloud AI attachments were not authorized');
+      throw StateError('本次未授权向云端 AI 提供附件');
     }
 
     final disclosedItems = [input, ...context, ...history, ...attachments];
     for (final item in disclosedItems) {
       if (!disclosure.allowedDataTypes.contains(item.dataType)) {
-        throw StateError(
-          'Cloud AI data type ${item.dataType} is outside disclosure scope',
-        );
+        throw StateError('数据类型 ${item.dataType} 不在本次云端 AI 授权范围内');
       }
     }
   }
@@ -139,7 +137,7 @@ class CloudAiInferenceResponse {
     _expectOnlyKeys(json, const {'request_id', 'provider', 'model', 'actions'});
     final rawActions = json['actions'];
     if (rawActions is! List) {
-      throw const FormatException('Expected Cloud AI actions list');
+      throw const FormatException('云端 AI 返回的候选动作列表格式无效');
     }
     return CloudAiInferenceResponse(
       requestId: _requiredString(json, 'request_id'),
@@ -148,7 +146,7 @@ class CloudAiInferenceResponse {
       actions: rawActions
           .map((item) {
             if (item is! Map) {
-              throw const FormatException('Expected Cloud AI action object');
+              throw const FormatException('云端 AI 返回的候选动作格式无效');
             }
             return AiCandidateAction.fromJson(Map<String, dynamic>.from(item));
           })
@@ -164,9 +162,7 @@ extension AiCandidateActionCaptureAdapter on AiCandidateAction {
 void _expectOnlyKeys(Map<String, dynamic> json, Set<String> allowed) {
   final unexpected = json.keys.where((key) => !allowed.contains(key)).toList();
   if (unexpected.isNotEmpty) {
-    throw FormatException(
-      'Unexpected Cloud AI fields: ${unexpected.join(', ')}',
-    );
+    throw FormatException('云端 AI 返回了未授权字段：${unexpected.join(', ')}');
   }
 }
 

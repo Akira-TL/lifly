@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:client_flutter/data/crypto/account_data_key.dart';
 import 'package:client_flutter/data/crypto/account_data_key_ring.dart';
+import 'package:client_flutter/data/auth/secure_secret_store.dart';
+import 'package:client_flutter/data/crypto/secure_local_database_key_provider.dart';
 import 'package:client_flutter/data/local_core/desktop_local_core_host.dart';
 import 'package:client_flutter/data/local_core/powersync_local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/write/encrypted_audit_payload_protector.dart';
@@ -19,7 +21,10 @@ Future<void> main() async {
 
   final dbPath = _databasePath();
   await Directory(File(dbPath).parent.path).create(recursive: true);
-  final syncService = SyncService();
+  final secrets = FlutterSecureSecretStore();
+  final syncService = SyncService(
+    databaseKeyProvider: SecureLocalDatabaseKeyProvider(secrets: secrets),
+  );
   await syncService.initialize(dbPath: dbPath);
   DesktopLocalCoreHost? host;
 
@@ -97,13 +102,14 @@ Future<DesktopLocalCoreHost> _initializeRuntime(
     accountId: accountId,
     keyRing: AccountDataKeyRing(dataKey),
   );
-  Future<void> flushProjection() => PlaintextE2eeMigrator(
+  await PlaintextE2eeMigrator(
     db: syncService.db,
     store: store,
     accountId: accountId,
   ).migrateCoreEntities();
-  await flushProjection();
-  syncService.setLocalMutationFlusher(flushProjection);
+  final mutationCommitter = PowerSyncEncryptedLocalMutationCommitter(store);
+  await mutationCommitter.initialize();
+  syncService.setLocalMutationCommitter(mutationCommitter);
   final bridge = PowerSyncLocalCoreBridge(
     syncService: syncService,
     auditPayloadProtector: EncryptedSyncAuditPayloadProtector(store),

@@ -1,5 +1,6 @@
 import 'package:client_flutter/app/data_mode.dart';
 import 'package:client_flutter/data/api/api_client.dart';
+import 'package:client_flutter/data/auth/secure_session_store.dart';
 import 'package:client_flutter/data/local_core/local_core_bridge.dart';
 import 'package:client_flutter/data/local_core/local_core_context.dart';
 import 'package:client_flutter/data/local_core/local_core_models.dart';
@@ -10,17 +11,20 @@ class AiCaptureService {
     required this.api,
     required this.dataMode,
     this.localCore,
+    this.sessions,
   });
 
   final ApiClient api;
   final LiflyDataMode dataMode;
   final LocalCoreBridge? localCore;
+  final AuthSessionStore? sessions;
+
+  bool get _useLocalCore => localCore != null;
 
   String get modeLabel {
     return switch (dataMode) {
-      LiflyDataMode.api => '云端处理',
-      LiflyDataMode.local =>
-        localCore == null ? '本地处理不可用' : '本地处理',
+      LiflyDataMode.api => _useLocalCore ? '本地加密处理' : '云端处理',
+      LiflyDataMode.local => localCore == null ? '本地处理不可用' : '本地处理',
     };
   }
 
@@ -30,18 +34,25 @@ class AiCaptureService {
       dataMode == LiflyDataMode.api || localCore != null;
 
   Future<List<AiCaptureAssetContext>> listAssets({int limit = 50}) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final items = await _requireLocalCore().listCaptureAssets({
         'limit': limit,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return items.map(_assetContextFromLocal).toList(growable: false);
     }
-    final data = await api.get('/assets', params: {'limit': limit, 'offset': 0});
+    final data = await api.get(
+      '/assets',
+      params: {'limit': limit, 'offset': 0},
+    );
     final payload = data['data'];
-    final items = payload is Map ? payload['items'] as List? ?? const [] : const [];
+    final items = payload is Map
+        ? payload['items'] as List? ?? const []
+        : const [];
     return items
         .whereType<Map>()
-        .map((item) => _assetContextFromAssetJson(Map<String, dynamic>.from(item)))
+        .map(
+          (item) => _assetContextFromAssetJson(Map<String, dynamic>.from(item)),
+        )
         .toList(growable: false);
   }
 
@@ -51,13 +62,13 @@ class AiCaptureService {
     String locale = 'zh-CN',
     List<String> assetIds = const [],
   }) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final session = await _requireLocalCore().captureParse({
         'text': text,
         'timezone': timezone,
         'locale': locale,
         'asset_ids': assetIds,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return _parseResultFromLocal(session);
     }
 
@@ -78,12 +89,12 @@ class AiCaptureService {
     int limit = 20,
     int offset = 0,
   }) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final items = await _requireLocalCore().listCaptureSessions({
         'status': status,
         'limit': limit,
         'offset': offset,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return AiCaptureSessionPage(
         items: items.map(_sessionFromLocal).toList(growable: false),
         total: offset + items.length,
@@ -99,10 +110,10 @@ class AiCaptureService {
   }
 
   Future<AiCaptureSession> getSession(String captureId) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final session = await _requireLocalCore().getCaptureSession({
         'capture_id': captureId,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       if (session == null) {
         throw StateError('Capture session not found: $captureId');
       }
@@ -117,12 +128,12 @@ class AiCaptureService {
     required String text,
     List<String> assetIds = const [],
   }) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final session = await _requireLocalCore().appendCaptureTurn({
         'capture_id': captureId,
         'text': text,
         'asset_ids': assetIds,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return _sessionFromLocal(session);
     }
     final data = await api.post(
@@ -148,12 +159,12 @@ class AiCaptureService {
       'confidence': ?confidence,
       'note': ?note,
     };
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final turn = await _requireLocalCore().reviseCaptureAction({
         'capture_id': captureId,
         'turn_id': turnId,
         ...request,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return _turnFromLocal(turn);
     }
     final data = await api.post(
@@ -169,11 +180,11 @@ class AiCaptureService {
     String captureId, {
     String? reason,
   }) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final session = await _requireLocalCore().dismissCaptureSession({
         'capture_id': captureId,
         'reason': ?reason,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return _sessionFromLocal(session);
     }
     final data = await api.post(
@@ -188,12 +199,12 @@ class AiCaptureService {
     required List<int> selectedActionIndexes,
     String? turnId,
   }) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final result = await _requireLocalCore().captureCommit({
         'capture_id': captureId,
         'selected_action_indexes': selectedActionIndexes,
         'turn_id': ?turnId,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return _commitResultFromLocal(
         result,
         captureId: captureId,
@@ -213,10 +224,10 @@ class AiCaptureService {
   }
 
   Future<AiCaptureUndoResult> undo({required String undoToken}) async {
-    if (dataMode == LiflyDataMode.local) {
+    if (_useLocalCore) {
       final result = await _requireLocalCore().captureUndo({
         'undo_token': undoToken,
-      }, LocalCoreContext.flutterUser());
+      }, await _localContext());
       return _undoResultFromLocal(result);
     }
 
@@ -225,6 +236,13 @@ class AiCaptureService {
       data: {'undo_token': undoToken},
     );
     return AiCaptureUndoResult.fromJson(data);
+  }
+
+  Future<LocalCoreContext> _localContext() async {
+    final session = await sessions?.read();
+    return LocalCoreContext.flutterUser(
+      userId: session?.account.accountId ?? defaultLocalCoreUserId,
+    );
   }
 
   LocalCoreBridge _requireLocalCore() {
@@ -314,14 +332,16 @@ class AiCaptureService {
     );
   }
 
-  AiCaptureAssetContext _assetContextFromAssetJson(
-    Map<String, dynamic> json,
-  ) {
+  AiCaptureAssetContext _assetContextFromAssetJson(Map<String, dynamic> json) {
     final kind = json['kind'] as String?;
     final assetType = json['asset_type'] as String?;
     final mimeType = json['mime_type'] as String?;
     final syncStatus = json['sync_status'] as String? ?? 'pending';
-    final normalizedMime = (mimeType ?? '').split(';').first.trim().toLowerCase();
+    final normalizedMime = (mimeType ?? '')
+        .split(';')
+        .first
+        .trim()
+        .toLowerCase();
     var status = 'metadata_only';
     var extractor = 'metadata';
     String? requiredCapability = 'binary_content_extractor';
@@ -347,7 +367,8 @@ class AiCaptureService {
       assetId: json['id'] as String? ?? '',
       kind: kind,
       assetType: assetType,
-      name: json['title'] as String? ??
+      name:
+          json['title'] as String? ??
           json['filename'] as String? ??
           json['external_url'] as String?,
       mimeType: mimeType,
@@ -355,7 +376,9 @@ class AiCaptureService {
       sourceUrl: json['external_url'] as String?,
       status: status,
       extractor: extractor,
-      error: status == 'pending_upload' ? 'asset_sync_status_$syncStatus' : null,
+      error: status == 'pending_upload'
+          ? 'asset_sync_status_$syncStatus'
+          : null,
       requiredCapability: requiredCapability,
     );
   }

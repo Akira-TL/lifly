@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:client_flutter/data/ai/ai_provider.dart';
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/device/device_contracts.dart';
@@ -14,13 +16,19 @@ import 'package:client_flutter/features/ai_capture/widgets/ai_execution_target_b
 import 'package:client_flutter/features/ai_capture/widgets/cloud_ai_consent_dialog.dart';
 import 'package:client_flutter/features/ai_capture/widgets/external_ai_plan_panel.dart';
 import 'package:client_flutter/shared/errors/user_facing_error.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+class AiCapturePageController extends ChangeNotifier {
+  void activate() => notifyListeners();
+}
+
 class AiCapturePage extends StatefulWidget {
-  const AiCapturePage({super.key, this.executionRuntime});
+  const AiCapturePage({super.key, this.executionRuntime, this.controller});
 
   final AiCaptureExecutionRuntime? executionRuntime;
+  final AiCapturePageController? controller;
 
   @override
   State<AiCapturePage> createState() => _AiCapturePageState();
@@ -35,18 +43,35 @@ class _AiCapturePageState extends State<AiCapturePage> {
   List<AiCaptureAssetContext> _assets = const [];
   AiCaptureSession? _session;
   late AiCaptureExecutionRuntime _executionRuntime;
-  AiExecutionTarget _executionTarget = AiExecutionTarget.existing;
+  AiExecutionTarget _executionTarget = kIsWeb
+      ? AiExecutionTarget.computeNode
+      : AiExecutionTarget.existing;
   List<DeviceDescriptor> _computeNodes = const [];
   String? _selectedComputeNodeId;
-  String _computeStatusText = '尚未读取 Device Registry。';
+  String _computeStatusText = '尚未读取设备列表。';
   ExternalAiPlanResult? _externalPlan;
   final Map<int, ExternalAiActionCommitResult> _externalCommits = {};
   final Set<int> _externalBusyIndexes = {};
+  final Set<int> _externalUndoneIndexes = {};
   AiProviderKind _cloudProvider = AiProviderKind.ollama;
   String _cloudModel = '';
   String? _error;
   bool _loading = false;
   bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller?.addListener(_handlePageActivated);
+  }
+
+  @override
+  void didUpdateWidget(covariant AiCapturePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller == widget.controller) return;
+    oldWidget.controller?.removeListener(_handlePageActivated);
+    widget.controller?.addListener(_handlePageActivated);
+  }
 
   @override
   void didChangeDependencies() {
@@ -65,6 +90,7 @@ class _AiCapturePageState extends State<AiCapturePage> {
 
   @override
   void dispose() {
+    widget.controller?.removeListener(_handlePageActivated);
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -145,8 +171,7 @@ class _AiCapturePageState extends State<AiCapturePage> {
           computeNodes: _computeNodes,
           selectedComputeNodeId: selectedComputeNode?.deviceId,
           computeStatusText: _computeStatusText,
-          onTargetChanged: (target) =>
-              setState(() => _executionTarget = target),
+          onTargetChanged: _selectExecutionTarget,
           onComputeNodeChanged: (deviceId) {
             setState(() {
               _selectedComputeNodeId = deviceId;
@@ -160,12 +185,14 @@ class _AiCapturePageState extends State<AiCapturePage> {
             plan: _externalPlan!,
             commits: _externalCommits,
             busyIndexes: _externalBusyIndexes,
+            undoneIndexes: _externalUndoneIndexes,
             onCommit: _commitExternalAction,
             onUndo: _undoExternalAction,
             onClose: () => setState(() {
               _externalPlan = null;
               _externalCommits.clear();
               _externalBusyIndexes.clear();
+              _externalUndoneIndexes.clear();
             }),
           ),
         Expanded(
@@ -294,7 +321,7 @@ class _AiCapturePageState extends State<AiCapturePage> {
   ) async {
     final target = _selectedComputeNode();
     if (target == null) {
-      setState(() => _error = '请先选择一个 Trusted Compute Node。');
+      setState(() => _error = '请先选择一个已信任的本地计算节点。');
       return;
     }
     await _run(() async {
@@ -303,19 +330,27 @@ class _AiCapturePageState extends State<AiCapturePage> {
           target: target,
           text: text,
           assetIds: assetIds,
+          timezone: _session?.timezone ?? 'Asia/Shanghai',
+          locale:
+              _session?.locale ??
+              WidgetsBinding.instance.platformDispatcher.locale.toLanguageTag(),
         );
         if (!mounted) return;
         setState(() {
-          _externalPlan = plan;
-          _externalCommits.clear();
           _textController.clear();
           _selectedAssetIds.clear();
-          _computeStatusText = '${target.displayName} 已返回加密 Job 结果。';
+        });
+        final completed = await _autoExecuteExternalPlan(plan);
+        if (!mounted) return;
+        setState(() {
+          _computeStatusText = completed == 0
+              ? '${target.displayName} 已返回结果，但没有成功执行的操作。'
+              : '${target.displayName} 已完成 $completed 项操作，可随时撤回。';
         });
       } on ComputeNodeUnavailable catch (error) {
         if (mounted) {
           setState(() {
-            _computeStatusText = '${error.message} 不会自动转 Cloud AI。';
+            _computeStatusText = '${error.message} 不会自动切换到云端 AI。';
           });
         }
         rethrow;
@@ -341,7 +376,7 @@ class _AiCapturePageState extends State<AiCapturePage> {
         provider: decision.provider,
         model: decision.model,
         allowedDataTypes: {'capture_input'},
-        reason: '用户本次明确授权 Cloud AI 处理当前输入',
+        reason: '用户本次明确授权云端 AI 处理当前输入',
         includesAttachments: false,
         includesHistory: false,
       ),
@@ -355,10 +390,10 @@ class _AiCapturePageState extends State<AiCapturePage> {
       final plan = await _executionRuntime.planOnCloud(request);
       if (!mounted) return;
       setState(() {
-        _externalPlan = plan;
-        _externalCommits.clear();
         _textController.clear();
+        _selectedAssetIds.clear();
       });
+      await _autoExecuteExternalPlan(plan);
     });
   }
 
@@ -456,6 +491,17 @@ class _AiCapturePageState extends State<AiCapturePage> {
     }
   }
 
+  void _handlePageActivated() {
+    unawaited(_loadExecutionTargets());
+  }
+
+  void _selectExecutionTarget(AiExecutionTarget target) {
+    if (mounted) setState(() => _executionTarget = target);
+    if (target == AiExecutionTarget.computeNode) {
+      unawaited(_loadExecutionTargets());
+    }
+  }
+
   Future<void> _showSessionHistory() async {
     final selectedId = await showModalBottomSheet<String>(
       context: context,
@@ -494,7 +540,7 @@ class _AiCapturePageState extends State<AiCapturePage> {
       setState(() {
         _computeNodes = const [];
         _selectedComputeNodeId = null;
-        _computeStatusText = 'Device Registry 不可用：$error；不会自动转 Cloud AI。';
+        _computeStatusText = '设备列表不可用：$error；不会自动切换到云端 AI。';
       });
     }
   }
@@ -509,12 +555,61 @@ class _AiCapturePageState extends State<AiCapturePage> {
   }
 
   String _computeNodeStatus(DeviceDescriptor? device) {
-    if (device == null) return '没有可用的 Compute Node。';
+    if (device == null) return '没有可用的本地计算节点。';
     final lastSeen = device.lastSeenAt;
     if (lastSeen == null) {
-      return '${device.displayName} 尚未上报 last_seen；当前合同无法判定在线状态。不会自动转 Cloud AI。';
+      return '${device.displayName} 尚未上报最近在线时间；当前协议无法判定在线状态。不会自动切换到云端 AI。';
     }
-    return '${device.displayName} 最近心跳 ${lastSeen.toLocal()}；当前 Device Registry 合同未提供 online 布尔状态。不会自动转 Cloud AI。';
+    return '${device.displayName} 最近心跳 ${lastSeen.toLocal()}；当前设备协议未提供在线状态字段。不会自动切换到云端 AI。';
+  }
+
+  Future<int> _autoExecuteExternalPlan(ExternalAiPlanResult plan) async {
+    if (!mounted) return 0;
+    final indexes = List<int>.generate(plan.actions.length, (index) => index);
+    setState(() {
+      _externalPlan = plan;
+      _externalCommits.clear();
+      _externalUndoneIndexes.clear();
+      _externalBusyIndexes
+        ..clear()
+        ..addAll(indexes);
+    });
+
+    String? selectedCaptureId;
+    var completed = 0;
+    Object? firstError;
+    StackTrace? firstStackTrace;
+    for (final index in indexes) {
+      try {
+        final result = await _executionRuntime.commit(plan.actions[index]);
+        selectedCaptureId ??= result.captureId;
+        completed += 1;
+        if (mounted) {
+          setState(() => _externalCommits[index] = result);
+        }
+      } catch (error, stackTrace) {
+        firstError ??= error;
+        firstStackTrace ??= stackTrace;
+      } finally {
+        if (mounted) {
+          setState(() => _externalBusyIndexes.remove(index));
+        }
+      }
+    }
+
+    if (selectedCaptureId != null) {
+      await _refreshSessions(selectCaptureId: selectedCaptureId);
+    }
+    if (firstError != null && mounted) {
+      setState(
+        () => _error = userFacingFailure(
+          action: '自动执行 AI 操作',
+          error: firstError!,
+          stackTrace: firstStackTrace ?? StackTrace.current,
+        ),
+      );
+    }
+    return completed;
   }
 
   Future<void> _commitExternalAction(int index) async {
@@ -523,12 +618,18 @@ class _AiCapturePageState extends State<AiCapturePage> {
     setState(() => _externalBusyIndexes.add(index));
     try {
       final result = await _executionRuntime.commit(plan.actions[index]);
-      if (mounted) setState(() => _externalCommits[index] = result);
+      if (mounted) {
+        setState(() {
+          _externalCommits[index] = result;
+          _externalUndoneIndexes.remove(index);
+        });
+      }
+      await _refreshSessions(selectCaptureId: result.captureId);
     } catch (error, stackTrace) {
       if (mounted) {
         setState(
           () => _error = userFacingFailure(
-            action: '提交 AI 候选动作',
+            action: '重新执行 AI 操作',
             error: error,
             stackTrace: stackTrace,
           ),
@@ -546,13 +647,14 @@ class _AiCapturePageState extends State<AiCapturePage> {
     try {
       final result = await _executionRuntime.undo(committed.undoToken);
       if (mounted && result.undone > 0) {
-        setState(() => _externalCommits.remove(index));
+        setState(() => _externalUndoneIndexes.add(index));
+        await _refreshSessions(selectCaptureId: committed.captureId);
       }
     } catch (error, stackTrace) {
       if (mounted) {
         setState(
           () => _error = userFacingFailure(
-            action: '撤销 AI 候选动作',
+            action: '撤回 AI 操作',
             error: error,
             stackTrace: stackTrace,
           ),

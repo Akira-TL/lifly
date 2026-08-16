@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "phone": {
+    "private_key_base64": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+    "public_key_base64": "pOCSkrZRwni5dyxWn1+puxPZBrRqtoyd+dwrRAn4ogk="
+  },
+  "desktop": {
+    "private_key_base64": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+    "public_key_base64": "zo060cy2M+x7cMF4FKXHbs0CloUFDTRHRboFhw5YfVk="
+  },
+  "request": {
+    "context": [
+      "lifly/device-ai-job/key/v1",
+      "account-1",
+      "phone-1",
+      "desktop-1",
+      "request",
+      null,
+      "request-1",
+      "idem-1",
+      "2026-08-15T13:00:00.000Z",
+      1,
+      1
+    ],
+    "nonce_base64url": "BQUFBQUFBQUFBQUF",
+    "payload": {
+      "schema_version": 1,
+      "operation": "plan",
+      "text": "记一下跨设备",
+      "asset_ids": [],
+      "timezone": "America/Los_Angeles",
+      "locale": "en-US"
+    },
+    "ciphertext_base64url": "3E2NRilY9tb6-Iz2VJ8lzS_oc7iKfkSzk_x9GGiToztDB4VqdGJYZTZE6wPSD00yehqcsmqOc1qSnDMo6_4Zxkqm0PEsZB_EBnD54hH0lcv5D_IigxRCgMWj29gEc8evOY3LeuFmNabOL1PDYWZc-hmx5r2OErsEGEshzbN8C6XyoI8F4hQw1m5AO2_xFT8-IgjtBA"
+  },
+  "result": {
+    "context": [
+      "lifly/device-ai-job/key/v1",
+      "account-1",
+      "desktop-1",
+      "phone-1",
+      "result",
+      "request-1",
+      "result-1",
+      "idem-1",
+      "2026-08-15T13:00:00.000Z",
+      1,
+      1
+    ],
+    "nonce_base64url": "BgYGBgYGBgYGBgYG",
+    "payload": {
+      "schema_version": 1,
+      "actions": [
+        {
+          "type": "memo_create",
+          "payload": {
+            "type": "memo",
+            "content_markdown": "跨设备"
+          },
+          "confidence": 0.91
+        }
+      ]
+    },
+    "ciphertext_base64url": "izHH69By2tovT6vhH9P81RTJpiO3n4A-dj-BM0jrtojyxQWpLN0Z4sqmh2WbNdr9MR3ffAGdkfwAN8ZL4yQM15npr1B21BTttIqtvu8LWJF8msJfcNH5hB54mP1otkHqjNZ3IwFIwxelZ8Ou5W4hr1O-pqv2fwkyXQH84mppKD9OuMaQXKC_ftxbUpcvkSkbSLU"
+  }
+}

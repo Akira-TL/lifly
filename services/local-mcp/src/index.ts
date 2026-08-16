@@ -11,8 +11,16 @@ export type { AccessTokenProvider, AiRelayClient, HttpAiRelayClientOptions } fro
 export { LocalCoreComputeNodePlanner } from "./compute-node-planner.js";
 export { ProviderBackedComputeNodePlanner } from "./provider-backed-planner.js";
 export type { ProviderBackedPlannerOptions } from "./provider-backed-planner.js";
-export { DeviceAiJobCipher } from "./device-ai-job-cipher.js";
-export type { DeviceAiJobCipherOptions, DevicePublicKeyResolver } from "./device-ai-job-cipher.js";
+export {
+  DeviceAiJobCipher,
+  RawX25519DeviceKeyAgreement,
+} from "./device-ai-job-cipher.js";
+export type {
+  DeviceAiJobCipherOptions,
+  DeviceKeyAgreement,
+  DevicePublicKeyResolver,
+  RawX25519DeviceKeyAgreementOptions,
+} from "./device-ai-job-cipher.js";
 export { EncryptedAiRelayWorker } from "./encrypted-relay-worker.js";
 export type { EncryptedRelayWorkerStatus } from "./encrypted-relay-worker.js";
 export { createComputeNodeRelayRuntime } from "./compute-node-runtime.js";

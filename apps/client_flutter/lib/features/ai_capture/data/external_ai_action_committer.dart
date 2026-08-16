@@ -5,11 +5,13 @@ import 'package:client_flutter/data/local_core/local_core_context.dart';
 
 class ExternalAiActionCommitResult {
   const ExternalAiActionCommitResult({
+    required this.captureId,
     required this.entityType,
     required this.entityId,
     required this.undoToken,
   });
 
+  final String captureId;
   final String entityType;
   final String entityId;
   final String undoToken;
@@ -40,37 +42,26 @@ class LocalCoreExternalAiActionCommitter
   @override
   Future<ExternalAiActionCommitResult> commit(AiCandidateAction action) async {
     final context = await _context();
-    final parsed = await bridge.captureParse({
-      'text': _seedText(action),
-      'timezone': 'Asia/Shanghai',
-      'locale': 'zh-CN',
+    final session = await bridge.captureIngestCandidates({
+      'source_text': action.rawText ?? '',
       'asset_ids': const <String>[],
+      'actions': [action.toJson()],
     }, context);
-    final actionTurn = parsed.turns.reversed.firstWhere(
+    final actionTurn = session.turns.reversed.firstWhere(
       (turn) => turn.role == 'assistant' && turn.actions.isNotEmpty,
-      orElse: () => throw StateError(
-        'Local Core could not create a candidate commit seam',
-      ),
+      orElse: () => throw StateError('本地处理无法创建 AI 执行会话'),
     );
-    final revised = await bridge.reviseCaptureAction({
-      'capture_id': parsed.captureId,
-      'turn_id': actionTurn.id,
-      'action_index': 0,
-      'action_type': action.type,
-      'payload': action.payloadJson,
-      'confidence': action.confidence,
-      'note': 'external_ai_candidate',
-    }, context);
     final committed = await bridge.captureCommit({
-      'capture_id': parsed.captureId,
-      'turn_id': revised.id,
+      'capture_id': session.captureId,
+      'turn_id': actionTurn.id,
       'selected_action_indexes': const [0],
     }, context);
     if (!committed.committed || committed.createdEntities.isEmpty) {
-      throw StateError('Local Core did not commit the external AI candidate');
+      throw StateError('本地处理未能执行 AI 操作');
     }
     final entity = committed.createdEntities.first;
     return ExternalAiActionCommitResult(
+      captureId: session.captureId,
       entityType: entity.type,
       entityId: entity.id,
       undoToken: committed.undoToken,
@@ -80,7 +71,7 @@ class LocalCoreExternalAiActionCommitter
   @override
   Future<ExternalAiActionUndoResult> undo(String undoToken) async {
     if (undoToken.isEmpty) {
-      throw const FormatException('Undo token is required');
+      throw const FormatException('撤回凭据不能为空');
     }
     final result = await bridge.captureUndo({
       'undo_token': undoToken,
@@ -91,19 +82,8 @@ class LocalCoreExternalAiActionCommitter
   Future<LocalCoreContext> _context() async {
     final session = await sessions.read();
     if (session == null) {
-      throw StateError(
-        'Account session is required for local AI candidate commit',
-      );
+      throw StateError('提交本地 AI 候选动作前需要先登录账号');
     }
     return LocalCoreContext.flutterUser(userId: session.account.accountId);
   }
-
-  String _seedText(AiCandidateAction action) => switch (action) {
-    MemoCreateCandidateAction(:final contentMarkdown) => '记一下 $contentMarkdown',
-    TaskCreateCandidateAction(:final title) => '提醒我 $title',
-    ExpenseCreateCandidateAction(:final amount, :final merchant) =>
-      '在${merchant.isEmpty ? '商户' : merchant}花了 $amount',
-    AssetRegisterExternalUrlCandidateAction(:final externalUrl) =>
-      '保存链接 $externalUrl',
-  };
 }

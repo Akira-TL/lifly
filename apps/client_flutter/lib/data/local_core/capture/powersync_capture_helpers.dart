@@ -11,7 +11,12 @@ List<LocalCaptureAction> _parseLocalActions({
   if (expense != null) actions.add(expense);
   final task = _taskAction(text, now);
   if (task != null) actions.add(task);
-  final memo = _memoAction(text, captureId, assetIds, fallback: actions.isEmpty);
+  final memo = _memoAction(
+    text,
+    captureId,
+    assetIds,
+    fallback: actions.isEmpty,
+  );
   if (memo != null) actions.add(memo);
   return actions;
 }
@@ -223,6 +228,48 @@ List<LocalCaptureAssetContext> _decodeAssetContext(String? value) {
       .toList(growable: false);
 }
 
+List<LocalCaptureAction> _readCandidateActions(Object? raw) {
+  if (raw is! List) {
+    throw const FormatException('Candidate actions must be a list');
+  }
+  const supported = {
+    'memo_create',
+    'task_create',
+    'expense_create',
+    'asset_register_external_url',
+  };
+  return raw
+      .map((item) {
+        if (item is! Map) {
+          throw const FormatException('Candidate action must be an object');
+        }
+        final json = item.cast<String, Object?>();
+        final type = json['type'];
+        final payload = json['payload'];
+        final confidence = json['confidence'];
+        if (type is! String || !supported.contains(type)) {
+          throw FormatException('Unsupported candidate action type: $type');
+        }
+        if (payload is! Map) {
+          throw FormatException('Candidate $type payload must be an object');
+        }
+        if (confidence is! num || confidence < 0 || confidence > 1) {
+          throw FormatException('Candidate $type confidence must be in [0, 1]');
+        }
+        final rawText = json['raw_text'];
+        if (rawText != null && rawText is! String) {
+          throw FormatException('Candidate $type raw_text must be a string');
+        }
+        return LocalCaptureAction(
+          type: type,
+          payload: payload.cast<String, Object?>(),
+          confidence: confidence.toDouble(),
+          rawText: rawText as String?,
+        );
+      })
+      .toList(growable: false);
+}
+
 String _encodeActions(List<LocalCaptureAction> actions) {
   return jsonEncode(
     actions
@@ -248,7 +295,8 @@ List<LocalCaptureAction> _decodeActions(String? value) {
         final json = item.cast<String, Object?>();
         return LocalCaptureAction(
           type: json['type'] as String? ?? 'memo_create',
-          payload: (json['payload'] as Map?)?.cast<String, Object?>() ?? const {},
+          payload:
+              (json['payload'] as Map?)?.cast<String, Object?>() ?? const {},
           confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
           rawText: json['raw_text'] as String?,
         );

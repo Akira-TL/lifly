@@ -25,6 +25,7 @@ void main() {
       );
 
       final committed = await committer.commit(action);
+      expect(committed.captureId, isNotEmpty);
       expect(committed.entityType, 'memo');
       expect(committed.undoToken, isNotEmpty);
 
@@ -33,6 +34,13 @@ void main() {
         'limit': 20,
       }, LocalCoreContext.flutterUser(userId: 'account-local'));
       expect(memos.single.contentMarkdown, 'private local candidate');
+      final capture = await bridge.getCaptureSession({
+        'capture_id': committed.captureId,
+      }, LocalCoreContext.flutterUser(userId: 'account-local'));
+      expect(capture?.originalText, 'private model text');
+      expect(capture?.actions.single.type, action.type);
+      expect(capture?.actions.single.payload, action.payloadJson);
+      expect(capture?.actions.single.rawText, action.rawText);
 
       final undone = await committer.undo(committed.undoToken);
       expect(undone.undone, 1);

@@ -11,19 +11,16 @@ class DeviceAiJobCipher {
   static const String _aadDomain = 'lifly/device-ai-job/aad/v1';
 
   final DeviceIdentityStore _identityStore;
-  final X25519 _keyAgreement;
   final Hkdf _kdf;
   final AesGcm _cipher;
   final List<int> Function()? _nonceFactory;
 
   DeviceAiJobCipher(
     this._identityStore, {
-    X25519? keyAgreement,
     Hkdf? kdf,
     AesGcm? cipher,
     List<int> Function()? nonce,
-  }) : _keyAgreement = keyAgreement ?? X25519(),
-       _kdf = kdf ?? Hkdf(hmac: Hmac.sha256(), outputLength: 32),
+  }) : _kdf = kdf ?? Hkdf(hmac: Hmac.sha256(), outputLength: 32),
        _cipher = cipher ?? AesGcm.with256bits(),
        _nonceFactory = nonce;
 
@@ -141,15 +138,8 @@ class DeviceAiJobCipher {
     required String remotePublicKey,
     required List<Object?> context,
   }) async {
-    final privateBytes = await _identityStore.loadPrivateKeyBytes();
-    final localKeyPair = await _keyAgreement.newKeyPairFromSeed(privateBytes);
-    final remoteBytes = base64Decode(remotePublicKey);
-    if (remoteBytes.length != 32) {
-      throw const FormatException('Unexpected X25519 public key length');
-    }
-    final shared = await _keyAgreement.sharedSecretKey(
-      keyPair: localKeyPair,
-      remotePublicKey: SimplePublicKey(remoteBytes, type: KeyPairType.x25519),
+    final shared = await _identityStore.deriveSharedSecret(
+      remotePublicKey: remotePublicKey,
     );
     return _kdf.deriveKey(
       secretKey: shared,

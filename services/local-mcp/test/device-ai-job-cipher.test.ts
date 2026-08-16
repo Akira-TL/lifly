@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import {
   createCipheriv,
   createPrivateKey,
@@ -11,7 +12,10 @@ import { describe, expect, it } from "vitest";
 import { FakeLocalCoreBridge } from "../../../packages/local-core/src/index.js";
 import { LiflyAiJobEnvelopeSchema } from "../../../packages/protocol/src/index.js";
 import { LocalCoreComputeNodePlanner } from "../src/compute-node-planner.js";
-import { DeviceAiJobCipher } from "../src/device-ai-job-cipher.js";
+import {
+  DeviceAiJobCipher,
+  RawX25519DeviceKeyAgreement,
+} from "../src/device-ai-job-cipher.js";
 import { EncryptedAiJobEngine } from "../src/encrypted-job-engine.js";
 
 const phonePrivate = Buffer.alloc(32, 1);
@@ -19,6 +23,25 @@ const desktopPrivate = Buffer.alloc(32, 2);
 const phonePublic = publicKeyFromPrivate(phonePrivate);
 const desktopPublic = publicKeyFromPrivate(desktopPrivate);
 const expiresAt = "2026-08-15T13:00:00.000Z";
+const sharedVector = JSON.parse(
+  readFileSync(
+    new URL("../../../packages/protocol/test-vectors/device-ai-job-v1.json", import.meta.url),
+    "utf8",
+  ),
+) as {
+  phone: { public_key_base64: string };
+  desktop: { public_key_base64: string };
+  request: {
+    nonce_base64url: string;
+    ciphertext_base64url: string;
+    payload: Record<string, unknown>;
+  };
+  result: {
+    nonce_base64url: string;
+    ciphertext_base64url: string;
+    payload: Record<string, unknown>;
+  };
+};
 
 function resolver(keys: Record<string, string>) {
   return async (deviceId: string): Promise<string> => {
@@ -29,14 +52,50 @@ function resolver(keys: Record<string, string>) {
 }
 
 describe("DeviceAiJobCipher", () => {
+  it("matches the shared Dart/TypeScript request and result vectors", async () => {
+    const desktopCipher = cipherFor(
+      "desktop-1",
+      desktopPrivate,
+      { "phone-1": sharedVector.phone.public_key_base64 },
+      () => Buffer.from(sharedVector.result.nonce_base64url, "base64url"),
+    );
+    const request = LiflyAiJobEnvelopeSchema.parse({
+      protocol_version: 1,
+      job_id: "request-1",
+      account_id: "account-1",
+      source_device_id: "phone-1",
+      target_device_id: "desktop-1",
+      message_type: "request",
+      correlation_id: null,
+      idempotency_key: "idem-1",
+      expires_at: expiresAt,
+      encryption_version: 1,
+      nonce: sharedVector.request.nonce_base64url,
+      ciphertext: sharedVector.request.ciphertext_base64url,
+    });
+
+    await expect(desktopCipher.decrypt(request)).resolves.toEqual(
+      sharedVector.request.payload,
+    );
+    const encryptedResult = await desktopCipher.encrypt(sharedVector.result.payload, {
+      request,
+      result_job_id: "result-1",
+      source_device_id: "desktop-1",
+      target_device_id: "phone-1",
+      expires_at: expiresAt,
+    });
+    expect(encryptedResult.nonce).toBe(sharedVector.result.nonce_base64url);
+    expect(encryptedResult.ciphertext).toBe(sharedVector.result.ciphertext_base64url);
+  });
+
   it("executes encrypted request through Local Core and returns encrypted strict candidates", async () => {
     const requestCiphertext = encryptRequestForDesktop();
-    const desktopCipher = new DeviceAiJobCipher({
-      deviceId: "desktop-1",
-      privateKeyBytes: desktopPrivate,
-      resolvePublicKey: resolver({ "phone-1": phonePublic }),
-      nonce: () => new Uint8Array(12).fill(3),
-    });
+    const desktopCipher = cipherFor(
+      "desktop-1",
+      desktopPrivate,
+      { "phone-1": phonePublic },
+      () => new Uint8Array(12).fill(3),
+    );
     const engine = new EncryptedAiJobEngine({
       deviceId: "desktop-1",
       cipher: desktopCipher,
@@ -53,11 +112,11 @@ describe("DeviceAiJobCipher", () => {
     expect(outcome.status).toBe("succeeded");
     expect(outcome.result_envelope?.correlation_id).toBe("request-1");
     expect(outcome.result_envelope?.target_device_id).toBe("phone-1");
-    const phoneCipher = new DeviceAiJobCipher({
-      deviceId: "phone-1",
-      privateKeyBytes: phonePrivate,
-      resolvePublicKey: resolver({ "desktop-1": desktopPublic }),
-    });
+    const phoneCipher = cipherFor(
+      "phone-1",
+      phonePrivate,
+      { "desktop-1": desktopPublic },
+    );
     const clear = (await phoneCipher.decrypt(outcome.result_envelope!)) as {
       schema_version: number;
       actions: Array<{ type: string; payload: Record<string, unknown> }>;
@@ -73,11 +132,11 @@ describe("DeviceAiJobCipher", () => {
 
   it("decrypts requests whose wire expiry has microseconds using canonical UTC milliseconds", async () => {
     const request = encryptRequestForDesktop("2026-08-15T13:00:00.123456Z");
-    const desktopCipher = new DeviceAiJobCipher({
-      deviceId: "desktop-1",
-      privateKeyBytes: desktopPrivate,
-      resolvePublicKey: resolver({ "phone-1": phonePublic }),
-    });
+    const desktopCipher = cipherFor(
+      "desktop-1",
+      desktopPrivate,
+      { "phone-1": phonePublic },
+    );
     const clear = await desktopCipher.decrypt(request) as {
       schema_version: number;
       text: string;
@@ -88,11 +147,11 @@ describe("DeviceAiJobCipher", () => {
 
   it("fails closed when authenticated routing metadata is changed", async () => {
     const request = encryptRequestForDesktop();
-    const desktopCipher = new DeviceAiJobCipher({
-      deviceId: "desktop-2",
-      privateKeyBytes: desktopPrivate,
-      resolvePublicKey: resolver({ "phone-1": phonePublic }),
-    });
+    const desktopCipher = cipherFor(
+      "desktop-2",
+      desktopPrivate,
+      { "phone-1": phonePublic },
+    );
     await expect(
       desktopCipher.decrypt({ ...request, target_device_id: "desktop-2" }),
     ).rejects.toThrow();
@@ -137,6 +196,8 @@ function encryptRequestForDesktop(wireExpiresAt = expiresAt) {
     operation: "plan",
     text: "记一下跨设备",
     asset_ids: [],
+    timezone: "Asia/Shanghai",
+    locale: "zh-CN",
   });
   const cipherText = Buffer.concat([cipher.update(plaintext), cipher.final()]);
   const tag = cipher.getAuthTag();
@@ -153,6 +214,22 @@ function encryptRequestForDesktop(wireExpiresAt = expiresAt) {
     encryption_version: 1,
     nonce: nonce.toString("base64url"),
     ciphertext: Buffer.concat([cipherText, tag]).toString("base64url"),
+  });
+}
+
+function cipherFor(
+  deviceId: string,
+  privateKeyBytes: Uint8Array,
+  keys: Record<string, string>,
+  nonce?: () => Uint8Array,
+): DeviceAiJobCipher {
+  return new DeviceAiJobCipher({
+    keyAgreement: new RawX25519DeviceKeyAgreement({
+      deviceId,
+      privateKeyBytes,
+      resolvePublicKey: resolver(keys),
+    }),
+    nonce,
   });
 }
 

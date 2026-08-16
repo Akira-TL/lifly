@@ -1,4 +1,5 @@
 import 'package:client_flutter/data/device/device_contracts.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 enum AiExecutionTarget { existing, computeNode, cloudAi }
@@ -12,6 +13,7 @@ class AiExecutionTargetBar extends StatelessWidget {
     required this.computeStatusText,
     required this.onTargetChanged,
     required this.onComputeNodeChanged,
+    this.webMode,
   });
 
   final AiExecutionTarget target;
@@ -20,10 +22,30 @@ class AiExecutionTargetBar extends StatelessWidget {
   final String computeStatusText;
   final ValueChanged<AiExecutionTarget> onTargetChanged;
   final ValueChanged<String?> onComputeNodeChanged;
+  final bool? webMode;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isWeb = webMode ?? kIsWeb;
+    final targets = <({AiExecutionTarget value, String label, IconData icon})>[
+      if (!isWeb)
+        (
+          value: AiExecutionTarget.existing,
+          label: '当前处理',
+          icon: Icons.auto_awesome_outlined,
+        ),
+      (
+        value: AiExecutionTarget.computeNode,
+        label: '我的电脑',
+        icon: Icons.computer_outlined,
+      ),
+      (
+        value: AiExecutionTarget.cloudAi,
+        label: '云端 AI',
+        icon: Icons.cloud_outlined,
+      ),
+    ];
     return Material(
       color: theme.colorScheme.surfaceContainerLow,
       child: Padding(
@@ -31,37 +53,24 @@ class AiExecutionTargetBar extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SegmentedButton<AiExecutionTarget>(
-                segments: const [
-                  ButtonSegment(
-                    value: AiExecutionTarget.existing,
-                    label: Text('当前处理'),
-                    icon: Icon(Icons.auto_awesome_outlined),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final item in targets)
+                  ChoiceChip(
+                    selected: target == item.value,
+                    showCheckmark: false,
+                    avatar: Icon(item.icon, size: 18),
+                    label: Text(item.label, maxLines: 1),
+                    onSelected: (_) => onTargetChanged(item.value),
                   ),
-                  ButtonSegment(
-                    value: AiExecutionTarget.computeNode,
-                    label: Text('我的电脑'),
-                    icon: Icon(Icons.computer_outlined),
-                  ),
-                  ButtonSegment(
-                    value: AiExecutionTarget.cloudAi,
-                    label: Text('Cloud AI'),
-                    icon: Icon(Icons.cloud_outlined),
-                  ),
-                ],
-                selected: {target},
-                showSelectedIcon: false,
-                onSelectionChanged: (values) {
-                  if (values.isNotEmpty) onTargetChanged(values.first);
-                },
-              ),
+              ],
             ),
             if (target == AiExecutionTarget.computeNode) ...[
               const SizedBox(height: 8),
               if (computeNodes.isEmpty)
-                const Text('没有可执行 local_ai 的 Trusted Compute Node。')
+                const Text('没有可用的可信本地计算节点。')
               else
                 DropdownButtonFormField<String>(
                   key: const Key('ai_compute_node_selector'),
@@ -101,7 +110,7 @@ class AiExecutionTargetBar extends StatelessWidget {
             if (target == AiExecutionTarget.cloudAi) ...[
               const SizedBox(height: 6),
               Text(
-                'Cloud AI 只会在你每次明确确认后收到本次允许披露的数据。',
+                '云端 AI 只会在你每次明确确认后收到本次允许披露的数据。',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),

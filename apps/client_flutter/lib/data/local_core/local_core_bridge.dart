@@ -192,6 +192,10 @@ abstract class LocalCoreBridge {
     Map<String, Object?> input,
     LocalCoreContext context,
   );
+  Future<LocalCaptureSession> captureIngestCandidates(
+    Map<String, Object?> input,
+    LocalCoreContext context,
+  );
   Future<List<LocalCaptureSession>> listCaptureSessions(
     Map<String, Object?> input,
     LocalCoreContext context,

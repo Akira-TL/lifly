@@ -13,6 +13,8 @@ export interface ComputeNodePlanRequest {
   operation: "plan";
   text: string;
   asset_ids: string[];
+  timezone: string;
+  locale: string;
 }
 
 export class LocalCoreComputeNodePlanner implements DecryptedAiJobExecutor {
@@ -31,8 +33,8 @@ export class LocalCoreComputeNodePlanner implements DecryptedAiJobExecutor {
     const session = await this.core.captureParse(
       {
         text: request.text,
-        timezone: "Asia/Shanghai",
-        locale: "zh-CN",
+        timezone: request.timezone,
+        locale: request.locale,
       },
       localMcpContext("capture_parse"),
     );
@@ -58,11 +60,19 @@ export function parseComputeNodePlanRequest(payload: unknown): ComputeNodePlanRe
   if (!Array.isArray(assetIds) || assetIds.some((item) => typeof item !== "string" || item.length === 0)) {
     throw new Error("Encrypted AI Job asset_ids must be a string list");
   }
+  if (typeof value.timezone !== "string" || value.timezone.trim().length === 0) {
+    throw new Error("Encrypted AI Job timezone must be non-empty");
+  }
+  if (typeof value.locale !== "string" || value.locale.trim().length === 0) {
+    throw new Error("Encrypted AI Job locale must be non-empty");
+  }
   return {
     schema_version: 1,
     operation: "plan",
     text: value.text.trim(),
     asset_ids: assetIds as string[],
+    timezone: value.timezone.trim(),
+    locale: value.locale.trim(),
   };
 }
 

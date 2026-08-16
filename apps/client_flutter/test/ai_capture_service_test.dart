@@ -23,6 +23,14 @@ void main() {
       AiCaptureService(api: api, dataMode: LiflyDataMode.api).modeLabel,
       '云端处理',
     );
+    expect(
+      AiCaptureService(
+        api: api,
+        dataMode: LiflyDataMode.api,
+        localCore: FakeLocalCoreBridge(),
+      ).modeLabel,
+      '本地加密处理',
+    );
   });
 
   test(
@@ -47,7 +55,10 @@ void main() {
       );
       expect(afterAppend.sessionStatus, 'active');
       expect(afterAppend.turns, hasLength(4));
-      expect(afterAppend.turns.where((turn) => turn.role == 'user'), hasLength(2));
+      expect(
+        afterAppend.turns.where((turn) => turn.role == 'user'),
+        hasLength(2),
+      );
       expect(
         afterAppend.turns.where((turn) => turn.role == 'assistant'),
         hasLength(2),
@@ -121,9 +132,15 @@ void main() {
       expect(dismissed.turns.last.turnStatus, 'dismissed');
 
       final active = await service.listSessions();
-      expect(active.items.map((item) => item.captureId), isNot(contains(parsed.captureId)));
+      expect(
+        active.items.map((item) => item.captureId),
+        isNot(contains(parsed.captureId)),
+      );
       final all = await service.listSessions(status: 'all');
-      expect(all.items.map((item) => item.captureId), contains(parsed.captureId));
+      expect(
+        all.items.map((item) => item.captureId),
+        contains(parsed.captureId),
+      );
     },
   );
 }
