@@ -1,6 +1,7 @@
 import 'package:client_flutter/data/api/api_client.dart';
 import 'package:client_flutter/data/powersync/powersync_connection_coordinator.dart';
 import 'package:client_flutter/data/powersync/powersync_credentials_service.dart';
+import 'package:client_flutter/data/powersync/local_database_key.dart';
 import 'package:client_flutter/data/powersync/sync_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -58,11 +59,33 @@ class FailingConnectSyncService extends FakeConnectSyncService {
   }
 }
 
+class _RecordingBoundSyncService extends SyncService {
+  _RecordingBoundSyncService()
+    : super(api: ApiClient(baseUrl: 'http://example.invalid/api/v1'));
+
+  String? deviceId;
+
+  @override
+  Future<void> connect(
+    String powerSyncEndpoint,
+    String token, {
+    String? userId,
+    String? deviceId,
+    DateTime? expiresAt,
+  }) async {
+    this.deviceId = deviceId;
+  }
+}
+
 void main() {
   test(
     'PowerSyncConnectionCoordinator connects with fetched credentials',
     () async {
-      final syncService = FakeConnectSyncService();
+      final syncService = FakeConnectSyncService(
+        databaseKeyProvider: const FixedLocalDatabaseKeyProvider(
+          'lifly-test-sqlcipher-key-v1',
+        ),
+      );
       final coordinator = PowerSyncConnectionCoordinator(
         credentialsService: PowerSyncCredentialsService(
           FakeConnectionApiClient(),
@@ -83,9 +106,36 @@ void main() {
   );
 
   test(
+    'SyncService binds encrypted uploads to authenticated device id',
+    () async {
+      final service = _RecordingBoundSyncService(
+        databaseKeyProvider: const FixedLocalDatabaseKeyProvider(
+          'lifly-test-sqlcipher-key-v1',
+        ),
+      );
+      await service.connectWithCredentials(
+        LiflyPowerSyncCredentials(
+          endpoint: 'https://lifly.example/powersync',
+          token: 'token',
+          userId: 'account-1',
+          deviceId: 'web-device-1',
+          expiresAt: DateTime.utc(2026, 8, 16, 12),
+          mode: 'authenticated',
+        ),
+      );
+
+      expect(service.deviceId, 'web-device-1');
+    },
+  );
+
+  test(
     'PowerSyncConnectionCoordinator disconnects current sync service',
     () async {
-      final syncService = FakeConnectSyncService();
+      final syncService = FakeConnectSyncService(
+        databaseKeyProvider: const FixedLocalDatabaseKeyProvider(
+          'lifly-test-sqlcipher-key-v1',
+        ),
+      );
       final coordinator = PowerSyncConnectionCoordinator(
         credentialsService: PowerSyncCredentialsService(
           FakeConnectionApiClient(),

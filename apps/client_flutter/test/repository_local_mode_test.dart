@@ -47,10 +47,16 @@ void main() {
     expect(page.items.map((item) => item.id), contains(memo.id));
 
     await repo.delete(memo.id);
-    expect((await repo.listPage()).items.map((item) => item.id), isNot(contains(memo.id)));
+    expect(
+      (await repo.listPage()).items.map((item) => item.id),
+      isNot(contains(memo.id)),
+    );
     final restored = await repo.restore(memo.id);
     expect(restored.status, 'active');
-    expect((await repo.listPage()).items.map((item) => item.id), contains(memo.id));
+    expect(
+      (await repo.listPage()).items.map((item) => item.id),
+      contains(memo.id),
+    );
   });
 
   test('TaskRepository uses Local Core in local mode', () async {
@@ -80,85 +86,59 @@ void main() {
     );
   });
 
-  test('TaskRepository keeps completedAt aligned with status edits locally', () async {
-    final repo = TaskRepository(
-      api,
-      localCore: localCore,
-      dataMode: LiflyDataMode.local,
-    );
-    final task = await repo.create({'title': '状态切换任务'});
+  test(
+    'TaskRepository keeps completedAt aligned with status edits locally',
+    () async {
+      final repo = TaskRepository(
+        api,
+        localCore: localCore,
+        dataMode: LiflyDataMode.local,
+      );
+      final task = await repo.create({'title': '状态切换任务'});
 
-    final done = await repo.update(task.id, {'task_status': 'done'});
-    expect(done.taskStatus, 'done');
-    expect(done.completedAt, isNotNull);
+      final done = await repo.update(task.id, {'task_status': 'done'});
+      expect(done.taskStatus, 'done');
+      expect(done.completedAt, isNotNull);
 
-    final reopened = await repo.update(task.id, {'task_status': 'doing'});
-    expect(reopened.taskStatus, 'doing');
-    expect(reopened.completedAt, isNull);
-  });
+      final reopened = await repo.update(task.id, {'task_status': 'doing'});
+      expect(reopened.taskStatus, 'doing');
+      expect(reopened.completedAt, isNull);
+    },
+  );
 
-  test('TaskRepository restores through the trash endpoint in api mode', () async {
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost/api/v1'));
-    final requests = <String>[];
-    dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) {
-          requests.add('${options.method} ${options.path}');
-          if (options.method == 'POST') {
-            handler.resolve(
-              Response(
+  test(
+    'TaskRepository stays local-first in api mode when Local Core exists',
+    () async {
+      final dio = Dio(BaseOptions(baseUrl: 'http://localhost/api/v1'));
+      final requests = <String>[];
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            requests.add('${options.method} ${options.path}');
+            handler.reject(
+              DioException(
                 requestOptions: options,
-                statusCode: 200,
-                data: {
-                  'success': true,
-                  'data': {
-                    'entity_type': 'task',
-                    'entity_id': 'cloud-task',
-                    'status': 'active',
-                    'revision': 3,
-                  },
-                },
+                type: DioExceptionType.connectionError,
+                error: 'REST must not be used for core local data',
               ),
             );
-            return;
-          }
-          handler.resolve(
-            Response(
-              requestOptions: options,
-              statusCode: 200,
-              data: {
-                'success': true,
-                'data': {
-                  'id': 'cloud-task',
-                  'title': '云端恢复任务',
-                  'description': null,
-                  'due_at': null,
-                  'remind_at': null,
-                  'priority': 'normal',
-                  'task_status': 'todo',
-                  'completed_at': null,
-                  'created_at': '2026-08-11T05:00:00Z',
-                },
-              },
-            ),
-          );
-        },
-      ),
-    );
-    final repo = TaskRepository(
-      ApiClient(baseUrl: 'http://localhost/api/v1', dio: dio),
-      localCore: localCore,
-      dataMode: LiflyDataMode.api,
-    );
+          },
+        ),
+      );
+      final repo = TaskRepository(
+        ApiClient(baseUrl: 'http://localhost/api/v1', dio: dio),
+        localCore: localCore,
+        dataMode: LiflyDataMode.api,
+      );
+      final task = await repo.create({'title': 'API 模式本地任务'});
+      await repo.delete(task.id);
 
-    final restored = await repo.restore('cloud-task');
+      final restored = await repo.restore(task.id);
 
-    expect(restored.title, '云端恢复任务');
-    expect(requests, [
-      'POST /trash/task/cloud-task/restore',
-      'GET /tasks/cloud-task',
-    ]);
-  });
+      expect(restored.title, 'API 模式本地任务');
+      expect(requests, isEmpty);
+    },
+  );
 
   test('TaskRepository handles reminder strategy boundaries locally', () async {
     final repo = TaskRepository(
@@ -311,10 +291,16 @@ void main() {
     expect(summary['transaction_count'], 1);
 
     await repo.delete(tx.id);
-    expect((await repo.listPage()).items.map((item) => item.id), isNot(contains(tx.id)));
+    expect(
+      (await repo.listPage()).items.map((item) => item.id),
+      isNot(contains(tx.id)),
+    );
     final restored = await repo.restore(tx.id);
     expect(restored.amount, 18.75);
-    expect((await repo.listPage()).items.map((item) => item.id), contains(tx.id));
+    expect(
+      (await repo.listPage()).items.map((item) => item.id),
+      contains(tx.id),
+    );
   });
 
   test('LedgerRepository manages budgets through Local Core', () async {
@@ -356,36 +342,18 @@ void main() {
     expect(await repo.listBudgets(period: period), hasLength(1));
   });
 
-  test('LedgerRepository prefers cloud budget reads', () async {
+  test('LedgerRepository stays local-first for budgets in api mode', () async {
     final dio = Dio(BaseOptions(baseUrl: 'http://localhost/api/v1'));
     String? requestedPath;
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
           requestedPath = options.path;
-          handler.resolve(
-            Response(
+          handler.reject(
+            DioException(
               requestOptions: options,
-              statusCode: 200,
-              data: {
-                'success': true,
-                'data': [
-                  {
-                    'id': 'cloud-budget',
-                    'period_type': 'month',
-                    'period_key': '2026-07',
-                    'category_id': null,
-                    'category_name': null,
-                    'amount': 5000,
-                    'currency': 'CNY',
-                    'alert_threshold': 0.8,
-                    'status': 'active',
-                    'revision': 3,
-                    'created_at': '2026-07-01T00:00:00Z',
-                    'updated_at': '2026-07-08T00:00:00Z',
-                  },
-                ],
-              },
+              type: DioExceptionType.connectionError,
+              error: 'REST must not be used for core local data',
             ),
           );
         },
@@ -396,13 +364,16 @@ void main() {
       localCore: localCore,
       dataMode: LiflyDataMode.api,
     );
+    final budget = await repo.createBudget({
+      'period_key': '2026-07',
+      'amount': 5000,
+    });
 
     final budgets = await repo.listBudgets(period: '2026-07');
 
-    expect(requestedPath, '/ledger/budgets');
-    expect(budgets.single.id, 'cloud-budget');
+    expect(requestedPath, isNull);
+    expect(budgets.single.id, budget.id);
     expect(budgets.single.amount, 5000);
-    expect(budgets.single.revision, 3);
   });
 
   test('LedgerRepository falls back to local budget reads', () async {
@@ -541,112 +512,79 @@ void main() {
     },
   );
 
-  test(
-    'LedgerRepository falls back to Local Core when cloud overview fails',
-    () async {
-      final failingDio = Dio(BaseOptions(baseUrl: 'http://localhost/api/v1'));
-      failingDio.interceptors.add(
-        InterceptorsWrapper(
-          onRequest: (options, handler) {
-            handler.reject(
-              DioException(
-                requestOptions: options,
-                type: DioExceptionType.connectionError,
-                error: 'offline',
-              ),
-            );
-          },
-        ),
-      );
-      final repo = LedgerRepository(
-        ApiClient(baseUrl: 'http://localhost/api/v1', dio: failingDio),
-        localCore: localCore,
-        dataMode: LiflyDataMode.api,
-      );
-      final localLedgerRepo = LedgerRepository(
-        api,
-        localCore: localCore,
-        dataMode: LiflyDataMode.local,
-      );
+  test('LedgerRepository uses Local Core directly in api mode', () async {
+    final failingDio = Dio(BaseOptions(baseUrl: 'http://localhost/api/v1'));
+    failingDio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          handler.reject(
+            DioException(
+              requestOptions: options,
+              type: DioExceptionType.connectionError,
+              error: 'offline',
+            ),
+          );
+        },
+      ),
+    );
+    final repo = LedgerRepository(
+      ApiClient(baseUrl: 'http://localhost/api/v1', dio: failingDio),
+      localCore: localCore,
+      dataMode: LiflyDataMode.api,
+    );
+    final localLedgerRepo = LedgerRepository(
+      api,
+      localCore: localCore,
+      dataMode: LiflyDataMode.local,
+    );
 
-      await localLedgerRepo.create({
-        'direction': 'expense',
-        'amount': 12.0,
-        'merchant': '本地账单',
-      });
+    await localLedgerRepo.create({
+      'direction': 'expense',
+      'amount': 12.0,
+      'merchant': '本地账单',
+    });
 
-      final overview = await repo.overview();
+    final overview = await repo.overview();
 
-      expect(overview['source_mode'], 'fallback');
-      expect(overview['month_expense'], 12.0);
-    },
-  );
+    expect(overview['source_mode'], 'local');
+    expect(overview['month_expense'], 12.0);
+  });
 
-  test(
-    'HomeOverviewRepository loads cloud home overview endpoint first',
-    () async {
-      String? requestedPath;
-      final dio = Dio(BaseOptions(baseUrl: 'http://localhost/api/v1'));
-      dio.interceptors.add(
-        InterceptorsWrapper(
-          onRequest: (options, handler) {
-            requestedPath = options.path;
-            handler.resolve(
-              Response(
-                requestOptions: options,
-                statusCode: 200,
-                data: {
-                  'success': true,
-                  'data': {
-                    'schema_version': 'home_overview.v1',
-                    'generated_at': '2026-07-07T12:00:00Z',
-                    'user_timezone': 'UTC',
-                    'source_mode': 'api',
-                    'today_metrics': {
-                      'memo_total': 1,
-                      'task_todo': 0,
-                      'task_total': 0,
-                      'task_overdue': 0,
-                      'task_due_today': 0,
-                    },
-                    'finance_overview': {
-                      'month_income': 0,
-                      'month_expense': 0,
-                      'transaction_count': 0,
-                      'budget_state': 'not_configured',
-                      'budget_amount': null,
-                      'budget_used': null,
-                      'budget_progress': null,
-                      'budget_remaining': null,
-                      'currency': 'CNY',
-                      'category_breakdown': const [],
-                      'insights': const [],
-                    },
-                    'daily_trend': const [],
-                    'recent_activity': const [],
-                    'sync_summary': {'status': 'api_available'},
-                    'import_summary': {'status': 'idle'},
-                    'settings_summary': {'status': 'ok'},
-                  },
-                },
-              ),
-            );
-          },
-        ),
-      );
-      final homeRepo = HomeOverviewRepository(
-        ApiClient(baseUrl: 'http://localhost/api/v1', dio: dio),
-        localCore: localCore,
-        dataMode: LiflyDataMode.api,
-      );
+  test('HomeOverviewRepository stays local-first in api mode', () async {
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost/api/v1'));
+    String? requestedPath;
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          requestedPath = options.path;
+          handler.reject(
+            DioException(
+              requestOptions: options,
+              type: DioExceptionType.connectionError,
+              error: 'REST must not be used for core local data',
+            ),
+          );
+        },
+      ),
+    );
+    final memoRepo = MemoRepository(
+      api,
+      localCore: localCore,
+      dataMode: LiflyDataMode.local,
+    );
+    await memoRepo.create({'type': 'memo', 'content_markdown': '本地首页数据'});
+    final homeRepo = HomeOverviewRepository(
+      ApiClient(baseUrl: 'http://localhost/api/v1', dio: dio),
+      localCore: localCore,
+      dataMode: LiflyDataMode.api,
+    );
 
-      final overview = await homeRepo.load();
+    final overview = await homeRepo.load();
 
-      expect(requestedPath, '/home/overview');
-      expect(overview.sourceMode, 'api');
-      expect(overview.todayMetrics.memoTotal, 1);
-    },
-  );
+    expect(requestedPath, isNull);
+    expect(overview.sourceMode, 'local_encrypted');
+    expect(overview.todayMetrics.memoTotal, 1);
+  });
 
   test('HomeOverview parses cloud home overview schema', () {
     final overview = HomeOverview.fromDashboardJson({
@@ -794,7 +732,7 @@ void main() {
   });
 
   test(
-    'HomeOverviewRepository falls back to Local Core when cloud load fails',
+    'HomeOverviewRepository remains local-first while cloud is unavailable',
     () async {
       final failingDio = Dio(BaseOptions(baseUrl: 'http://localhost/api/v1'));
       failingDio.interceptors.add(
@@ -833,7 +771,7 @@ void main() {
 
       final overview = await homeRepo.load();
 
-      expect(overview.sourceMode, 'fallback');
+      expect(overview.sourceMode, 'local_encrypted');
       expect(overview.todayMetrics.memoTotal, 1);
       expect(
         overview.recentActivity.map((item) => item.entityType),

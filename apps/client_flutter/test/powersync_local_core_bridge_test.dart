@@ -1,5 +1,6 @@
 import 'package:client_flutter/data/local_core/local_core_context.dart';
 import 'package:client_flutter/data/local_core/powersync_local_core_bridge.dart';
+import 'package:client_flutter/data/powersync/local_database_key.dart';
 import 'package:client_flutter/data/powersync/sync_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -7,7 +8,11 @@ import 'support/powersync_persistence_harness.dart';
 
 void main() {
   test('PowerSyncLocalCoreBridge reports health or diagnostic error', () async {
-    final service = SyncService();
+    final service = SyncService(
+      databaseKeyProvider: const FixedLocalDatabaseKeyProvider(
+        'lifly-test-sqlcipher-key-v1',
+      ),
+    );
     addTearDown(service.dispose);
 
     final health = await PowerSyncLocalCoreBridge(
@@ -66,17 +71,11 @@ void main() {
       ],
     );
 
-    final overview = await PowerSyncLocalCoreBridge(
-      syncService: service,
-    ).getHomeOverview(
-      {
-        'source_mode': 'local',
-        'user_timezone': 'Asia/Shanghai',
-      },
-      LocalCoreContext.flutterUser(
-        now: DateTime.utc(2026, 7, 11, 12),
-      ),
-    );
+    final overview = await PowerSyncLocalCoreBridge(syncService: service)
+        .getHomeOverview({
+          'source_mode': 'local',
+          'user_timezone': 'Asia/Shanghai',
+        }, LocalCoreContext.flutterUser(now: DateTime.utc(2026, 7, 11, 12)));
 
     expect(overview.syncSummary.status, 'error');
     expect(overview.syncSummary.failedAssetCount, 1);

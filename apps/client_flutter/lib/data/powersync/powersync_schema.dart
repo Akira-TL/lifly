@@ -1,4 +1,4 @@
-import 'package:powersync/powersync.dart';
+import 'package:powersync_sqlcipher/powersync.dart';
 
 const liflyPowerSyncSchema = Schema([
   Table('encrypted_entities', [
@@ -20,6 +20,19 @@ const liflyPowerSyncSchema = Schema([
     Column.integer('key_version'),
     Column.text('lifecycle_status'),
     Column.text('updated_at'),
+  ]),
+  Table.localOnly('e2ee_local_mutations', [
+    Column.text('entity_id'),
+    Column.text('user_id'),
+    Column.text('entity_type'),
+    Column.integer('revision'),
+    Column.text('lifecycle_status'),
+    Column.text('updated_at'),
+  ]),
+  Table.localOnly('e2ee_migration_state', [
+    Column.text('account_id'),
+    Column.text('migration_id'),
+    Column.text('completed_at'),
   ]),
   Table.localOnly('memos', [
     Column.text('user_id'),

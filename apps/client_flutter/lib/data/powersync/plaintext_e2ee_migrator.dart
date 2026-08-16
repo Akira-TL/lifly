@@ -1,6 +1,7 @@
-import 'package:client_flutter/data/crypto/encrypted_envelope.dart';
+import 'package:client_flutter/data/powersync/encrypted_projection_spec.dart';
 import 'package:client_flutter/data/powersync/encrypted_sync_store.dart';
-import 'package:powersync/powersync.dart';
+import 'package:client_flutter/data/powersync/powersync_view_writer.dart';
+import 'package:powersync_sqlcipher/powersync.dart';
 
 class PlaintextE2eeMigrationResult {
   final int encrypted;
@@ -11,6 +12,12 @@ class PlaintextE2eeMigrationResult {
     required this.skipped,
   });
 }
+
+/// One-time compatibility path for rows created before the encrypted write seam.
+///
+/// Normal Local Core writes must never call this migrator. They are encrypted in
+/// the same SQLite transaction by [PowerSyncEncryptedLocalMutationCommitter].
+const String plaintextE2eeCoreMigrationId = 'plaintext-e2ee-core-v1';
 
 class PlaintextE2eeMigrator {
   final PowerSyncDatabase db;
@@ -24,10 +31,19 @@ class PlaintextE2eeMigrator {
   });
 
   Future<PlaintextE2eeMigrationResult> migrateCoreEntities() async {
+    final markerId = '$plaintextE2eeCoreMigrationId:$accountId';
+    final completed = await db.getOptional(
+      'SELECT id FROM e2ee_migration_state WHERE id = ? AND account_id = ?',
+      [markerId, accountId],
+    );
+    if (completed != null) {
+      return const PlaintextE2eeMigrationResult(encrypted: 0, skipped: 0);
+    }
+
     var encrypted = 0;
     var skipped = 0;
 
-    for (final spec in _migrationSpecs) {
+    for (final spec in encryptedProjectionSpecs) {
       final rows = await db.getAll(
         'SELECT * FROM ${spec.table} WHERE user_id = ?',
         [accountId],
@@ -48,155 +64,41 @@ class PlaintextE2eeMigrator {
           continue;
         }
 
-        final payload = <String, Object?>{};
-        for (final column in spec.payloadColumns) {
-          final value = row[column];
-          if (value != null) payload[column] = value;
-        }
-        final status = row['status']?.toString();
-        final lifecycle = status == 'deleted'
-            ? EncryptedEntityLifecycleStatus.tombstone
-            : EncryptedEntityLifecycleStatus.active;
-        final updatedAt =
-            _dateTimeValue(row['updated_at']) ?? DateTime.now().toUtc();
-
         await store.putEncryptedEntity(
           DecryptedSyncEntity(
             id: id,
             userId: accountId,
             entityType: spec.entityType,
             revision: revision,
-            lifecycleStatus: lifecycle,
-            updatedAt: updatedAt,
-            payload: payload,
+            lifecycleStatus: spec.lifecycleFromRow(row),
+            updatedAt:
+                _dateTimeValue(row['updated_at']) ?? DateTime.now().toUtc(),
+            payload: spec.payloadFromRow(row),
           ),
         );
         encrypted += 1;
       }
     }
 
+    await insertOrUpdatePowerSyncView(
+      db,
+      table: 'e2ee_migration_state',
+      id: markerId,
+      values: {
+        'account_id': accountId,
+        'migration_id': plaintextE2eeCoreMigrationId,
+        'completed_at': DateTime.now().toUtc().toIso8601String(),
+      },
+    );
     return PlaintextE2eeMigrationResult(encrypted: encrypted, skipped: skipped);
   }
 }
 
-class _MigrationSpec {
-  final String table;
-  final String entityType;
-  final List<String> payloadColumns;
-
-  const _MigrationSpec(this.table, this.entityType, this.payloadColumns);
-}
-
-const _migrationSpecs = <_MigrationSpec>[
-  _MigrationSpec('memos', 'memo', [
-    'type',
-    'title',
-    'content_markdown',
-    'tags',
-    'mood',
-    'source_capture_id',
-    'source',
-    'status',
-    'created_at',
-    'deleted_at',
-  ]),
-  _MigrationSpec('tasks', 'task', [
-    'title',
-    'description',
-    'due_at',
-    'remind_at',
-    'priority',
-    'task_status',
-    'source_capture_id',
-    'source',
-    'status',
-    'created_at',
-    'completed_at',
-    'deleted_at',
-  ]),
-  _MigrationSpec('ledger_transactions', 'expense', [
-    'account_id',
-    'category_id',
-    'direction',
-    'amount',
-    'currency',
-    'merchant',
-    'note',
-    'occurred_at',
-    'source',
-    'source_capture_id',
-    'import_batch_id',
-    'confidence',
-    'status',
-    'created_at',
-    'deleted_at',
-  ]),
-  _MigrationSpec('ledger_budgets', 'ledger_budget', [
-    'period_type',
-    'period_key',
-    'category_id',
-    'amount',
-    'currency',
-    'alert_threshold',
-    'status',
-    'created_at',
-  ]),
-  _MigrationSpec('reminders', 'reminder', [
-    'target_type',
-    'target_id',
-    'remind_at',
-    'channel',
-    'reminder_status',
-    'attempt_count',
-    'max_attempts',
-    'next_attempt_at',
-    'last_attempt_at',
-    'delivered_at',
-    'failed_at',
-    'cancelled_at',
-    'last_error',
-    'external_id',
-    'dispatch_token',
-    'lease_until',
-    'created_at',
-  ]),
-  _MigrationSpec('mcp_capture_sessions', 'capture_session', [
-    'capture_id',
-    'original_text',
-    'timezone',
-    'locale',
-    'actions',
-    'requires_confirmation',
-    'committed',
-    'session_status',
-    'source_channel',
-    'created_at',
-    'expires_at',
-    'committed_at',
-    'dismissed_at',
-  ]),
-  _MigrationSpec('mcp_capture_turns', 'capture_turn', [
-    'capture_id',
-    'turn_index',
-    'role',
-    'text',
-    'asset_ids',
-    'asset_context',
-    'actions',
-    'selected_action_indexes',
-    'result_entities',
-    'undo_token',
-    'supersedes_turn_id',
-    'turn_status',
-    'source_channel',
-    'created_at',
-  ]),
-];
-
 int? _positiveInt(Object? value) {
   if (value is int && value > 0) return value;
   if (value is num && value > 0) return value.toInt();
-  return int.tryParse(value?.toString() ?? '');
+  final parsed = int.tryParse(value?.toString() ?? '');
+  return parsed != null && parsed > 0 ? parsed : null;
 }
 
 DateTime? _dateTimeValue(Object? value) {

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:client_flutter/data/local_core/local_core_context.dart';
 import 'package:client_flutter/data/local_core/powersync_local_core_bridge.dart';
+import 'package:client_flutter/data/powersync/local_database_key.dart';
 import 'package:client_flutter/data/powersync/sync_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -13,7 +14,11 @@ void main() {
         'lifly_task_store_',
       );
       final dbPath = '${tempDir.path}/lifly-test.db';
-      final service = SyncService();
+      final service = SyncService(
+        databaseKeyProvider: const FixedLocalDatabaseKeyProvider(
+          'lifly-test-sqlcipher-key-v1',
+        ),
+      );
       addTearDown(() async {
         service.dispose();
         await tempDir.delete(recursive: true);
@@ -88,7 +93,11 @@ void main() {
         'lifly_reminder_store_',
       );
       final dbPath = '${tempDir.path}/lifly-test.db';
-      final service = SyncService();
+      final service = SyncService(
+        databaseKeyProvider: const FixedLocalDatabaseKeyProvider(
+          'lifly-test-sqlcipher-key-v1',
+        ),
+      );
       addTearDown(() async {
         service.dispose();
         await tempDir.delete(recursive: true);

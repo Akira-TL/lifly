@@ -58,12 +58,9 @@ class LocalCoreWriteExecutor {
     Future<T> Function(LocalCoreWriteHandle handle) write,
   ) async {
     try {
-      await syncService.ensureInitialized();
-      final result = await syncService.db.writeTransaction((transaction) {
+      return await syncService.writeLocalTransaction((transaction) {
         return write(PowerSyncLocalCoreWriteHandle(transaction));
       });
-      await syncService.flushLocalMutations();
-      return result;
     } catch (error, stackTrace) {
       throw LocalCoreWriteException(
         message: 'Local Core write transaction failed',

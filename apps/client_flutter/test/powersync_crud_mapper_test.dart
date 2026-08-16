@@ -1,6 +1,6 @@
 import 'package:client_flutter/data/powersync/powersync_crud_mapper.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:powersync/powersync.dart';
+import 'package:powersync_sqlcipher/powersync.dart';
 
 void main() {
   const mapper = PowerSyncCrudMapper();

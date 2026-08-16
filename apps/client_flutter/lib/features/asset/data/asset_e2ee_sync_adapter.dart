@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:client_flutter/data/crypto/account_data_key.dart';
 import 'package:client_flutter/data/crypto/encrypted_envelope.dart';
 import 'package:client_flutter/data/powersync/encrypted_sync_store.dart';
+import 'package:client_flutter/data/powersync/powersync_view_writer.dart';
 import 'package:client_flutter/domain/entities/asset.dart';
 import 'package:client_flutter/domain/entities/memo.dart';
 import 'package:client_flutter/features/asset/data/asset_e2ee_cipher.dart';
@@ -575,24 +576,15 @@ class PowerSyncAssetE2eeCoordinator implements AssetE2eeCoordinator {
     String id,
     Map<String, Object?> values,
   ) async {
-    final existing = await store.db.getOptional(
-      'SELECT id FROM $table WHERE id = ?',
-      [id],
+    await insertOrUpdatePowerSyncView(
+      store.db,
+      table: table,
+      id: id,
+      values: {
+        for (final entry in values.entries)
+          entry.key: _sqliteValue(entry.value),
+      },
     );
-    final columns = values.keys.toList(growable: false);
-    if (existing == null) {
-      final placeholders = List.filled(columns.length + 1, '?').join(', ');
-      await store.db.execute(
-        'INSERT INTO $table(id, ${columns.join(', ')}) VALUES ($placeholders)',
-        [id, ...columns.map((column) => _sqliteValue(values[column]))],
-      );
-      return;
-    }
-    final assignments = columns.map((column) => '$column = ?').join(', ');
-    await store.db.execute('UPDATE $table SET $assignments WHERE id = ?', [
-      ...columns.map((column) => _sqliteValue(values[column])),
-      id,
-    ]);
   }
 
   Future<void> _recordProjectionState(EncryptedEntityEnvelope envelope) async {

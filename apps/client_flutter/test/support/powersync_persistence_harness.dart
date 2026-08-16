@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:client_flutter/data/powersync/local_database_key.dart';
 import 'package:client_flutter/data/powersync/sync_service.dart';
 
 class PowerSyncPersistenceHarness {
@@ -19,8 +20,12 @@ class PowerSyncPersistenceHarness {
     );
   }
 
-  Future<SyncService?> openService() async {
-    final service = SyncService();
+  Future<SyncService?> openService({String? databaseKey}) async {
+    final service = SyncService(
+      databaseKeyProvider: FixedLocalDatabaseKeyProvider(
+        databaseKey ?? 'lifly-test-sqlcipher-key-v1',
+      ),
+    );
     try {
       await service.initialize(dbPath: dbPath);
       return service;

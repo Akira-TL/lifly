@@ -1,5 +1,5 @@
 import 'package:client_flutter/data/crypto/encrypted_envelope.dart';
-import 'package:powersync/powersync.dart';
+import 'package:powersync_sqlcipher/powersync.dart';
 
 class EncryptedSyncPushRequestPayload {
   final String clientId;

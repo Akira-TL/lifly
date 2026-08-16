@@ -8,6 +8,7 @@ import 'package:client_flutter/data/auth/secure_secret_store.dart';
 import 'package:client_flutter/data/auth/secure_session_store.dart';
 import 'package:client_flutter/data/crypto/account_data_key.dart';
 import 'package:client_flutter/data/crypto/account_e2ee_runtime.dart';
+import 'package:client_flutter/data/crypto/secure_local_database_key_provider.dart';
 import 'package:client_flutter/data/local_core/powersync_local_core_bridge.dart';
 import 'package:client_flutter/data/powersync/password_key_envelope_service.dart';
 import 'package:client_flutter/data/powersync/sync_service.dart';
@@ -64,7 +65,10 @@ Future<void> main() async {
     baseUrl: apiBase,
     accessTokenProvider: sessions.readAccessToken,
   );
-  final syncService = SyncService(api: api);
+  final syncService = SyncService(
+    api: api,
+    databaseKeyProvider: SecureLocalDatabaseKeyProvider(secrets: secrets),
+  );
   await syncService.initialize(dbPath: dbPath);
   final e2ee = AccountE2eeRuntime(
     syncService: syncService,

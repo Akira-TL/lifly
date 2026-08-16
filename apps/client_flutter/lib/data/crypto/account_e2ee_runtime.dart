@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:client_flutter/data/auth/auth_repository.dart';
@@ -18,8 +19,9 @@ import 'package:client_flutter/domain/entities/asset.dart';
 import 'package:client_flutter/domain/entities/memo.dart';
 import 'package:client_flutter/features/asset/data/asset_e2ee_sync_adapter.dart';
 import 'package:cryptography/cryptography.dart';
+import 'package:flutter/foundation.dart';
 
-class AccountE2eeRuntime
+class AccountE2eeRuntime extends ChangeNotifier
     implements AssetE2eeCoordinator, AuditPayloadProtector {
   final SyncService syncService;
   final AuthSessionStore sessions;
@@ -29,6 +31,9 @@ class AccountE2eeRuntime
 
   PowerSyncEncryptedSyncStore? _store;
   PowerSyncAssetE2eeCoordinator? _assets;
+  StreamSubscription<EncryptedSyncState>? _remoteEnvelopeSubscription;
+  bool _unlocking = false;
+  Object? _lastUnlockError;
 
   AccountE2eeRuntime({
     required this.syncService,
@@ -39,6 +44,8 @@ class AccountE2eeRuntime
   }) : envelopeCipher = envelopeCipher ?? PasswordKeyEnvelopeCipher();
 
   bool get isUnlocked => _store != null;
+  bool get isUnlocking => _unlocking;
+  String? get lastUnlockError => _lastUnlockError?.toString();
 
   @override
   String get accountId => _requireAssets().accountId;
@@ -54,43 +61,49 @@ class AccountE2eeRuntime
       _lock();
       return false;
     }
-    await _activate(session.account.accountId, key);
+    await _runUnlock(() => _activate(session.account.accountId, key));
     return true;
   }
 
-  Future<void> initializeAfterRegistration(AuthCompletion completion) async {
-    final accountId = completion.session.account.accountId;
-    final dataKey = await AccountDataKey.generate(keyVersion: 1);
-    final envelope = await envelopeCipher.wrap(
-      accountId: accountId,
-      dataKey: dataKey,
-      clientExportKey: SecretKey(completion.exportKey),
-    );
-    await passwordEnvelopes.store(envelope);
-    await _writeLocalKey(accountId, dataKey);
-    await _activate(accountId, dataKey);
+  Future<void> initializeAfterRegistration(AuthCompletion completion) {
+    return _runUnlock(() async {
+      final accountId = completion.session.account.accountId;
+      final dataKey = await AccountDataKey.generate(keyVersion: 1);
+      final envelope = await envelopeCipher.wrap(
+        accountId: accountId,
+        dataKey: dataKey,
+        clientExportKey: SecretKey(completion.exportKey),
+      );
+      await passwordEnvelopes.store(envelope);
+      await _writeLocalKey(accountId, dataKey);
+      await _activate(accountId, dataKey);
+    });
   }
 
-  Future<void> initializeAfterLogin(AuthCompletion completion) async {
-    final accountId = completion.session.account.accountId;
-    final envelope = await passwordEnvelopes.fetch();
-    if (envelope.accountId != accountId) {
-      throw const FormatException('Password Key Envelope account mismatch');
-    }
-    final dataKey = await envelopeCipher.unwrap(
-      envelope,
-      clientExportKey: SecretKey(completion.exportKey),
-    );
-    await _writeLocalKey(accountId, dataKey);
-    await _activate(accountId, dataKey);
+  Future<void> initializeAfterLogin(AuthCompletion completion) {
+    return _runUnlock(() async {
+      final accountId = completion.session.account.accountId;
+      final envelope = await passwordEnvelopes.fetch();
+      if (envelope.accountId != accountId) {
+        throw const FormatException('Password Key Envelope account mismatch');
+      }
+      final dataKey = await envelopeCipher.unwrap(
+        envelope,
+        clientExportKey: SecretKey(completion.exportKey),
+      );
+      await _writeLocalKey(accountId, dataKey);
+      await _activate(accountId, dataKey);
+    });
   }
 
   Future<void> initializeWithLocalDataKey({
     required String accountId,
     required AccountDataKey dataKey,
-  }) async {
-    await _writeLocalKey(accountId, dataKey);
-    await _activate(accountId, dataKey);
+  }) {
+    return _runUnlock(() async {
+      await _writeLocalKey(accountId, dataKey);
+      await _activate(accountId, dataKey);
+    });
   }
 
   Future<void> destroyLocalKeyForCurrentSession() async {
@@ -113,24 +126,55 @@ class AccountE2eeRuntime
       store: store,
       accountId: accountId,
     ).migrateCoreEntities();
+    await store.materializePendingEnvelopes();
+    final mutationCommitter = PowerSyncEncryptedLocalMutationCommitter(store);
+    await mutationCommitter.initialize();
     _store = store;
     _assets = PowerSyncAssetE2eeCoordinator(store: store);
-    syncService.setLocalMutationFlusher(flushLocalProjectionToEncryptedSync);
+    syncService.setLocalMutationCommitter(mutationCommitter);
+    await _remoteEnvelopeSubscription?.cancel();
+    _remoteEnvelopeSubscription = store.watchSyncState().listen((_) {
+      unawaited(store.materializePendingEnvelopes());
+    });
   }
 
-  Future<void> flushLocalProjectionToEncryptedSync() async {
-    final store = _requireStore();
-    await PlaintextE2eeMigrator(
-      db: syncService.db,
-      store: store,
-      accountId: store.accountId,
-    ).migrateCoreEntities();
+  Future<T> _runUnlock<T>(Future<T> Function() operation) async {
+    _unlocking = true;
+    _lastUnlockError = null;
+    notifyListeners();
+    try {
+      final result = await operation();
+      _unlocking = false;
+      _lastUnlockError = null;
+      notifyListeners();
+      return result;
+    } catch (error) {
+      _lock(notify: false);
+      _unlocking = false;
+      _lastUnlockError = error;
+      notifyListeners();
+      rethrow;
+    }
   }
 
-  void _lock() {
-    syncService.setLocalMutationFlusher(null);
+  void _lock({bool notify = true}) {
+    syncService.setLocalMutationCommitter(null);
+    unawaited(_remoteEnvelopeSubscription?.cancel());
+    _remoteEnvelopeSubscription = null;
     _assets = null;
     _store = null;
+    _unlocking = false;
+    if (notify) {
+      _lastUnlockError = null;
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    unawaited(_remoteEnvelopeSubscription?.cancel());
+    _remoteEnvelopeSubscription = null;
+    super.dispose();
   }
 
   PowerSyncEncryptedSyncStore _requireStore() {
