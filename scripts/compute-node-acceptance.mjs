@@ -15,11 +15,28 @@ import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline/promises';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const bundledRuntimeRoot = resolve(projectRoot, 'runtime');
 const apiBase = process.env.LIFLY_API_BASE_URL ?? 'https://lifly.babelbeast.com/api/v1';
 const opaqueHelper = process.env.LIFLY_OPAQUE_CLIENT_HELPER
-  ?? resolve(projectRoot, 'build/runtime/lifly-opaque-helper');
+  ?? firstExistingPath(
+    resolve(bundledRuntimeRoot, 'lifly-opaque-helper'),
+    resolve(projectRoot, 'build/runtime/lifly-opaque-helper'),
+  );
 const bridgePath = process.env.LIFLY_LOCAL_CORE_BRIDGE_PATH
-  ?? resolve(projectRoot, 'apps/client_flutter/build/runtime/local-core-bridge/client_flutter');
+  ?? firstExistingPath(
+    resolve(bundledRuntimeRoot, 'local-core-bridge/client_flutter'),
+    resolve(projectRoot, 'apps/client_flutter/build/runtime/local-core-bridge/client_flutter'),
+  );
+const localMcpRoot = process.env.LIFLY_LOCAL_MCP_ROOT
+  ?? firstExistingPath(
+    resolve(bundledRuntimeRoot, 'local-mcp'),
+    resolve(projectRoot, 'services/local-mcp'),
+  );
+const providerProjectDir = process.env.LIFLY_AI_PROVIDER_PROJECT_DIR
+  ?? firstExistingPath(
+    resolve(bundledRuntimeRoot, 'provider-api'),
+    resolve(projectRoot, 'services/api'),
+  );
 const ollamaEndpoint = process.env.LIFLY_LOCAL_AI_ENDPOINT ?? 'http://127.0.0.1:11434';
 const ollamaModel = process.env.LIFLY_LOCAL_AI_MODEL ?? 'qwen3.5:4b';
 const deviceIdStatePath = process.env.LIFLY_ACCEPTANCE_DEVICE_ID_FILE
@@ -125,6 +142,8 @@ try {
     env: {
       ...process.env,
       LIFLY_LOCAL_CORE_BRIDGE_PATH: bridgePath,
+      LIFLY_LOCAL_MCP_ROOT: localMcpRoot,
+      LIFLY_AI_PROVIDER_PROJECT_DIR: providerProjectDir,
       LIFLY_API_BASE_URL: apiBase,
       LIFLY_LOCAL_AI_PROVIDER: 'ollama',
       LIFLY_LOCAL_AI_ENDPOINT: ollamaEndpoint,
@@ -172,8 +191,17 @@ try {
 }
 
 async function checkEnvironment() {
+  if (spawnSync('uv', ['--version'], { stdio: 'ignore' }).status !== 0) {
+    throw new Error('uv 不可用；Desktop Compute Node 的本地 AI Provider runtime 需要 uv');
+  }
   if (!existsSync(opaqueHelper)) throw new Error(`OPAQUE helper 不存在: ${opaqueHelper}`);
   if (!existsSync(bridgePath)) throw new Error(`Local Core bridge 不存在: ${bridgePath}`);
+  if (!existsSync(resolve(localMcpRoot, 'dist/services/local-mcp/src/relay-worker-main.js'))) {
+    throw new Error(`Compute Node worker 不存在: ${localMcpRoot}`);
+  }
+  if (!existsSync(resolve(providerProjectDir, 'pyproject.toml'))) {
+    throw new Error(`AI Provider runtime 不存在: ${providerProjectDir}`);
+  }
   const health = await fetch(`${apiBase}/health`);
   if (!health.ok) throw new Error(`公网 API 不可用: HTTP ${health.status}`);
   const tagsResponse = await fetch(`${ollamaEndpoint.replace(/\/$/, '')}/api/tags`);
@@ -326,6 +354,13 @@ function unwrapPasswordEnvelope(envelope, exportKey) {
 
 function decodeBase64Url(value) {
   return Buffer.from(value, 'base64url');
+}
+
+function firstExistingPath(...candidates) {
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return candidates[0];
 }
 
 function requiredString(value, name) {

@@ -3,8 +3,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-LOG_DIR="$PROJECT_ROOT/logs"
+LOG_DIR="${LIFLY_COMPUTE_NODE_LOG_DIR:-$PROJECT_ROOT/logs}"
 LOG_FILE="$LOG_DIR/compute-node-worker.log"
+LOCAL_MCP_ROOT="${LIFLY_LOCAL_MCP_ROOT:-$PROJECT_ROOT/services/local-mcp}"
+WORKER_ENTRY="$LOCAL_MCP_ROOT/dist/services/local-mcp/src/relay-worker-main.js"
 
 if [[ -t 0 ]]; then
   cat >&2 <<'EOF'
@@ -23,9 +25,17 @@ mkdir -p "$LOG_DIR"
 export LIFLY_AI_PROVIDER_HELPER_PATH="${LIFLY_AI_PROVIDER_HELPER_PATH:-$PROJECT_ROOT/scripts/ai-provider-worker.sh}"
 export LIFLY_LOCAL_AI_ENDPOINT="${LIFLY_LOCAL_AI_ENDPOINT:-http://127.0.0.1:8205}"
 export LIFLY_LOCAL_AI_MODEL="${LIFLY_LOCAL_AI_MODEL:-${LIFLY_CLOUD_AI_MODEL:-}}"
-cd "$PROJECT_ROOT"
-pnpm --dir services/local-mcp build
+
+if [[ ! -f "$WORKER_ENTRY" ]]; then
+  if [[ "$LOCAL_MCP_ROOT" == "$PROJECT_ROOT/services/local-mcp" ]]; then
+    cd "$PROJECT_ROOT"
+    pnpm --dir services/local-mcp build
+  else
+    echo "预编译 Compute Node worker 不存在: $WORKER_ENTRY" >&2
+    exit 2
+  fi
+fi
 
 echo "启动 Lifly encrypted Compute Node worker；运行日志：$LOG_FILE"
 exec > >(tee -a "$LOG_FILE") 2>&1
-exec node "$PROJECT_ROOT/services/local-mcp/dist/services/local-mcp/src/relay-worker-main.js"
+exec node "$WORKER_ENTRY"
