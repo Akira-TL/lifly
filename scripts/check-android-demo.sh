@@ -9,6 +9,9 @@ APP_GRADLE="$ANDROID_DIR/app/build.gradle.kts"
 ROOT_GRADLE="$ANDROID_DIR/build.gradle.kts"
 MAIN_ACTIVITY="$ANDROID_DIR/app/src/main/kotlin/com/lifly/app/MainActivity.kt"
 NOTIFICATION_ICON="$ANDROID_DIR/app/src/main/res/drawable/ic_stat_lifly.xml"
+DATA_MODE="${LIFLY_DATA_MODE:-api}"
+API_BASE_URL="${LIFLY_API_BASE_URL:-https://lifly.babelbeast.com/api/v1}"
+APP_VERSION="${LIFLY_APP_VERSION:-0.9.0}"
 
 fail() {
   printf '[android-demo] FAIL: %s\n' "$*" >&2
@@ -56,8 +59,13 @@ flutter analyze --no-pub \
 printf '%s\n' '[android-demo] running reminder tests'
 flutter test --no-pub test/reminder_*.dart
 
-printf '%s\n' '[android-demo] building Android debug APK'
-flutter build apk --debug --no-pub
+printf '[android-demo] building Android debug APK | data_mode=%s api=%s version=%s\n' \
+  "$DATA_MODE" "$API_BASE_URL" "$APP_VERSION"
+flutter build apk --debug --no-pub \
+  --dart-define="LIFLY_DATA_MODE=$DATA_MODE" \
+  --dart-define="LIFLY_API_BASE_URL=$API_BASE_URL" \
+  --dart-define="LIFLY_APP_VERSION=$APP_VERSION" \
+  --dart-define="LIFLY_VISUAL_FIXTURES=false"
 APK="$CLIENT_DIR/build/app/outputs/flutter-apk/app-debug.apk"
 [[ -f "$APK" ]] || fail 'debug APK missing'
 if ! unzip -l "$APK" | grep -q 'lib/arm64-v8a/liblifly_opaque_helper.so'; then

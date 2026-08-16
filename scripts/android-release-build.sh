@@ -7,6 +7,9 @@ CLIENT_DIR="$PROJECT_ROOT/apps/client_flutter"
 ANDROID_DIR="$CLIENT_DIR/android"
 KEY_PROPERTIES="$ANDROID_DIR/key.properties"
 APK="$CLIENT_DIR/build/app/outputs/flutter-apk/app-release.apk"
+DATA_MODE="${LIFLY_DATA_MODE:-api}"
+API_BASE_URL="${LIFLY_API_BASE_URL:-https://lifly.babelbeast.com/api/v1}"
+APP_VERSION="${LIFLY_APP_VERSION:-0.9.0}"
 
 if [[ ! -f "$KEY_PROPERTIES" ]]; then
   cat >&2 <<'EOF'
@@ -24,13 +27,18 @@ for key in storeFile storePassword keyAlias keyPassword; do
   }
 done
 
+printf 'Android release config: data_mode=%s api=%s version=%s\n' "$DATA_MODE" "$API_BASE_URL" "$APP_VERSION"
 bash "$SCRIPT_DIR/build-native-opaque.sh" android
 (
   cd "$CLIENT_DIR"
   flutter clean
   flutter pub get
   flutter build apk --release \
-    --target-platform android-arm,android-arm64,android-x64
+    --target-platform android-arm,android-arm64,android-x64 \
+    --dart-define="LIFLY_DATA_MODE=$DATA_MODE" \
+    --dart-define="LIFLY_API_BASE_URL=$API_BASE_URL" \
+    --dart-define="LIFLY_APP_VERSION=$APP_VERSION" \
+    --dart-define="LIFLY_VISUAL_FIXTURES=false"
 )
 
 [[ -f "$APK" ]] || { echo "Android release APK missing: $APK" >&2; exit 1; }

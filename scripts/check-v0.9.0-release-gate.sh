@@ -92,6 +92,17 @@ bash -n \
   scripts/lib/lifly-ports.sh
 node --check scripts/compute-node-acceptance.mjs
 
+for android_build_script in scripts/android-release-build.sh scripts/check-android-demo.sh; do
+  grep -Fq 'API_BASE_URL="${LIFLY_API_BASE_URL:-https://lifly.babelbeast.com/api/v1}"' "$android_build_script" || {
+    echo "FAIL: $android_build_script must default Demo Android builds to the public API" >&2
+    exit 1
+  }
+  grep -Fq -- '--dart-define="LIFLY_API_BASE_URL=$API_BASE_URL"' "$android_build_script" || {
+    echo "FAIL: $android_build_script must pass the API base URL into Flutter" >&2
+    exit 1
+  }
+done
+
 compose_render="$(mktemp)"
 trap 'rm -f "$compose_render"' EXIT
 LIFLY_COMMON_POSTGRES_PORT="$LIFLY_COMMON_POSTGRES_PORT" \
