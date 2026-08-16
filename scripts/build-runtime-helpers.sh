@@ -58,18 +58,24 @@ build_flutter_bundle() {
     rm -rf "$stage" "$output"
     mkdir -p "$stage"
     DESTDIR="$stage" cmake --install build/linux/x64/release >/dev/null
-    if [[ ! -x "$stage/usr/local/client_flutter" ]]; then
+    staged_binary="$(find "$stage" -type f -name client_flutter -perm -u+x -print -quit)"
+    if [[ -z "$staged_binary" ]]; then
       echo "Flutter Linux staged bundle is incomplete: $target" >&2
       exit 1
     fi
-    mv "$stage/usr/local" "$output"
+    staged_bundle="$(dirname "$staged_binary")"
+    mv "$staged_bundle" "$output"
     rm -rf "$stage"
   )
 }
 
 build_flutter_bundle lib/local_core_host_main.dart local-core-bridge
 build_flutter_bundle lib/e2ee_commit_smoke_main.dart e2ee-commit-smoke
+build_flutter_bundle lib/sqlcipher_smoke_main.dart sqlcipher-smoke
+build_flutter_bundle lib/encrypted_write_smoke_main.dart encrypted-write-smoke
 
 echo "OPAQUE_HELPER=$PROJECT_ROOT/build/runtime/lifly-opaque-helper"
 echo "LOCAL_CORE_BRIDGE=$PROJECT_ROOT/scripts/local-core-bridge.sh"
 echo "E2EE_COMMIT_SMOKE=$PROJECT_ROOT/scripts/e2ee-commit-smoke.sh"
+echo "SQLCIPHER_SMOKE=$PROJECT_ROOT/scripts/sqlcipher-smoke.sh"
+echo "ENCRYPTED_WRITE_SMOKE=$PROJECT_ROOT/scripts/encrypted-write-smoke.sh"

@@ -160,7 +160,12 @@ void main() {
       );
       expect(desktopAdkBytes, phoneAdkBytes);
 
-      final privateKey = await desktopIdentity.loadPrivateKeyBytes();
+      final encodedDesktopPrivateKey =
+          desktopSecrets.values['lifly.device.x25519.private.v1'];
+      if (encodedDesktopPrivateKey == null) {
+        throw StateError('Golden Desktop private key fixture is unavailable');
+      }
+      final privateKey = base64Decode(encodedDesktopPrivateKey);
       final worker = await Process.start(
         'bash',
         ['scripts/compute-node-start.sh'],
@@ -234,6 +239,8 @@ void main() {
           target: desktopCompletion.session.device,
           text: '请记一条备忘：$marker，今天完成了 Lifly 加密计算节点实机验证。',
           assetIds: const [],
+          timezone: 'Asia/Shanghai',
+          locale: 'zh-CN',
         );
 
         expect(relay.submitted, isNotNull);

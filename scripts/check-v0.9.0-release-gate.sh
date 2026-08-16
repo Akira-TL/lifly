@@ -10,7 +10,7 @@ cd "$PROJECT_ROOT"
 
 echo "=== Lifly v0.9.0 integration release gate ==="
 
-echo "[1/7] Static product/security invariants"
+echo "[1/8] Static product/security invariants"
 grep -Fq "defaultValue: '0.9.0'" apps/client_flutter/lib/app/app_config.dart
 grep -Eq '^version: 0\.9\.0\+' apps/client_flutter/pubspec.yaml
 grep -Fq 'version="0.9.0"' services/api/app/main.py
@@ -18,8 +18,40 @@ grep -Fq 'version = "0.9.0"' services/api/pyproject.toml
 
 grep -Fq 'accessTokenProvider: sessions.readAccessToken' apps/client_flutter/lib/main.dart
 grep -Fq 'PlaintextE2eeMigrator(' apps/client_flutter/lib/data/crypto/account_e2ee_runtime.dart
+grep -Fq 'PowerSyncEncryptedLocalMutationCommitter' apps/client_flutter/lib/data/crypto/account_e2ee_runtime.dart
+grep -Fq 'plaintextE2eeCoreMigrationId' apps/client_flutter/lib/data/powersync/plaintext_e2ee_migrator.dart
+grep -Fq "Table.localOnly('e2ee_migration_state'" apps/client_flutter/lib/data/powersync/powersync_schema.dart
+grep -Fq 'PowerSyncSQLCipherOpenFactory' apps/client_flutter/lib/data/powersync/sync_service.dart
+grep -Fq 'powersync_sqlcipher:' apps/client_flutter/pubspec.yaml
 grep -Fq 'auditPayloadProtector: e2eeRuntime' apps/client_flutter/lib/main.dart
+grep -Fq 'captureIngestCandidates' apps/client_flutter/lib/features/ai_capture/data/external_ai_action_committer.dart
 grep -Fq 'Depends(get_active_subject)' services/api/app/modules/ai/router.py
+grep -Fq 'SqlAlchemySessionRegistry' services/api/app/modules/auth/sessions.py
+grep -Fq 'SqlAlchemyAuthFlowStore' services/api/app/modules/auth/flows.py
+grep -Fq 'CREATE PUBLICATION powersync FOR TABLE public.encrypted_entities' services/api/app/core/schema_compat.py
+test -s apps/client_flutter/web/sqlite3mc.wasm
+test -s packages/protocol/test-vectors/device-ai-job-v1.json
+
+if rg -n 'setLocalMutationFlusher|flushLocalMutations|loadPrivateKeyBytes' apps/client_flutter/lib; then
+  echo "FAIL: deprecated mutation flusher or raw Device private-key interface returned" >&2
+  exit 1
+fi
+if rg -n '_seedText\(|captureParse\(' apps/client_flutter/lib/features/ai_capture/data/external_ai_action_committer.dart; then
+  echo "FAIL: external AI candidate commit still reparses synthetic text" >&2
+  exit 1
+fi
+if rg -n 'ON CONFLICT' \
+  apps/client_flutter/lib/data/powersync \
+  apps/client_flutter/lib/features/asset/data/asset_e2ee_sync_adapter.dart; then
+  echo "FAIL: PowerSync view write still uses SQLite UPSERT syntax" >&2
+  exit 1
+fi
+
+if rg -n '_default_session_registry|_default_flow_store|process-local|one API process' \
+  services/api/app/modules/auth/sessions.py services/api/app/modules/auth/flows.py; then
+  echo "FAIL: production auth state still contains process-local registry semantics" >&2
+  exit 1
+fi
 
 if rg -n 'DEFAULT_LOCAL_USER_ID|local-dev' \
   services/api/app/modules --glob '*router.py' --glob 'cloud_server.py'; then
@@ -28,7 +60,7 @@ if rg -n 'DEFAULT_LOCAL_USER_ID|local-dev' \
 fi
 
 
-echo "[2/7] Runtime topology and scripts"
+echo "[2/8] Runtime topology and scripts"
 bash -n \
   scripts/dev-start.sh \
   scripts/dev-stop.sh \
@@ -38,8 +70,13 @@ bash -n \
   scripts/build-runtime-helpers.sh \
   scripts/local-core-bridge.sh \
   scripts/e2ee-commit-smoke.sh \
+  scripts/sqlcipher-smoke.sh \
+  scripts/encrypted-write-smoke.sh \
+  scripts/auth-runtime-smoke.sh \
+  scripts/relay-runtime-smoke.sh \
   scripts/run-v0.9.0-golden.sh \
   scripts/lib/lifly-ports.sh
+node --check scripts/compute-node-acceptance.mjs
 
 compose_render="$(mktemp)"
 trap 'rm -f "$compose_render"' EXIT
@@ -64,7 +101,7 @@ for port in \
   grep -Fq "published: \"$port\"" "$compose_render"
 done
 
-echo "[3/7] OPAQUE / Python P0 integration contracts"
+echo "[3/8] OPAQUE / Python P0 integration contracts"
 cargo_bin="${LIFLY_CARGO_BIN:-}"
 if [[ -z "$cargo_bin" && -x "$HOME/.cargo/bin/cargo" ]]; then
   cargo_bin="$HOME/.cargo/bin/cargo"
@@ -77,10 +114,14 @@ if [[ -z "$cargo_bin" ]]; then
   exit 1
 fi
 "$cargo_bin" test --manifest-path tools/opaque-helper/Cargo.toml
+bash scripts/auth-runtime-smoke.sh
+bash scripts/relay-runtime-smoke.sh
 
 (
   cd services/api
   uv run pytest -q \
+    tests/test_auth_account_api.py \
+    tests/test_device_registry_api.py \
     tests/test_ai_relay_api.py \
     tests/test_ai_provider_contract.py \
     tests/test_cloud_ai_privacy.py \
@@ -98,7 +139,7 @@ fi
     tests/test_sync_push_service.py
 )
 
-echo "[4/7] Shared protocol / Local Core / Local MCP"
+echo "[4/8] Shared protocol / Local Core / Local MCP"
 pnpm --dir packages/protocol typecheck
 pnpm --dir packages/protocol test
 pnpm --dir packages/local-core typecheck
@@ -106,15 +147,19 @@ pnpm --dir packages/local-core test
 pnpm --dir services/local-mcp typecheck
 env -u LIFLY_LOCAL_CORE_BRIDGE_PATH pnpm --dir services/local-mcp test
 
-echo "[5/7] Flutter P0 integration contracts"
+echo "[5/8] Flutter P0 integration contracts"
 (
   cd apps/client_flutter
   dart analyze \
     lib/main.dart \
     lib/data/api/api_client.dart \
+    lib/data/auth/account_runtime_state.dart \
     lib/data/auth/pake_client_adapter.dart \
     lib/data/crypto/account_e2ee_runtime.dart \
+    lib/data/crypto/secure_local_database_key_provider.dart \
     lib/data/ai/device_ai_job_cipher.dart \
+    lib/data/powersync/encrypted_sync_store.dart \
+    lib/data/powersync/sync_service.dart \
     lib/data/local_core/powersync_local_core_bridge.dart \
     lib/data/local_core/desktop_local_core_host.dart \
     lib/features/ai_capture/data/compute_node_plan_client.dart \
@@ -125,6 +170,10 @@ echo "[5/7] Flutter P0 integration contracts"
     test/api_client_auth_session_test.dart \
     test/auth_repository_test.dart \
     test/auth_session_store_test.dart \
+    test/account_device_runtime_test.dart \
+    test/device_settings_section_test.dart \
+    test/session_gate_test.dart \
+    test/secure_local_database_key_provider_test.dart \
     test/pake_client_helper_adapter_test.dart \
     test/compute_node_plan_client_test.dart \
     test/ai_capture_execution_runtime_test.dart \
@@ -132,14 +181,21 @@ echo "[5/7] Flutter P0 integration contracts"
     test/asset_audit_e2ee_test.dart \
     test/asset_repository_test.dart \
     test/powersync_encrypted_sync_store_test.dart \
+    test/sync_local_mutation_committer_test.dart \
     test/powersync_password_key_envelope_service_test.dart \
     test/local_core_write_test.dart \
     test/powersync_local_core_bridge_test.dart \
     test/desktop_local_core_host_test.dart \
-    test/external_ai_action_committer_test.dart
+    test/external_ai_action_committer_test.dart \
+    test/device_identity_store_test.dart
 )
 
-echo "[6/7] Golden runtime prerequisites / live run"
+echo "[6/8] Packaged runtime security smoke"
+bash scripts/build-runtime-helpers.sh
+bash scripts/sqlcipher-smoke.sh
+bash scripts/encrypted-write-smoke.sh
+
+echo "[7/8] Golden runtime prerequisites / live run"
 default_opaque="$PROJECT_ROOT/build/runtime/lifly-opaque-helper"
 default_bridge="$PROJECT_ROOT/scripts/local-core-bridge.sh"
 resolved_server_helper="${LIFLY_OPAQUE_SERVER_HELPER:-$default_opaque}"
@@ -172,5 +228,5 @@ else
   fi
 fi
 
-echo "[7/7] Gate result"
+echo "[8/8] Gate result"
 echo "CONTRACT_GATE=PASS"
