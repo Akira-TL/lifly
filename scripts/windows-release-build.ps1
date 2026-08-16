@@ -14,6 +14,26 @@ if (-not (Get-Command flutter -ErrorAction SilentlyContinue)) {
   throw "Flutter is required to build the Windows Desktop release"
 }
 
+if (-not $env:OPENSSL_ROOT_DIR) {
+  $OpenSslCandidates = @(
+    (Join-Path $env:ProgramFiles "OpenSSL-Win64"),
+    "C:\Program Files\OpenSSL-Win64",
+    "D:\Program Files\OpenSSL-Win64"
+  ) | Select-Object -Unique
+
+  foreach ($Candidate in $OpenSslCandidates) {
+    $Header = Join-Path $Candidate "include\openssl\opensslv.h"
+    $StaticCrypto = Get-ChildItem (Join-Path $Candidate "lib") -Filter "libcrypto_static.lib" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ((Test-Path $Header) -and $StaticCrypto) {
+      $env:OPENSSL_ROOT_DIR = $Candidate
+      break
+    }
+  }
+}
+if (-not $env:OPENSSL_ROOT_DIR) {
+  throw "OpenSSL development files are required for Windows SQLCipher. Install ShiningLight.OpenSSL.Dev or set OPENSSL_ROOT_DIR."
+}
+
 cargo test --manifest-path $OpaqueManifest
 cargo build --release --manifest-path $OpaqueManifest
 if (-not (Test-Path $OpaqueSource)) {
